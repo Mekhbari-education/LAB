@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // -------------------------------------------------------------------------
+    // GLOBALS & HELPERS
+    // -------------------------------------------------------------------------
+
+    function isSignedIn() { return request.auth != null; }
+    function isVerified() { return isSignedIn() && request.auth.token.email_verified == true; }
+    function isOwner(userId) { return isVerified() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function isServerTimestamp(ts) {
+      return ts == request.time;
+    }
+
+    // -------------------------------------------------------------------------
+    // ENTITY VALIDATORS
+    // -------------------------------------------------------------------------
+
+    function isValidChemical(data) {
+      return data.keys().hasAll(['name', 'quantity', 'unit']) &&
+             data.keys().size() >= 3 && data.keys().size() <= 10 &&
+             data.name is string && data.name.size() > 1 && data.name.size() <= 100 &&
+             data.quantity is number && data.quantity >= 0 &&
+             data.unit is string && data.unit.size() <= 20;
+    }
+
+    function isValidEquipment(data) {
+      return data.keys().hasAll(['name', 'type', 'totalQuantity']) &&
+             data.keys().size() >= 3 && data.keys().size() <= 10 &&
+             data.name is string && data.name.size() > 1 && data.name.size() <= 100 &&
+             data.type in ['glassware', 'tech', 'other'] &&
+             data.totalQuantity is number && data.totalQuantity >= 0;
+    }
+
+    function isValidReservation(data) {
+      return data.keys().hasAll(['labName', 'day', 'time', 'teacher', 'subject', 'group', 'status']) &&
+             data.keys().size() >= 7 && data.keys().size() <= 10 &&
+             data.labName is string && data.day is string &&
+             data.status in ['confirmed', 'pending', 'cancelled'];
+    }
+
+    function isValidIncident(data) {
+      return data.keys().hasAll(['type', 'date', 'severity', 'status']) &&
+             data.keys().size() >= 4 && data.keys().size() <= 10 &&
+             data.severity in ['minor', 'moderate', 'high'] &&
+             data.status in ['investigating', 'resolved', 'closed'];
+    }
+    
+    function isValidExperiment(data) {
+      return data.keys().hasAll(['title', 'date', 'teacher', 'class', 'status']) &&
+             data.keys().size() >= 5 && data.keys().size() <= 15 &&
+             data.status in ['planned', 'completed', 'cancelled'];
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // USER SANDBOXES
+    // -------------------------------------------------------------------------
+
+    match /users/{userId} {
+      allow get, write: if isOwner(userId) && isValidId(userId);
+      
+      // Chemicals
+      match /chemicals/{chemId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(chemId) && isValidChemical(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(chemId) && isValidChemical(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'quantity', 'unit', 'formula', 'expiryDate', 'location', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(chemId);
+      }
+
+      // Equipment
+      match /equipment/{equipId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(equipId) && isValidEquipment(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(equipId) && isValidEquipment(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'type', 'status', 'totalQuantity', 'availableQuantity', 'brokenQuantity', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(equipId);
+      }
+
+      // Lab Schedule
+      match /lab_schedule/{resId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(resId) && isValidReservation(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(resId) && isValidReservation(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'time', 'day', 'teacher', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(resId);
+      }
+
+      // Incidents
+      match /incident_logs/{logId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(logId) && isValidIncident(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(logId) && isValidIncident(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'description', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(logId);
+      }
+      
+      // Experiment Logs
+      match /experiment_logs/{logId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(logId) && isValidExperiment(incoming());
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(logId) && isValidExperiment(incoming()) && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'observations', 'updatedAt'])
+        );
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(logId);
+      }
+
+      // Settings
+      match /settings/{docId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow write: if isOwner(userId) && isValidId(userId) && isValidId(docId);
+      }
+      
+      // Generic match for other user collections
+      match /{anyCollection}/{anyId} {
+        allow read: if isOwner(userId) && isValidId(userId);
+        allow write: if isOwner(userId) && isValidId(userId) && isValidId(anyId);
+      }
+    }
+  }
+}

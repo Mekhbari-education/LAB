@@ -1,0 +1,11 @@
+{
+  "name": "lab-education-dzالأرضية الرقمية — فضاء موظفوا المخابر",
+  "description": "نظام شامل لتسيير المخابر العلمية في المتوسطات والثانويات الجزائرية، يشمل إدارة المخزون، مصفوفة التوافق الذكية، والتشريع المدرسي.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

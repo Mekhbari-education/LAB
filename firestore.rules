@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidChemical(data) {
+      return data.keys().hasAll(['name', 'quantity', 'unit']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.quantity is number &&
+             data.unit is string && data.unit.size() <= 20;
+    }
+
+    function isValidEquipment(data) {
+      return data.keys().hasAll(['name', 'type', 'status', 'totalQuantity']) &&
+             data.name is string && data.name.size() <= 200 &&
+             data.type in ['glassware', 'tech', 'other'] &&
+             data.status in ['functional', 'maintenance', 'broken'] &&
+             data.totalQuantity is number;
+    }
+
+    function isValidTeacher(data) {
+      return data.keys().hasAll(['name']) &&
+             data.name is string && data.name.size() <= 100;
+    }
+
+    function isValidLog(data) {
+      return data.keys().hasAll(['userId', 'action', 'module', 'details', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.action is string &&
+             data.module is string &&
+             data.details is string &&
+             data.timestamp == request.time;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['school', 'directorate']) &&
+             data.school is string && data.school.size() <= 200 &&
+             data.directorate is string && data.directorate.size() <= 200;
+    }
+
+    // --- Collection Matches ---
+
+    // User Documents
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+
+    // Isolated School/User Data
+    match /schools/{schoolId}/{collection}/{docId} {
+      allow read: if isOwner(schoolId) || isAdmin();
+      allow write: if isOwner(schoolId);
+    }
+
+    // Schools Database
+    match /schools/{id} {
+      allow read: if isSignedIn();
+    }
+    
+    match /school_metadata/directorates {
+      allow read: if isSignedIn();
+    }
+
+    // Global Collections
+    match /support_tickets/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /purchase_requests/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // Connection Test
+    match /_connection_test_/{id} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /diagnostics_log/{id} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Settings Profile
+    match /settings/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId);
+    }
+  }
+}

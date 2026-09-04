@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "chemical": {
+      "title": "Chemical Entity",
+      "description": "Represents a chemical substance in the laboratory inventory.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Common name of the chemical" },
+        "formula": { "type": "string", "description": "Chemical formula" },
+        "casNumber": { "type": "string", "description": "CAS Registry Number" },
+        "concentration": { "type": "string", "description": "Concentration/Purity" },
+        "quantity": { "type": "number", "description": "Current quantity" },
+        "unit": { "type": "string", "description": "Unit of measurement (g, ml, etc.)" },
+        "location": { "type": "string", "description": "Storage location" },
+        "hazardClass": { "type": "string", "description": "Hazard classification" },
+        "expiryDate": { "type": "string", "format": "date", "description": "Expiry date" },
+        "ghs": { "type": "array", "items": { "type": "string" }, "description": "GHS pictograms" },
+        "updatedAt": { "type": "object", "description": "Firestore server timestamp" }
+      },
+      "required": ["name", "quantity", "unit"]
+    },
+    "equipment": {
+      "title": "Equipment Entity",
+      "description": "Represents laboratory tools, glassware, or technical devices.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["glassware", "tech", "other"] },
+        "serialNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["functional", "maintenance", "broken"] },
+        "totalQuantity": { "type": "number" },
+        "availableQuantity": { "type": "number" },
+        "brokenQuantity": { "type": "number" },
+        "location": { "type": "string" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["name", "type", "status", "totalQuantity"]
+    },
+    "teacher": {
+      "title": "Teacher Entity",
+      "description": "Information about teachers using the laboratory.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "subject": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "activity_request": {
+      "title": "Activity Request Entity",
+      "description": "A request made by a teacher to prepare a laboratory activity.",
+      "type": "object",
+      "properties": {
+        "teacherName": { "type": "string" },
+        "activityTitle": { "type": "string" },
+        "executionDate": { "type": "string", "format": "date" },
+        "timing": { "type": "string" },
+        "equipItems": { "type": "array" },
+        "chemItems": { "type": "array" },
+        "status": { "type": "string" }
+      },
+      "required": ["teacherName", "activityTitle"]
+    },
+    "loan_request": {
+      "title": "Loan Request Entity",
+      "description": "A request for borrowing equipment.",
+      "type": "object",
+      "properties": {
+        "teacherName": { "type": "string" },
+        "items": { "type": "array" },
+        "requestDate": { "type": "string", "format": "date" },
+        "returnDate": { "type": "string", "format": "date" }
+      }
+    },
+    "settings": {
+      "title": "User Settings Entity",
+      "description": "User profile and institution settings.",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "school": { "type": "string" },
+        "directorate": { "type": "string" },
+        "commune": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "profilePhoto": { "type": "string" },
+        "levels": { "type": "array" }
+      }
+    },
+    "log": {
+      "title": "Activity Log Entity",
+      "description": "System usage logs.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "schools/{userId}/chemicals": {
+      "schema": "chemical",
+      "description": "User-isolated chemical inventory."
+    },
+    "schools/{userId}/equipment": {
+      "schema": "equipment",
+      "description": "User-isolated equipment inventory."
+    },
+    "schools/{userId}/teachers": {
+      "schema": "teacher",
+      "description": "User-isolated teacher list."
+    },
+    "schools/{userId}/activity_requests": {
+      "schema": "activity_request",
+      "description": "User-isolated activity requests."
+    },
+    "schools/{userId}/loan_requests": {
+      "schema": "loan_request",
+      "description": "User-isolated loan requests."
+    },
+    "schools/{userId}/logs": {
+      "schema": "log",
+      "description": "User-isolated activity logs."
+    },
+    "settings/{userId}": {
+      "schema": "settings",
+      "description": "User-isolated settings profile."
+    },
+    "users/{userId}": {
+      "schema": "settings",
+      "description": "User basic profile."
+    }
+  }
+}
