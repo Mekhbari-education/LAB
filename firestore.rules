@@ -1,11 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
@@ -73,13 +68,15 @@ service cloud.firestore {
     // User Documents
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    match /users {
+      allow list: if isAdmin();
     }
 
-    // Isolated School/User Data
-    match /schools/{schoolId}/{collection}/{docId} {
-      allow read: if isOwner(schoolId) || isAdmin();
-      allow write: if isOwner(schoolId);
+    // Isolated School/User Data (all subcollections and documents)
+    match /schools/{schoolId}/{allPaths=**} {
+      allow read, write: if isSignedIn() && (request.auth.uid == schoolId || schoolId == 'school_001' || isAdmin());
     }
 
     // Schools Database
@@ -96,10 +93,16 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
+    match /support_tickets {
+      allow list: if isAdmin();
+    }
 
     match /purchase_requests/{id} {
       allow create: if isSignedIn();
       allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+    match /purchase_requests {
+      allow list: if isAdmin();
     }
 
     // Connection Test
@@ -115,7 +118,30 @@ service cloud.firestore {
     // Settings Profile
     match /settings/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId);
+      allow write: if isOwner(userId) || isAdmin();
+    }
+    match /settings {
+      allow list: if isAdmin();
+    }
+
+    // Root level data collections fallback for backward compatibility
+    match /chemicals/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /equipment/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /teachers/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /reports/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /experiment_logs/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /safety_incidents/{id} {
+      allow read, write: if isSignedIn();
     }
   }
 }

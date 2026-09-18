@@ -132,9 +132,10 @@ export const getUserCollection = (schoolId: string, collectionName: string) => {
     fbError("DEBUG: getUserCollection called without auth.currentUser. Collection:", collectionName);
     throw new Error("User must be authenticated to access personal data");
   }
-  const path = `schools/${schoolId}/${collectionName}`;
+  const effectiveSchoolId = (schoolId && schoolId !== 'school_001') ? schoolId : auth.currentUser.uid;
+  const path = `schools/${effectiveSchoolId}/${collectionName}`;
   fbLog(`DEBUG: Getting collection at path: ${path}`);
-  return collection(db, 'schools', schoolId, collectionName);
+  return collection(db, 'schools', effectiveSchoolId, collectionName);
 };
 
 

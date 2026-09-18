@@ -28,12 +28,14 @@ i18n
 
 // Update document direction on language change
 i18n.on('languageChanged', (lng) => {
-  document.documentElement.dir = lng === 'ar' ? 'rtl' : 'ltr';
+  const isArabic = lng === 'ar' || lng?.startsWith('ar');
+  document.documentElement.dir = isArabic ? 'rtl' : 'ltr';
   document.documentElement.lang = lng;
 });
 
 export default i18n;
 
 // Set initial direction
-document.documentElement.dir = i18n.language === 'ar' ? 'rtl' : 'ltr';
+const initialIsArabic = i18n.language === 'ar' || i18n.language?.startsWith('ar');
+document.documentElement.dir = initialIsArabic ? 'rtl' : 'ltr';
 document.documentElement.lang = i18n.language;

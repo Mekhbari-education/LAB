@@ -243,6 +243,8 @@ export default function Layout() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const isRtl = i18n.language?.startsWith('ar');
+
   return (
     <div className="min-h-screen bg-surface flex text-foreground">
       {/* Mobile Overlay */}
@@ -259,10 +261,15 @@ export default function Layout() {
       </AnimatePresence>
 
       {/* SideNavBar */}
-      <aside className={cn(
-        "fixed end-0 top-0 h-full z-40 flex flex-col bg-surface-container-low transition-all duration-300 no-print",
-        isSidebarOpen ? "translate-x-0 w-72" : "translate-x-full lg:translate-x-0 lg:w-20"
-      )}>
+      <aside 
+        dir={isRtl ? "rtl" : "ltr"}
+        className={cn(
+          "fixed start-0 top-0 h-full z-40 flex flex-col bg-surface-container-low transition-all duration-300 no-print border-e border-outline-variant/10",
+          isSidebarOpen 
+            ? "translate-x-0 w-72" 
+            : "rtl:translate-x-full ltr:-translate-x-full lg:translate-x-0 lg:w-20"
+        )}
+      >
         <div className="p-6 flex flex-col items-center gap-2">
           <img 
             className={cn("object-contain transition-all", isSidebarOpen ? "w-16 h-16" : "w-10 h-10")}
@@ -408,8 +415,8 @@ export default function Layout() {
 
       {/* Main Content Area */}
       <div className={cn(
-        "flex-1 flex flex-col transition-all duration-300 print:me-0 min-w-0 w-full",
-        isSidebarOpen ? "lg:me-72" : "lg:me-20"
+        "flex-1 flex flex-col transition-all duration-300 print:ms-0 min-w-0 w-full",
+        isSidebarOpen ? "lg:ms-72" : "lg:ms-20"
       )}>
         {/* TopAppBar */}
         <header className="h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 flex justify-between items-center px-4 md:px-8 no-print">

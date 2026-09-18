@@ -18,7 +18,11 @@
   },
   "firestore": [
     {
-      "database": "ai-studio-9137fe80-1a36-40c2-be63-979b26259c24",
+      "database": "ai-studio-labeducationdz-1f681c2a-3337-4272-85c5-58963eeb5292",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "(default)",
       "rules": "firestore.rules"
     }
   ]

@@ -21,8 +21,10 @@ const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
 
 export function SchoolProvider({ children }: { children: React.ReactNode }) {
   const [schoolId, setSchoolIdState] = useState<string>(() => {
+    if (auth.currentUser?.uid) return auth.currentUser.uid;
     if (typeof window !== 'undefined') {
-      return localStorage.getItem(SCHOOL_ID_KEY) || DEFAULT_SCHOOL_ID;
+      const stored = localStorage.getItem(SCHOOL_ID_KEY);
+      if (stored && stored !== DEFAULT_SCHOOL_ID) return stored;
     }
     return DEFAULT_SCHOOL_ID;
   });
