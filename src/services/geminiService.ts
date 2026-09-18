@@ -2,8 +2,8 @@ import { Type } from "@google/genai";
 import { logger } from './loggingService';
 
 // ── اسم الموديل في مكان واحد — غيّره هنا فقط إذا احتجت ─────────────────────
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_MODEL_VISION = "gemini-1.5-flash"; // للصور والمحادثة
+const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_MODEL_VISION = "gemini-3.8-flash"; // للصور والمحادثة
 // ────────────────────────────────────────────────────────────────────────────
 
 
@@ -12,18 +12,36 @@ function sanitizeInput(input: string, maxLength: number = 1000): string {
   return input.slice(0, maxLength).replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export async function callGeminiAPI(reqBody: any) {
-  const res = await fetch('/api/gemini', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(reqBody)
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Gemini API failed');
+export async function callGeminiAPI(reqBody: any, retries = 2, delay = 1000) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const errMsg = err.error || `HTTP ${res.status}`;
+        const isTransient = res.status === 503 || res.status === 429 || errMsg.includes('503') || errMsg.includes('high demand');
+        if (isTransient && attempt < retries) {
+          await new Promise(r => setTimeout(r, delay * (attempt + 1)));
+          continue;
+        }
+        throw new Error(errMsg);
+      }
+      const data = await res.json();
+      return { data: { text: data.text } };
+    } catch (err: any) {
+      const isTransient = err?.message?.includes('503') || err?.message?.includes('high demand') || err?.message?.includes('fetch');
+      if (isTransient && attempt < retries) {
+        await new Promise(r => setTimeout(r, delay * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
   }
-  const data = await res.json();
-  return { data: { text: data.text } };
+  throw new Error('خدمة الذكاء الاصطناعي تشهد ضغطاً حالياً، يرجى المحاولة لاحقاً.');
 }
 
 const functions = null as any;

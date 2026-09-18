@@ -14,10 +14,22 @@ export const generateContent = onCall({ cors: true }, async (request) => {
     // }
 
     const data = request.data;
-    const { model, contents, config } = data;
+    let { model, contents, config } = data;
 
-    if (!model || !contents) {
-      throw new HttpsError('invalid-argument', 'Model and contents are required.');
+    if (!contents) {
+      throw new HttpsError('invalid-argument', 'Contents are required.');
+    }
+
+    const deprecatedModels = [
+      'gemini-1.5-flash',
+      'gemini-1.5-pro',
+      'gemini-2.0-flash',
+      'gemini-2.0-pro',
+      'gemini-2.0-flash-thinking',
+      'gemini-pro'
+    ];
+    if (!model || deprecatedModels.includes(model)) {
+      model = 'gemini-3.8-flash';
     }
 
     const apiKey = geminiApiKey.value() || process.env.GEMINI_API_KEY;

@@ -135,7 +135,7 @@ export default function SafetyGuide() {
       Ensure the terminology matches Algerian school laboratory standards.`;
 
       const result = await callGeminiAPI({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.8-flash",
         contents: prompt
       });
       setAiResponse(result.data.text || "لم يتم الحصول على رد. يرجى المحاولة لاحقاً.");

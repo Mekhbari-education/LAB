@@ -140,15 +140,60 @@ async function startServer() {
         return res.status(500).json({ error: 'Server is missing Gemini API key configuration.' });
       }
 
-      const { model, contents, config } = req.body;
-      if (!model || !contents) {
-        return res.status(400).json({ error: 'Missing model or contents field.' });
+      let { model, contents, config } = req.body;
+      if (!contents) {
+        return res.status(400).json({ error: 'Missing contents field.' });
+      }
+
+      const deprecatedModels = [
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-2.0-flash',
+        'gemini-2.0-pro',
+        'gemini-2.0-flash-thinking',
+        'gemini-pro'
+      ];
+      if (!model || deprecatedModels.includes(model)) {
+        model = 'gemini-3.8-flash';
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({ model, contents, config });
 
-      res.status(200).json({ text: response.text });
+      // Resilient fallback list in case of 503 high demand or 429 rate limiting
+      const candidateModels = [
+        model,
+        'gemini-3.1-flash-lite',
+        'gemini-flash-latest'
+      ];
+      const modelsToTry = Array.from(new Set(candidateModels));
+
+      let lastError: any = null;
+      for (const currentModel of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({ model: currentModel, contents, config });
+          return res.status(200).json({ text: response.text });
+        } catch (err: any) {
+          lastError = err;
+          const status = err?.status || err?.code;
+          const msg = err?.message || String(err);
+          const isDemandError = status === 503 || 
+            status === 429 || 
+            msg.includes('503') || 
+            msg.includes('429') || 
+            msg.includes('high demand') || 
+            msg.includes('UNAVAILABLE') || 
+            msg.includes('RESOURCE_EXHAUSTED');
+
+          if (isDemandError) {
+            console.warn(`Model ${currentModel} returned 503/high demand, trying fallback model...`);
+            await new Promise(resolve => setTimeout(resolve, 600));
+            continue;
+          }
+          break;
+        }
+      }
+
+      throw lastError;
     } catch (error: any) {
       // في الإنتاج لا نُرسل تفاصيل الخطأ للعميل
       const isDev = process.env.NODE_ENV !== 'production';

@@ -14,7 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db, checkIsAdmin } from '../firebase';
-import { Beaker, Lock as LockIcon, User, Eye, EyeOff, ArrowLeft, ShieldCheck, Globe, UserPlus, Facebook, Sun, Moon } from 'lucide-react';
+import { Beaker, Lock as LockIcon, User, Eye, EyeOff, ArrowLeft, ShieldCheck, Globe, UserPlus, Facebook, Sun, Moon, AlertCircle, Copy, Check, ExternalLink } from 'lucide-react';
 import logo from '/ministry-logo.png';
 import { cn } from '../lib/utils';
 
@@ -38,6 +38,7 @@ export default function Login() {
   const [isInAppBrowser, setIsInAppBrowser] = useState(false);
   const [pendingCred, setPendingCred] = useState<any>(null);
   const [linkingMessage, setLinkingMessage] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -79,48 +80,12 @@ export default function Login() {
     const checkRedirect = async () => {
       try {
         const result = await getRedirectResult(auth);
-        if (result) {
-          const user = result.user;
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (!userDoc.exists()) {
-            await setDoc(doc(db, 'users', user.uid), {
-              uid: user.uid,
-              email: user.email,
-              role: (await checkIsAdmin(user)) ? 'Admin' : 'user',
-              displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
-              photoURL: user.photoURL || null,
-              createdAt: new Date().toISOString()
-            });
-          } else {
-            await setDoc(doc(db, 'users', user.uid), {
-              photoURL: user.photoURL || null,
-              displayName: user.displayName || userDoc.data()?.displayName
-            }, { merge: true });
-          }
+        if (result && result.user) {
+          await handlePostLoginUserSync(result.user);
         }
       } catch (err: any) {
         console.error('Redirect result error:', err);
-        if (err.code === 'auth/missing-initial-state' || err.code === 'auth/internal-error') {
-          setError(
-            <div className="text-right p-4 bg-error/5 rounded-2xl border border-error/20">
-              <p className="font-black text-error mb-2">فشل تسجيل الدخول بسبب قيود المتصفح.</p>
-              <p className="text-xs text-on-surface/70 leading-relaxed">
-                يبدو أنك تستخدم متصفحاً مدمجاً (مثل متصفح فيسبوك) يمنع حفظ بيانات الدخول.
-              </p>
-              <div className="mt-4 space-y-3">
-                <button 
-                  onClick={() => window.location.href = "https://amatti-education-dz.firebaseapp.com/LAB"}
-                  className="w-full bg-primary text-on-primary py-3 rounded-xl text-xs font-black shadow-lg"
-                >
-                  استخدام الرابط المباشر (موصى به)
-                </button>
-                <p className="text-[10px] text-center text-on-surface/40">أو قم بفتح هذا الرابط في متصفح Chrome أو Safari</p>
-              </div>
-            </div>
-          );
-        } else {
-          setError('حدث خطأ أثناء معالجة تسجيل الدخول. يرجى المحاولة مرة أخرى.');
-        }
+        handleAuthError(err, 'google');
       }
     };
     checkRedirect();
@@ -214,246 +179,236 @@ export default function Login() {
     }
   };
 
-  const isMobile = () => {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  };
+  const handlePostLoginUserSync = async (user: any) => {
+    if (pendingCred) {
+      try {
+        await linkWithCredential(user, pendingCred);
+        setPendingCred(null);
+        setLinkingMessage(null);
+      } catch (linkErr) {
+        console.error('Error linking account:', linkErr);
+      }
+    }
 
-  const handleGoogleLogin = async () => {
-    const provider = new GoogleAuthProvider();
     try {
-
-
-      if (isMobile()) {
-        await signInWithRedirect(auth, provider);
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      const isAdmin = await checkIsAdmin(user);
+      if (!userDoc.exists()) {
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          role: isAdmin ? 'Admin' : 'user',
+          displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
+          photoURL: user.photoURL || null,
+          createdAt: new Date().toISOString()
+        });
       } else {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        
-        // If there's a pending credential, link it now
-        if (pendingCred) {
-          try {
-            await linkWithCredential(user, pendingCred);
-            setPendingCred(null);
-            setLinkingMessage(null);
-            console.log('Account linked successfully');
-          } catch (linkErr) {
-            console.error('Error linking account:', linkErr);
-          }
-        }
-        
-        // Check if user document exists, if not create it
-        const userDocGoogle = await getDoc(doc(db, 'users', user.uid));
-        if (!userDocGoogle.exists()) {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            email: user.email,
-            role: (await checkIsAdmin(user)) ? 'Admin' : 'user',
-            displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
-            photoURL: user.photoURL || null,
-            createdAt: new Date().toISOString()
-          });
-        } else {
-          await setDoc(doc(db, 'users', user.uid), {
-            photoURL: user.photoURL || null,
-            displayName: user.displayName || userDocGoogle.data()?.displayName
-          }, { merge: true });
-        }
+        await setDoc(userRef, {
+          photoURL: user.photoURL || null,
+          displayName: user.displayName || userDoc.data()?.displayName
+        }, { merge: true });
       }
-    } catch (err: any) {
-      console.error('Google login error:', err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setError(
-          <div className="text-right p-4 bg-error/5 rounded-2xl border border-error/20">
-            <p className="font-black text-error mb-2">النطاق غير مصرح به (Unauthorized Domain)</p>
-            <p className="text-[10px] text-on-surface/70 leading-relaxed mb-3">
-              رابط هذا الموقع غير مضاف لقائمة النطاقات المسموح لها بتسجيل الدخول.
-            </p>
-            <div className="bg-surface p-2 rounded-lg text-[9px] font-mono select-all mb-4 break-all opacity-80 text-center">
-              {window.location.hostname}
-            </div>
-            <a 
-              href={`https://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/settings`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-primary text-on-primary py-2 rounded-xl text-center text-xs font-black"
-            >
-              فتح إعدادات Firebase
-            </a>
-          </div>
-        );
-      } else if (err.code === 'auth/missing-initial-state') {
-        setError(
-          <div className="text-right">
-            <p>فشل تسجيل الدخول بسبب قيود المتصفح على ملفات تعريف الارتباط (Cookies).</p>
-            <p className="mt-2">يرجى تجربة أحد الحلول التالية:</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li>استخدام متصفح Chrome أو Firefox بدلاً من متصفح فيسبوك المدمج.</li>
-              <li>إيقاف "منع التتبع بين المواقع" في إعدادات Safari.</li>
-              <li>
-                استخدام الرابط المباشر: {' '}
-                <a href="https://amatti-education-dz.firebaseapp.com/LAB" className="underline font-black">
-                  amatti-education-dz.firebaseapp.com/LAB
-                </a>
-              </li>
-            </ul>
-          </div>
-        );
-      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setError('تم إغلاق نافذة تسجيل الدخول قبل اكتمال العملية. يرجى المحاولة مرة أخرى.');
-      } else if (err.code === 'auth/invalid-credential') {
-        setError('بيانات الاعتماد غير صالحة. قد يكون هناك مشكلة في إعدادات Google Cloud أو انتهت صلاحية الجلسة.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('تسجيل الدخول عبر جوجل غير مفعل في إعدادات Firebase.');
-      } else if (err.code === 'auth/account-exists-with-different-credential') {
-        const email = err.customData?.email;
-        const credential = GoogleAuthProvider.credentialFromError(err);
-        
-        if (email && credential) {
-          setPendingCred(credential);
-          try {
-            const methods = await fetchSignInMethodsForEmail(auth, email);
-            const method = methods[0];
-            let providerName = 'طريقة أخرى';
-            if (method === 'facebook.com') providerName = 'فيسبوك';
-            if (method === 'password') providerName = 'البريد الإلكتروني';
-            
-            setLinkingMessage(`لديك حساب مفعل مسبقاً عبر ${providerName}. يرجى تسجيل الدخول عبر ${providerName} لربط حساب جوجل الخاص بك تلقائياً.`);
-            setError(null);
-          } catch (fetchErr) {
-            setError('هذا البريد الإلكتروني مرتبط بحساب آخر. يرجى تسجيل الدخول بالطريقة التي استخدمتها سابقاً لربط الحسابات.');
-          }
-        } else {
-          setError('هذا البريد الإلكتروني مرتبط بحساب آخر. يرجى تسجيل الدخول بالطريقة التي استخدمتها سابقاً.');
-        }
-      } else {
-        setError('فشل تسجيل الدخول عبر جوجل. يرجى المحاولة مرة أخرى.');
-      }
+    } catch (profileErr) {
+      console.warn('User profile sync non-fatal warning:', profileErr);
     }
   };
 
-  const handleFacebookLogin = async () => {
-    const provider = new FacebookAuthProvider();
-    try {
+  const handleAuthError = (err: any, providerType: 'google' | 'facebook') => {
+    console.error(`${providerType} login error:`, err);
+    setLoading(false);
 
-
-      if (isMobile()) {
-        await signInWithRedirect(auth, provider);
-      } else {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-
-        // If there's a pending credential, link it now
-        if (pendingCred) {
-          try {
-            await linkWithCredential(user, pendingCred);
-            setPendingCred(null);
-            setLinkingMessage(null);
-            console.log('Account linked successfully');
-          } catch (linkErr) {
-            console.error('Error linking account:', linkErr);
-          }
-        }
+    if (err.code === 'auth/unauthorized-domain') {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
+      const projectId = auth.app.options.projectId || 'education-dz-lab';
+      
+      setError(
+        <div className="text-right p-4 bg-error/10 rounded-2xl border border-error/30 space-y-3">
+          <div className="flex items-center gap-2 text-error font-black text-xs">
+            <AlertCircle size={18} className="shrink-0" />
+            <span>النطاق غير مصرح به في إعدادات Firebase</span>
+          </div>
+          <p className="text-[11px] text-on-surface/80 leading-relaxed">
+            لتسجيل الدخول بحساب جوجل من هذا الهاتف أو الجهاز، يجب إضافة اسم النطاق التالي إلى قائمة <b>Authorized Domains</b> في مشروع Firebase:
+          </p>
+          <div className="bg-surface p-2.5 rounded-xl border border-outline/20 font-mono text-[11px] select-all flex items-center justify-between text-left dir-ltr gap-2">
+            <span className="font-bold text-primary truncate">{currentHost}</span>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(currentHost);
+                setCopiedDomain(true);
+                setTimeout(() => setCopiedDomain(false), 3000);
+              }}
+              className="text-[10px] bg-primary hover:bg-primary-container text-on-primary px-3 py-1 rounded-lg font-sans font-bold transition-all shrink-0 flex items-center gap-1"
+            >
+              {copiedDomain ? <Check size={12} /> : <Copy size={12} />}
+              <span>{copiedDomain ? 'تم النسخ!' : 'نسخ النطاق'}</span>
+            </button>
+          </div>
+          <div className="space-y-2 pt-1">
+            <a
+              href={`https://console.firebase.google.com/project/${projectId}/authentication/settings`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full bg-primary text-on-primary py-2.5 rounded-xl text-center text-xs font-black hover:bg-primary-container transition-colors shadow-md flex items-center justify-center gap-2"
+            >
+              <span>فتح صفحة إعدادات Firebase</span>
+              <ExternalLink size={14} />
+            </a>
+            <div className="text-[10px] text-on-surface/70 bg-surface/60 p-2.5 rounded-xl space-y-1">
+              <p className="font-bold text-primary">طريقة الإضافة في دقيقة واحدة:</p>
+              <p>1. افتح الرابط أعلاه في المتصفح</p>
+              <p>2. اضغط على قسم <b>Authorized domains</b></p>
+              <p>3. اضغط على <b>Add domain</b> وألصق النطاق المنسوخ أعلاه</p>
+            </div>
+            <div className="pt-1 border-t border-outline/10">
+              <p className="text-[10px] text-on-surface/60 text-center mb-1.5">أو يمكنك استخدام الرابط المصرح به مسبقاً مباشرة:</p>
+              <a
+                href={`https://${projectId}.firebaseapp.com`}
+                className="block text-center text-xs font-bold text-primary underline"
+              >
+                https://{projectId}.firebaseapp.com
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    } else if (err.code === 'auth/popup-blocked') {
+      setError(
+        <div className="text-right p-4 bg-amber-500/10 rounded-2xl border border-amber-500/30 space-y-3">
+          <p className="font-black text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2">
+            <AlertCircle size={16} />
+            <span>قام المتصفح بحظر نافذة تسجيل الدخول المنبثقة</span>
+          </p>
+          <p className="text-[11px] text-on-surface/80 leading-relaxed">
+            يرجى السماح بالنوافذ المنبثقة في متصفحك، أو الضغط على الزر أدناه للمتابعة عبر صفحة الدخول المباشرة:
+          </p>
+          <button
+            type="button"
+            onClick={() => handleGoogleLogin(true)}
+            className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-xl text-xs font-black transition-colors"
+          >
+            المتابعة عبر إعادة التوجيه
+          </button>
+        </div>
+      );
+    } else if (err.code === 'auth/missing-initial-state' || err.code === 'auth/internal-error') {
+      setError(
+        <div className="text-right p-4 bg-error/10 rounded-2xl border border-error/30 space-y-3">
+          <p className="font-black text-error text-xs flex items-center gap-2">
+            <AlertCircle size={16} />
+            <span>قيود ملفات تعريف الارتباط في المتصفح</span>
+          </p>
+          <p className="text-[11px] text-on-surface/80 leading-relaxed">
+            يمنع متصفح الهاتف حفظ حالة الجلسة عند إعادة التوجيه. يرجى الضغط على الزر أدناه لتسجيل الدخول عبر نافذة منبثقة أو استخدام متصفح Chrome/Safari الأساسي.
+          </p>
+          <button
+            type="button"
+            onClick={() => handleGoogleLogin(false)}
+            className="w-full bg-primary text-on-primary py-2.5 rounded-xl text-xs font-black transition-colors"
+          >
+            إعادة المحاولة عبر نافذة منبثقة
+          </button>
+        </div>
+      );
+    } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      setError('تم إغلاق نافذة تسجيل الدخول قبل اكتمال العملية. يرجى الضغط مجدداً واختيار حسابك.');
+    } else if (err.code === 'auth/account-exists-with-different-credential') {
+      const email = err.customData?.email;
+      const credential = providerType === 'google' 
+        ? GoogleAuthProvider.credentialFromError(err) 
+        : FacebookAuthProvider.credentialFromError(err);
         
-        // Check if user document exists, if not create it
-        const userDocFB = await getDoc(doc(db, 'users', user.uid));
-        if (!userDocFB.exists()) {
-          await setDoc(doc(db, 'users', user.uid), {
-            uid: user.uid,
-            email: user.email,
-            role: (await checkIsAdmin(user)) ? 'Admin' : 'user',
-            displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
-            photoURL: user.photoURL || null,
-            createdAt: new Date().toISOString()
-          });
-        } else {
-          await setDoc(doc(db, 'users', user.uid), {
-            photoURL: user.photoURL || null,
-            displayName: user.displayName || userDocFB.data()?.displayName
-          }, { merge: true });
+      if (email && credential) {
+        setPendingCred(credential);
+        fetchSignInMethodsForEmail(auth, email).then(methods => {
+          const method = methods[0];
+          let providerTitle = 'طريقة أخرى';
+          if (method === 'facebook.com') providerTitle = 'فيسبوك';
+          if (method === 'google.com') providerTitle = 'جوجل';
+          if (method === 'password') providerTitle = 'البريد الإلكتروني';
+          setLinkingMessage(`لديك حساب مسجل مسبقاً عبر ${providerTitle}. يرجى تسجيل الدخول عبر ${providerTitle} لربط الحساب.`);
+          setError(null);
+        }).catch(() => {
+          setError('هذا البريد مرتبط بحساب مسجل مسبقاً بطريقة أخرى.');
+        });
+      } else {
+        setError('هذا البريد الإلكتروني مسجل بطريقة أخرى بالفعل.');
+      }
+    } else {
+      setError(err?.message || `فشل تسجيل الدخول عبر ${providerType === 'google' ? 'جوجل' : 'فيسبوك'}. يرجى المحاولة مرة أخرى.`);
+    }
+  };
+
+  const handleGoogleLogin = async (forceRedirect = false) => {
+    setError('');
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      let user: any = null;
+
+      if (forceRedirect) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
+      try {
+        const result = await signInWithPopup(auth, provider);
+        user = result.user;
+      } catch (popupErr: any) {
+        if (popupErr.code === 'auth/popup-blocked') {
+          console.warn('Popup blocked by browser, falling back to redirect...');
+          await signInWithRedirect(auth, provider);
+          return;
         }
+        throw popupErr;
+      }
+
+      if (user) {
+        await handlePostLoginUserSync(user);
       }
     } catch (err: any) {
-      console.error('Facebook login error:', err);
-      if (err.code === 'auth/unauthorized-domain') {
-        setError(
-          <div className="text-right p-4 bg-error/5 rounded-2xl border border-error/20">
-            <p className="font-black text-error mb-2">النطاق غير مصرح به</p>
-            <p className="text-xs mb-3">أضف هذا النطاق في إعدادات Facebook Authentication:</p>
-            <div className="bg-surface p-2 rounded-lg text-[10px] font-mono mb-4 text-center">{window.location.hostname}</div>
-            <a href={`https://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/settings`} target="_blank" rel="noopener noreferrer" className="block w-full bg-primary text-on-primary py-2 rounded-xl text-center text-xs font-black">فتح إعدادات Firebase</a>
-          </div>
-        );
-      } else if (err.code === 'auth/missing-initial-state') {
-        setError(
-          <div className="text-right">
-            <p>فشل تسجيل الدخول بسبب قيود المتصفح على ملفات تعريف الارتباط (Cookies).</p>
-            <p className="mt-2">يرجى تجربة أحد الحلول التالية:</p>
-            <ul className="list-disc list-inside mt-1 space-y-1">
-              <li>استخدام متصفح Chrome أو Firefox بدلاً من متصفح فيسبوك المدمج.</li>
-              <li>إيقاف "منع التتبع بين المواقع" في إعدادات Safari.</li>
-              <li>
-                استخدام الرابط المباشر: {' '}
-                <a href="https://amatti-education-dz.firebaseapp.com/LAB" className="underline font-black">
-                  amatti-education-dz.firebaseapp.com/LAB
-                </a>
-              </li>
-            </ul>
-          </div>
-        );
-      } else if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        setError('تم إغلاق نافذة تسجيل الدخول قبل اكتمال العملية. يرجى المحاولة مرة أخرى.');
-      } else if (err.code === 'auth/invalid-credential') {
-        setError(
-          <span className="flex flex-col items-center gap-1 justify-center text-center">
-            <span>بيانات الاعتماد غير صالحة. يرجى التأكد من صحة "App Secret" في إعدادات فيسبوك بـ Firebase.</span>
-            <a 
-              href={`https://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/providers`} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="underline font-black text-[10px]"
-            >
-              تحقق من الإعدادات هنا
-            </a>
-          </span>
-        );
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError(
-          <span className="flex items-center gap-1 justify-center">
-            تسجيل الدخول عبر فيسبوك غير مفعل. يرجى تفعيله من{' '}
-            <a 
-              href={`https://console.firebase.google.com/project/${auth.app.options.projectId}/authentication/providers`} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="underline font-black"
-            >
-              Firebase Console
-            </a>
-          </span>
-        );
-      } else if (err.code === 'auth/account-exists-with-different-credential') {
-        const email = err.customData?.email;
-        const credential = FacebookAuthProvider.credentialFromError(err);
-        
-        if (email && credential) {
-          setPendingCred(credential);
-          try {
-            const methods = await fetchSignInMethodsForEmail(auth, email);
-            const method = methods[0];
-            let providerName = 'طريقة أخرى';
-            if (method === 'google.com') providerName = 'جوجل';
-            if (method === 'password') providerName = 'البريد الإلكتروني';
-            
-            setLinkingMessage(`لديك حساب مفعل مسبقاً عبر ${providerName}. يرجى تسجيل الدخول عبر ${providerName} لربط حساب فيسبوك الخاص بك تلقائياً.`);
-            setError(null);
-          } catch (fetchErr) {
-            setError('هذا البريد الإلكتروني مرتبط بحساب آخر. يرجى تسجيل الدخول بالطريقة التي استخدمتها سابقاً لربط الحسابات.');
-          }
-        } else {
-          setError('هذا البريد الإلكتروني مرتبط بحساب آخر. يرجى تسجيل الدخول بالطريقة التي استخدمتها سابقاً.');
-        }
-      } else {
-        setError('فشل تسجيل الدخول عبر فيسبوك. يرجى المحاولة مرة أخرى.');
+      handleAuthError(err, 'google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async (forceRedirect = false) => {
+    setError('');
+    setLoading(true);
+    const provider = new FacebookAuthProvider();
+
+    try {
+      let user: any = null;
+
+      if (forceRedirect) {
+        await signInWithRedirect(auth, provider);
+        return;
       }
+
+      try {
+        const result = await signInWithPopup(auth, provider);
+        user = result.user;
+      } catch (popupErr: any) {
+        if (popupErr.code === 'auth/popup-blocked') {
+          console.warn('Popup blocked, falling back to redirect...');
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        throw popupErr;
+      }
+
+      if (user) {
+        await handlePostLoginUserSync(user);
+      }
+    } catch (err: any) {
+      handleAuthError(err, 'facebook');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -545,7 +500,7 @@ export default function Login() {
                   لتجنب مشاكل تسجيل الدخول، يفضل فتح الموقع في متصفح خارجي أو استخدام الرابط المباشر.
                 </p>
                 <button 
-                  onClick={() => window.location.href = "https://amatti-education-dz.firebaseapp.com/LAB"}
+                  onClick={() => window.location.href = "https://education-dz-lab.firebaseapp.com"}
                   className="w-full bg-primary text-on-primary py-1 rounded-lg text-[8px] font-black"
                 >
                   فتح الرابط المباشر المستقر
@@ -751,20 +706,22 @@ export default function Login() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button 
               type="button"
-              onClick={handleGoogleLogin}
-              className="w-full bg-surface border-2 border-outline/10 hover:border-primary/30 text-on-surface font-black py-3 rounded-full transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95 text-xs"
+              onClick={() => handleGoogleLogin(false)}
+              disabled={loading}
+              className="w-full bg-surface border-2 border-outline/10 hover:border-primary/30 text-on-surface font-black py-3 rounded-full transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4 ml-1" alt="Google" />
-              {isLogin ? 'جوجل' : 'جوجل'}
+              <span>Google</span>
             </button>
 
             <button 
               type="button"
-              onClick={handleFacebookLogin}
-              className="w-full bg-[#1877F2] hover:bg-[#166fe5] text-white font-black py-3 rounded-full transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95 text-xs"
+              onClick={() => handleFacebookLogin(false)}
+              disabled={loading}
+              className="w-full bg-[#1877F2] hover:bg-[#166fe5] text-white font-black py-3 rounded-full transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-md active:scale-95 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Facebook size={18} className="ml-1" />
-              {isLogin ? 'فيسبوك' : 'فيسبوك'}
+              <span>Facebook</span>
             </button>
           </div>
           <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-[10px] font-bold text-on-surface/60 border-t border-outline/10 pt-6 w-full max-w-md mx-auto">

@@ -24,11 +24,41 @@ export default function LocationCard({
   const [copied, setCopied] = useState(false);
 
   const getNearbyInstitutions = async (lat: number, lng: number) => {
+    // Helper to query offline school database as resilient fallback
+    const getOfflineSchools = async (): Promise<InstitutionSuggestion[]> => {
+      try {
+        const { SCHOOL_DB } = await import('../data/schools');
+        const results: InstitutionSuggestion[] = [];
+        for (const [dirId, dir] of Object.entries(SCHOOL_DB)) {
+          for (const [comId, com] of Object.entries(dir.communes)) {
+            const matchesCommune = !communeName || com.name.includes(communeName) || communeName.includes(com.name);
+            if (matchesCommune) {
+              for (const [cycle, schools] of Object.entries(com.cycles)) {
+                for (const sch of schools) {
+                  results.push({
+                    name: sch.name,
+                    directorate: dir.name,
+                    commune: com.name,
+                    cycle: cycle
+                  });
+                  if (results.length >= 6) return results;
+                }
+              }
+            }
+          }
+        }
+        return results;
+      } catch (e) {
+        console.error("Failed to load local schools fallback:", e);
+        return [];
+      }
+    };
+
     try {
       const prompt = `ما هي المتوسطات والثانويات القريبة أو المتواجدة في ${communeName ? `بلدية ${communeName}` : 'المنطقة'}؟ يرجى تقديم قائمة بأسماء المؤسسات فقط (متوسطات وثانويات فقط) مع تفاصيلها (المديرية، البلدية، الطور) بتنسيق JSON فقط: [{"name": "...", "directorate": "...", "commune": "...", "cycle": "..."}]`;
       
       const response = await callGeminiAPI({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.1-flash-lite",
         contents: prompt
       });
 
@@ -42,33 +72,25 @@ export default function LocationCard({
 
       try {
         const data = JSON.parse(text);
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           setInstitutions(data.slice(0, 5));
-        } else {
-          setInstitutions([]);
+          setError(null);
+          return;
         }
       } catch (e) {
         console.error("JSON parse error:", e);
-        setInstitutions([]);
       }
     } catch (err: any) {
-      console.error("Error fetching institutions:", err);
-      const errorMessage = err?.message || String(err);
-      if (errorMessage.includes("quota") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("Hard quota limit reached")) {
-        setError("تم الوصول إلى الحد الأقصى لاستخدام الذكاء الاصطناعي. يرجى المحاولة لاحقاً.");
-        
-        // If the user hasn't selected their own key, prompt them to do so
-        if (typeof window !== 'undefined' && (window as any).aistudio?.openSelectKey) {
-          const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-          if (!hasKey) {
-            await (window as any).aistudio.openSelectKey();
-            // Try again after key selection
-            return getNearbyInstitutions(lat, lng);
-          }
-        }
-      } else {
-        setError("تعذر العثور على مؤسسات قريبة.");
-      }
+      console.warn("Gemini service busy or returned 503, activating local educational database fallback...", err);
+    }
+
+    // Seamless offline fallback
+    const offlineSchools = await getOfflineSchools();
+    if (offlineSchools.length > 0) {
+      setInstitutions(offlineSchools.slice(0, 5));
+      setError(null);
+    } else {
+      setError("يمكنك اختيار المؤسسة والبلدية مباشرة من القوائم المنسدلة في الصفحة.");
     }
   };
 
