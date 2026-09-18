@@ -107,15 +107,15 @@ export function useDailyReport() {
         if (settingsSnap.exists()) {
           const data = settingsSnap.data();
           
-          let directorateName = data.directorate || '';
-          let schoolName = data.school || '';
+          let directorateName = data.directorateName || data.directorate || '';
+          let schoolName = data.schoolName || data.school || '';
 
-          // Resolve names from Firestore if they are codes
-          if (data.directorate) {
+          // Resolve names from SCHOOL_DB if they are codes
+          if (!data.directorateName && data.directorate) {
             try {
-              const dirDoc = await getDoc(doc(db, 'schools', data.directorate));
-              if (dirDoc.exists()) {
-                const dirData = dirDoc.data();
+              const { SCHOOL_DB } = await import('../data/schools');
+              const dirData = (SCHOOL_DB as any)[data.directorate];
+              if (dirData) {
                 directorateName = dirData.name;
                 
                 if (data.commune && data.cycle && data.school) {

@@ -49,8 +49,8 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
           const unsubSettings = onSnapshot(doc(db, 'settings', user.uid), (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
-              setSchoolName(data.school || 'ثانوية عامة');
-              setDirectorate(data.directorate || 'مديرية التربية');
+              setSchoolName(data.schoolName || data.school || 'ثانوية عامة');
+              setDirectorate(data.directorateName || data.directorate || 'مديرية التربية');
               setCommune(data.commune || '');
               setAddress(data.address || '');
               setJobTitle(data.jobTitle || 'ملحق بالمخابر');

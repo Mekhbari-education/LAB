@@ -89,47 +89,134 @@ export default function SettingsPage() {
   const [selectedCommune, setSelectedCommune] = useState('');
   const [selectedCycle, setSelectedCycle] = useState('');
   const [selectedSchool, setSelectedSchool] = useState('');
+  const [customSchoolName, setCustomSchoolName] = useState('');
+  const [isCustomSchool, setIsCustomSchool] = useState(false);
   const [schoolAddress, setSchoolAddress] = useState('');
   
-  // Data loaded from Firestore
-  const [dirList, setDirList] = useState<any[]>([]);
-  const [currentDirData, setCurrentDirData] = useState<any>(null);
+  // Data loaded from Algerian educational database
+  const [schoolsDb, setSchoolsDb] = useState<any>(null);
+  const [dirList, setDirList] = useState<{ id: string; name: string; wilayaNum: number }[]>([]);
+  const [isLoadingSchools, setIsLoadingSchools] = useState(true);
+  const [initialSettings, setInitialSettings] = useState<any>(null);
 
   useEffect(() => {
-    // Fetch directorates list once
-    const fetchMeta = async () => {
-      try {
-        const metaDoc = await getDoc(doc(db, 'school_metadata', 'directorates'));
-        if (metaDoc.exists()) {
-          setDirList(metaDoc.data().list || []);
-        }
-      } catch (e) {
-        console.error('Error fetching directorates metadata:', e);
-      }
-    };
-    fetchMeta();
+    let isMounted = true;
+    import('../data/schools').then(({ SCHOOL_DB }) => {
+      if (!isMounted) return;
+      setSchoolsDb(SCHOOL_DB);
+
+      // Build sorted directorates list by official Wilaya numbering (01 to 58)
+      const list = Object.entries(SCHOOL_DB).map(([id, data]) => {
+        const wilayaNum = parseInt(id.slice(0, 2), 10) || 99;
+        return {
+          id,
+          name: data.name,
+          wilayaNum
+        };
+      }).sort((a, b) => a.wilayaNum - b.wilayaNum || a.name.localeCompare(b.name, 'ar'));
+
+      setDirList(list);
+      setIsLoadingSchools(false);
+    }).catch(err => {
+      console.error('Failed to load schools database:', err);
+      setIsLoadingSchools(false);
+    });
+
+    return () => { isMounted = false; };
   }, []);
 
+  // Current directorate data derived reactively from schoolsDb
+  const currentDirData = (schoolsDb && selectedDirectorate)
+    ? (schoolsDb[selectedDirectorate] || Object.values(schoolsDb).find((d: any) => d.name === selectedDirectorate || d.name.includes(selectedDirectorate)))
+    : null;
+
+  // Communes list derived from current directorate
+  const communesList = currentDirData?.communes
+    ? Object.entries(currentDirData.communes).map(([id, com]: [string, any]) => ({
+        id,
+        name: com.name,
+        cycles: com.cycles
+      })).sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+    : [];
+
+  // Current commune data
+  const currentCommune = currentDirData?.communes?.[selectedCommune]
+    || (currentDirData?.communes && Object.values(currentDirData.communes).find((c: any) => c.name === selectedCommune));
+
+  // Cycles list derived from current commune
+  const cyclesList = currentCommune?.cycles
+    ? Object.keys(currentCommune.cycles)
+    : ['ابتدائي', 'متوسط', 'ثانوي'];
+
+  // Schools list derived from current commune and cycle
+  const schoolsList: any[] = (currentCommune?.cycles && selectedCycle && currentCommune.cycles[selectedCycle])
+    ? [...currentCommune.cycles[selectedCycle]].sort((a: any, b: any) => a.name.localeCompare(b.name, 'ar'))
+    : [];
+
+  // Reconcile initial Firestore settings with schoolsDb once loaded
   useEffect(() => {
-    // Fetch current directorate data whenever selectedDirectorate changes
-    const fetchDir = async () => {
-      if (!selectedDirectorate) {
-        setCurrentDirData(null);
-        return;
+    if (!schoolsDb || !initialSettings) return;
+
+    // 1. Resolve directorate
+    let dirKey = '';
+    if (initialSettings.directorate) {
+      if (schoolsDb[initialSettings.directorate]) {
+        dirKey = initialSettings.directorate;
+      } else {
+        const found = Object.entries(schoolsDb).find(([_, v]: [string, any]) => 
+          v.name === initialSettings.directorate || v.name.includes(initialSettings.directorate) || initialSettings.directorate.includes(v.name)
+        );
+        if (found) dirKey = found[0];
       }
-      try {
-        const dirDoc = await getDoc(doc(db, 'schools', selectedDirectorate));
-        if (dirDoc.exists()) {
-          setCurrentDirData(dirDoc.data());
+    }
+
+    if (dirKey) {
+      setSelectedDirectorate(dirKey);
+      const dirData = schoolsDb[dirKey];
+
+      // 2. Resolve commune
+      let comKey = '';
+      if (dirData?.communes && initialSettings.commune) {
+        if (dirData.communes[initialSettings.commune]) {
+          comKey = initialSettings.commune;
         } else {
-          setCurrentDirData(null);
+          const foundCom = Object.entries(dirData.communes).find(([_, v]: [string, any]) => 
+            v.name === initialSettings.commune || v.name.includes(initialSettings.commune)
+          );
+          if (foundCom) comKey = foundCom[0];
         }
-      } catch (e) {
-        console.error('Error fetching directorate data from Firestore:', e);
       }
-    };
-    fetchDir();
-  }, [selectedDirectorate]);
+
+      if (comKey) {
+        setSelectedCommune(comKey);
+
+        // 3. Resolve cycle
+        if (initialSettings.cycle) {
+          setSelectedCycle(initialSettings.cycle);
+
+          // 4. Resolve school
+          const comData = dirData.communes[comKey];
+          const cycleSchools = comData?.cycles?.[initialSettings.cycle] || [];
+          const foundSchool = cycleSchools.find((s: any) => 
+            s.code === initialSettings.school || s.name === initialSettings.school || (initialSettings.schoolName && s.name === initialSettings.schoolName)
+          );
+
+          if (foundSchool) {
+            setSelectedSchool(foundSchool.code);
+            setIsCustomSchool(false);
+          } else if (initialSettings.school || initialSettings.schoolName) {
+            setSelectedSchool('__custom__');
+            setCustomSchoolName(initialSettings.schoolName || initialSettings.school);
+            setIsCustomSchool(true);
+          }
+        }
+      }
+    } else if (initialSettings.school || initialSettings.schoolName) {
+      setSelectedSchool('__custom__');
+      setCustomSchoolName(initialSettings.schoolName || initialSettings.school);
+      setIsCustomSchool(true);
+    }
+  }, [schoolsDb, initialSettings]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -251,23 +338,52 @@ export default function SettingsPage() {
   };
 
   const handleInstitutionSelect = async (suggestion: InstitutionSuggestion) => {
+    // Update address if we have it
+    if (suggestion.commune && suggestion.directorate) {
+      setSchoolAddress(`${suggestion.name}، ${suggestion.commune}، ${suggestion.directorate}`);
+    }
+
+    // Direct local match in schoolsDb
+    if (schoolsDb) {
+      for (const [dirId, dir] of Object.entries(schoolsDb) as any[]) {
+        if (suggestion.directorate && !dir.name.includes(suggestion.directorate) && !suggestion.directorate.includes(dir.name)) {
+          continue;
+        }
+        for (const [comId, com] of Object.entries(dir.communes) as any[]) {
+          if (suggestion.commune && !com.name.includes(suggestion.commune) && !suggestion.commune.includes(com.name)) {
+            continue;
+          }
+          for (const [cycle, schools] of Object.entries(com.cycles) as any[]) {
+            for (const school of schools) {
+              if (school.name.includes(suggestion.name) || suggestion.name.includes(school.name)) {
+                setSelectedDirectorate(dirId);
+                setSelectedCommune(comId);
+                setSelectedCycle(cycle);
+                setSelectedSchool(school.code);
+                setIsCustomSchool(false);
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to server search if available
     try {
       const response = await fetch('/api/schools/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ suggestion })
       });
-      const { bestMatch } = await response.json();
-      
-      if (bestMatch) {
-        setSelectedDirectorate(bestMatch.dirId);
-        setSelectedCommune(bestMatch.comId);
-        setSelectedCycle(bestMatch.cycle);
-        setSelectedSchool(bestMatch.schoolCode);
-        
-        // Also update address if we have it
-        if (suggestion.commune && suggestion.directorate) {
-          setSchoolAddress(`${suggestion.name}، ${suggestion.commune}، ${suggestion.directorate}`);
+      if (response.ok) {
+        const { bestMatch } = await response.json();
+        if (bestMatch) {
+          setSelectedDirectorate(bestMatch.dirId);
+          setSelectedCommune(bestMatch.comId);
+          setSelectedCycle(bestMatch.cycle);
+          setSelectedSchool(bestMatch.schoolCode);
+          setIsCustomSchool(false);
         }
       }
     } catch (err) {
@@ -408,14 +524,18 @@ export default function SettingsPage() {
           setJobTitle(data.jobTitle || 'ملحق بالمخابر');
           setGrade(data.grade || '');
           setSpecialty(data.specialty || '');
-          setSelectedDirectorate(data.directorate || '');
-          setSelectedCommune(data.commune || '');
-          setSelectedCycle(data.cycle || '');
-          setSelectedSchool(data.school || '');
           setSchoolAddress(data.address || '');
           setEmployeeId(data.employeeId || '1010101010101010');
           if (data.levels) setLevels(data.levels);
           if (data.timeSlots) setTimeSlots(data.timeSlots);
+
+          setInitialSettings({
+            directorate: data.directorate || data.directorateName || '',
+            commune: data.commune || data.communeName || '',
+            cycle: data.cycle || '',
+            school: data.school || data.schoolName || '',
+            schoolName: data.schoolName || ''
+          });
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, `settings/${auth.currentUser.uid}`);
@@ -480,14 +600,24 @@ export default function SettingsPage() {
     try {
       await updateProfile(auth.currentUser, { displayName });
       
+      const dirName = currentDirData?.name || selectedDirectorate || 'مديرية التربية';
+      const comName = currentCommune?.name || selectedCommune || '';
+      const matchedSchoolObj = schoolsList.find((s: any) => s.code === selectedSchool);
+      const resolvedSchoolName = isCustomSchool 
+        ? (customSchoolName || 'ثانوية عامة') 
+        : (matchedSchoolObj?.name || (selectedSchool === '__custom__' ? (customSchoolName || 'ثانوية عامة') : (selectedSchool || 'ثانوية عامة')));
+
       await setDoc(doc(db, 'settings', auth.currentUser.uid), {
         jobTitle,
         grade,
         specialty,
         directorate: selectedDirectorate,
+        directorateName: dirName,
         commune: selectedCommune,
+        communeName: comName,
         cycle: selectedCycle,
         school: selectedSchool,
+        schoolName: resolvedSchoolName,
         address: schoolAddress,
         employeeId,
         levels,
@@ -952,78 +1082,131 @@ export default function SettingsPage() {
                     بيانات المؤسسة التعليمية
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* مديرية التربية */}
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">مديرية التربية</label>
+                      <label className="text-sm font-black text-secondary mr-2 flex items-center justify-between">
+                        <span>مديرية التربية</span>
+                        {isLoadingSchools && <Loader2 className="animate-spin text-primary" size={14} />}
+                      </label>
                       <select 
-                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none"
+                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none cursor-pointer"
                         value={selectedDirectorate}
+                        disabled={isLoadingSchools}
                         onChange={(e) => {
                           setSelectedDirectorate(e.target.value);
                           setSelectedCommune('');
+                          setSelectedCycle('');
                           setSelectedSchool('');
+                          setIsCustomSchool(false);
+                          setCustomSchoolName('');
                         }}
                       >
-                        <option value="">اختر المديرية...</option>
-                        {dirList.map((dir: any) => (
+                        <option value="">{isLoadingSchools ? 'جاري تحميل مديريات التربية...' : 'اختر المديرية...'}</option>
+                        {dirList.map((dir) => (
                           <option key={dir.id} value={dir.id}>{dir.name}</option>
                         ))}
                       </select>
                     </div>
 
+                    {/* البلدية */}
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">البلدية</label>
+                      <label className="text-sm font-black text-secondary mr-2 flex items-center justify-between">
+                        <span>البلدية</span>
+                        {communesList.length > 0 && (
+                          <span className="text-xs text-on-surface/50 font-medium">({communesList.length} بلدية)</span>
+                        )}
+                      </label>
                       <select 
-                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-30"
-                        disabled={!selectedDirectorate || !currentDirData}
+                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-40 cursor-pointer"
+                        disabled={!selectedDirectorate || communesList.length === 0}
                         value={selectedCommune}
                         onChange={(e) => {
                           setSelectedCommune(e.target.value);
                           setSelectedCycle('');
                           setSelectedSchool('');
+                          setIsCustomSchool(false);
+                          setCustomSchoolName('');
                         }}
                       >
-                        <option value="">اختر البلدية...</option>
-                        {currentDirData && currentDirData.communes && Object.entries(currentDirData.communes).map(([id, com]: [string, any]) => (
-                          <option key={id} value={id}>{com.name}</option>
+                        <option value="">{selectedDirectorate ? 'اختر البلدية...' : 'يرجى اختيار المديرية أولاً...'}</option>
+                        {communesList.map((com) => (
+                          <option key={com.id} value={com.id}>{com.name}</option>
                         ))}
                       </select>
                     </div>
 
+                    {/* الطور التعليمي */}
                     <div className="space-y-3">
                       <label className="text-sm font-black text-secondary mr-2">الطور التعليمي</label>
                       <select 
-                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-30"
-                        disabled={!selectedCommune || !currentDirData}
+                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-40 cursor-pointer"
+                        disabled={!selectedCommune}
                         value={selectedCycle}
                         onChange={(e) => {
                           setSelectedCycle(e.target.value);
                           setSelectedSchool('');
+                          setIsCustomSchool(false);
+                          setCustomSchoolName('');
                         }}
                       >
-                        <option value="">اختر الطور...</option>
-                        {currentDirData && currentDirData.communes && currentDirData.communes[selectedCommune] && 
-                          Object.keys(currentDirData.communes[selectedCommune].cycles).map((cycle) => (
-                            <option key={cycle} value={cycle}>{cycle}</option>
-                          ))
-                        }
+                        <option value="">{selectedCommune ? 'اختر الطور...' : 'يرجى اختيار البلدية أولاً...'}</option>
+                        {cyclesList.map((cycle) => (
+                          <option key={cycle} value={cycle}>{cycle}</option>
+                        ))}
                       </select>
                     </div>
 
+                    {/* المؤسسة التعليمية */}
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">المؤسسة التعليمية</label>
-                      <select 
-                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-30"
-                        disabled={!selectedCycle || !currentDirData}
-                        value={selectedSchool}
-                        onChange={(e) => setSelectedSchool(e.target.value)}
-                      >
-                        <option value="">اختر المؤسسة...</option>
-                        {currentDirData && currentDirData.communes && currentDirData.communes[selectedCommune] && currentDirData.communes[selectedCommune].cycles[selectedCycle] && 
-                          currentDirData.communes[selectedCommune].cycles[selectedCycle].map((sch: any) => (
+                      <div className="flex items-center justify-between mr-2">
+                        <label className="text-sm font-black text-secondary">المؤسسة التعليمية</label>
+                        {selectedCycle && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCustomSchool(!isCustomSchool);
+                              if (!isCustomSchool) {
+                                setSelectedSchool('__custom__');
+                              } else {
+                                setSelectedSchool('');
+                              }
+                            }}
+                            className="text-xs text-primary hover:underline font-bold"
+                          >
+                            {isCustomSchool ? 'اختيار من القائمة الرسمية' : 'مؤسسة غير مدرجة؟ كتابة يدوية'}
+                          </button>
+                        )}
+                      </div>
+
+                      {!isCustomSchool ? (
+                        <select 
+                          className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none disabled:opacity-40 cursor-pointer"
+                          disabled={!selectedCycle || schoolsList.length === 0}
+                          value={selectedSchool}
+                          onChange={(e) => {
+                            if (e.target.value === '__custom__') {
+                              setIsCustomSchool(true);
+                              setSelectedSchool('__custom__');
+                            } else {
+                              setSelectedSchool(e.target.value);
+                            }
+                          }}
+                        >
+                          <option value="">{selectedCycle ? `اختر المؤسسة (${schoolsList.length} مؤسسة)...` : 'يرجى اختيار الطور أولاً...'}</option>
+                          {schoolsList.map((sch: any) => (
                             <option key={sch.code} value={sch.code}>{sch.name}</option>
-                          ))
-                        }
-                      </select>
+                          ))}
+                          <option value="__custom__">-- إدخال اسم المؤسسة يدوياً --</option>
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold"
+                          placeholder="اكتب اسم المؤسسة التعليمية كاملاً (مثال: ثانوية العربي التبسي)..."
+                          value={customSchoolName}
+                          onChange={(e) => setCustomSchoolName(e.target.value)}
+                        />
+                      )}
                     </div>
                   </div>
 
