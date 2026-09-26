@@ -132487,38 +132487,40 @@ var init_db = __esm({
   }
 });
 
-// firebase-applet-config.json
-var firebase_applet_config_default;
-var init_firebase_applet_config = __esm({
-  "firebase-applet-config.json"() {
-    firebase_applet_config_default = {
-      projectId: "education-dz-lab",
-      appId: "1:507740772254:web:80b99ef42dbb5e1e33a88f",
-      apiKey: "AIzaSyBp5_StPcZz7Imvvk879yNPS8KfdLmO8cw",
-      authDomain: "education-dz-lab.firebaseapp.com",
-      firestoreDatabaseId: "ai-studio-labeducationdz-1f681c2a-3337-4272-85c5-58963eeb5292",
-      storageBucket: "education-dz-lab.firebasestorage.app",
-      messagingSenderId: "507740772254",
-      measurementId: "",
-      oAuthClientId: "507740772254-fgqlc892fcdo8ator099jif13q1mq9jd.apps.googleusercontent.com",
-      recaptchaSiteKey: ""
-    };
-  }
-});
-
 // src/lib/firebase-admin.ts
-var import_app, import_auth, adminAuth;
+function getAdminAuth() {
+  if (!cachedAuth) {
+    let projectId = "education-dz-lab";
+    try {
+      const configPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+      if (import_fs.default.existsSync(configPath)) {
+        const config = JSON.parse(import_fs.default.readFileSync(configPath, "utf8"));
+        if (config.projectId) projectId = config.projectId;
+      }
+    } catch (e) {
+      console.warn("Could not read firebase-applet-config.json, using default projectId", e);
+    }
+    if (!(0, import_app.getApps)().length) {
+      (0, import_app.initializeApp)({ projectId });
+    }
+    cachedAuth = (0, import_auth.getAuth)();
+  }
+  return cachedAuth;
+}
+var import_app, import_auth, import_fs, import_path, cachedAuth, adminAuth;
 var init_firebase_admin = __esm({
   "src/lib/firebase-admin.ts"() {
     import_app = require("firebase-admin/app");
     import_auth = require("firebase-admin/auth");
-    init_firebase_applet_config();
-    if (!(0, import_app.getApps)().length) {
-      (0, import_app.initializeApp)({
-        projectId: firebase_applet_config_default.projectId
-      });
-    }
-    adminAuth = (0, import_auth.getAuth)();
+    import_fs = __toESM(require("fs"), 1);
+    import_path = __toESM(require("path"), 1);
+    cachedAuth = null;
+    adminAuth = {
+      verifyIdToken: async (token) => {
+        const auth = getAdminAuth();
+        return auth.verifyIdToken(token);
+      }
+    };
   }
 });
 
@@ -133057,9 +133059,9 @@ var init_dbRoutes = __esm({
 // server.ts
 var import_express2 = __toESM(require("express"), 1);
 var import_vite = require("vite");
-var import_path = __toESM(require("path"), 1);
+var import_path2 = __toESM(require("path"), 1);
 var import_firebase_admin2 = __toESM(require("firebase-admin"), 1);
-var import_fs = __toESM(require("fs"), 1);
+var import_fs2 = __toESM(require("fs"), 1);
 var import_genai = require("@google/genai");
 var import_ioredis = __toESM(require("ioredis"), 1);
 var MemoryStore = class {
@@ -133125,9 +133127,11 @@ function createRateLimiter(windowMs, maxRequests, store = activeRateLimitStore) 
 var geminiLimiter = createRateLimiter(6e4, 30);
 var adminLimiter = createRateLimiter(6e4, 5);
 function requireLocalhost(req, res, next) {
+  const socketIp = req.socket.remoteAddress ?? "";
+  const isSocketLocal = socketIp === "127.0.0.1" || socketIp === "::1" || socketIp === "::ffff:127.0.0.1";
   const ip = req.ip ?? "";
-  const isLocal = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
-  if (!isLocal) {
+  const isIpLocal = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+  if (!isSocketLocal || !isIpLocal) {
     return res.status(403).json({
       error: "\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u0627\u0631 \u0645\u062A\u0627\u062D \u0645\u0646 \u0627\u0644\u062E\u0627\u062F\u0645 \u0627\u0644\u0645\u062D\u0644\u064A \u0641\u0642\u0637."
     });
@@ -133226,10 +133230,10 @@ async function startServer() {
       }
       const user = await adminApp.auth().getUserByEmail(email);
       await adminApp.auth().setCustomUserClaims(user.uid, { admin: true });
-      const appletConfigPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+      const appletConfigPath = import_path2.default.join(process.cwd(), "firebase-applet-config.json");
       let dbId;
-      if (import_fs.default.existsSync(appletConfigPath)) {
-        const config = JSON.parse(import_fs.default.readFileSync(appletConfigPath, "utf8"));
+      if (import_fs2.default.existsSync(appletConfigPath)) {
+        const config = JSON.parse(import_fs2.default.readFileSync(appletConfigPath, "utf8"));
         dbId = config.firestoreDatabaseId;
       }
       const { getFirestore } = await import("firebase-admin/firestore");
@@ -133275,10 +133279,10 @@ async function startServer() {
         await adminApp.delete();
         return res.status(403).json({ error: "Caller is not an admin" });
       }
-      const appletConfigPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+      const appletConfigPath = import_path2.default.join(process.cwd(), "firebase-applet-config.json");
       let dbId;
-      if (import_fs.default.existsSync(appletConfigPath)) {
-        const config = JSON.parse(import_fs.default.readFileSync(appletConfigPath, "utf8"));
+      if (import_fs2.default.existsSync(appletConfigPath)) {
+        const config = JSON.parse(import_fs2.default.readFileSync(appletConfigPath, "utf8"));
         dbId = config.firestoreDatabaseId;
       }
       const { getFirestore } = await import("firebase-admin/firestore");
@@ -133369,10 +133373,10 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path.default.join(process.cwd(), "dist");
+    const distPath = import_path2.default.join(process.cwd(), "dist");
     app.use(import_express2.default.static(distPath));
     app.get("*", (_req, res) => {
-      res.sendFile(import_path.default.join(distPath, "index.html"));
+      res.sendFile(import_path2.default.join(distPath, "index.html"));
     });
   }
   app.listen(PORT, "0.0.0.0", () => {
