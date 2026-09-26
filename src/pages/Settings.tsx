@@ -28,10 +28,12 @@ import {
   AlertCircle,
   Clock,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
+import PrintSettingsTab from '../components/settings/PrintSettingsTab';
 import { auth, db, storage, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
 import { 
   updateProfile, 
@@ -797,6 +799,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: 'profile', name: 'الملف الشخصي', icon: User },
     { id: 'institution', name: 'المؤسسة والتعليم', icon: School },
+    { id: 'printing', name: 'إعدادات الطباعة والوثائق', icon: Printer },
     { id: 'database', name: 'إدارة البيانات', icon: Database },
     { id: 'system', name: 'النظام والأمان', icon: Shield },
   ];
@@ -1819,6 +1822,10 @@ export default function SettingsPage() {
                   </div>
                 </section>
               </div>
+            )}
+
+            {activeTab === 'printing' && (
+              <PrintSettingsTab />
             )}
           </motion.div>
 

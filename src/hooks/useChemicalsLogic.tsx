@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { onSnapshot, query, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { db, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
+import { handleFirestoreError, OperationType } from '../firebase';
 import { useSchool } from '../context/SchoolContext';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import * as XLSX from 'xlsx';
@@ -11,6 +10,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { PDFService } from '../services/pdfService';
+import { PrintService } from '../services/printService';
 import { Chemical, GHS_ICONS, GHS_LABELS } from '../types/chemicals';
 import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
@@ -300,12 +300,6 @@ export function useChemicalsLogic(isNested = false) {
   };
 
   const handlePrintList = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بالنوافذ المنبثقة لطباعة القائمة');
-      return;
-    }
-
     const hazardousCount = sortedChemicals.filter(c => (c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger').length;
     const today = new Date();
     const formattedDate = today.toLocaleDateString('ar-DZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -333,7 +327,7 @@ export function useChemicalsLogic(isNested = false) {
       `;
     }).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl" lang="ar">
         <head>
           <meta charset="UTF-8">
@@ -566,8 +560,8 @@ export function useChemicalsLogic(isNested = false) {
           </div>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: `سجل المواد الكيميائية — ${schoolName}` });
   };
 
 
@@ -584,10 +578,24 @@ export function useChemicalsLogic(isNested = false) {
     ]);
 
     await PDFService.generateTablePDF(
-      'تقرير جرد المواد الكيميائية',
+      'تقرير جرد المواد الكيميائية المخبرية',
       headers,
       tableData,
-      `chemicals_inventory_${new Date().toISOString().split('T')[0]}.pdf`
+      `chemicals_inventory_${new Date().toISOString().split('T')[0]}.pdf`,
+      {
+        subtitle: `سجل المواد والمحاليل المتوفرة في المخبر - إجمالي المواد: ${filteredChemicals.length}`,
+        schoolInfo: {
+          school: schoolName,
+          directorate: stateName,
+          laboratory: 'مخبر الكيمياء والعلوم الفيزيائية'
+        },
+        summaryCards: [
+          { label: 'إجمالي المواد الكيميائية', value: filteredChemicals.length },
+          { label: 'المواد السائلة', value: filteredChemicals.filter(c => c.state === 'liquid').length },
+          { label: 'المواد الصلبة', value: filteredChemicals.filter(c => c.state === 'solid').length },
+          { label: 'تاريخ إعداد التقرير', value: new Date().toLocaleDateString('ar-DZ') }
+        ]
+      }
     );
   };
 
@@ -674,12 +682,6 @@ export function useChemicalsLogic(isNested = false) {
   };
 
   const handlePrintInventoryCards = (items: Chemical[]) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بالنوافذ المنبثقة لطباعة البطاقات');
-      return;
-    }
-
     const today = new Date();
     const academicYear = "2025/2026"; 
 
@@ -813,7 +815,7 @@ export function useChemicalsLogic(isNested = false) {
       `;
     }).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl" lang="ar">
         <head>
           <meta charset="UTF-8">
@@ -971,15 +973,12 @@ export function useChemicalsLogic(isNested = false) {
           </div>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: 'بطاقة مخزون' });
   };
 
   const handlePrint = (c: Chemical) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl">
         <head>
           <title>بطاقة مادة - ${c.nameEn}</title>
@@ -1024,11 +1023,10 @@ export function useChemicalsLogic(isNested = false) {
             <div class="item" style="grid-column: span 2;"><span class="label">ملاحظات:</span> ${c.notes || 'لا توجد'}</div>
           </div>
           <div class="footer">طبع بتاريخ: ${new Date().toLocaleString('ar-DZ')}</div>
-          <script>window.print();</script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: `بطاقة مادة - ${c.nameAr || c.nameEn}` });
   };
 
   const handleSort = (key: keyof Chemical) => {

@@ -22,8 +22,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { analyzeIncident } from '../services/geminiService';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { PDFService } from '../services/pdfService';
 import { FileText, Sparkles, Download, ShieldCheck as ShieldCheckIcon } from 'lucide-react';
 
 import { SafetyItem, Incident } from '../types/safety';
@@ -36,7 +35,7 @@ const iconMap = {
 };
 
 export default function Safety() {
-  const { schoolId } = useSchool();
+  const { schoolId, schoolName, directorate } = useSchool();
   const navigate = useNavigate();
   const [safetyItems, setSafetyItems] = useState<SafetyItem[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -167,51 +166,12 @@ export default function Safety() {
     }
   };
 
-  const exportIncidentPDF = (incident: Incident) => {
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    
-    // Arabic support is tricky in jsPDF without custom fonts, 
-    // so we'll use English labels or assume the user has fonts if this were a production app.
-    // For this prototype, we'll create a professional structured layout.
-    
-    doc.setFontSize(22);
-    doc.text('Incident Report (PV d\'accident)', 105, 20, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.text(`Ref: ${incident.id.toUpperCase()}`, 20, 30);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 190, 30, { align: 'right' });
-    
-    autoTable(doc, {
-      startY: 40,
-      head: [['Field', 'Details']],
-      body: [
-        ['Type', incident.type],
-        ['Location', incident.location || 'N/A'],
-        ['Severity', incident.severity.toUpperCase()],
-        ['Reporter', incident.reporter],
-        ['Injured Persons', incident.injured || 'None reported'],
-        ['Witnesses', incident.witnesses || 'None'],
-        ['First Aid Given', incident.firstAid || 'None'],
-        ['Description', incident.description || 'N/A'],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [43, 61, 34] },
+  const exportIncidentPDF = async (incident: Incident) => {
+    await PDFService.generateIncidentPDF(incident, {
+      school: schoolName,
+      directorate: directorate,
+      laboratory: 'مخبر العلوم والتكنولوجيا'
     });
-
-    if (incident.analysis) {
-      doc.text('AI Safety Analysis & Investigation:', 20, (doc as any).lastAutoTable.finalY + 15);
-      autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 20,
-        body: [
-          ['Root Cause', incident.analysis.rootCause],
-          ['Mitigation', incident.analysis.longTermMitigation],
-          ['Safety Tips', incident.analysis.safetyTipsAr]
-        ],
-        theme: 'striped'
-      });
-    }
-
-    doc.save(`incident_${incident.id}.pdf`);
   };
 
   const handleDeleteIncident = async (id: string) => {

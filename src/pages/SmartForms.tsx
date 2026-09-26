@@ -20,6 +20,7 @@ import { cn } from '../lib/utils';
 
 import { findSmartForm, ensureApiKey } from '../services/geminiService';
 import { PDFService } from '../services/pdfService';
+import { useSchool } from '../context/SchoolContext';
 
 interface FormTemplate {
   id: string;
@@ -37,6 +38,7 @@ const TEMPLATES: FormTemplate[] = [
 ];
 
 export default function SmartForms() {
+  const { schoolName, directorate } = useSchool();
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
   const [aiQuery, setAiQuery] = useState('');
@@ -62,11 +64,20 @@ export default function SmartForms() {
       item.condition
     ]));
 
-    PDFService.generateTablePDF(
+    await PDFService.generateTablePDF(
       selectedTemplate.title,
       headers,
       data,
-      `${selectedTemplate.id}.pdf`
+      `${selectedTemplate.id}.pdf`,
+      {
+        subtitle: selectedTemplate.description,
+        schoolInfo: {
+          school: schoolName,
+          directorate: directorate,
+          laboratory: 'مخبر العلوم والتكنولوجيا'
+        },
+        notes: formData.content || undefined
+      }
     );
   };
 

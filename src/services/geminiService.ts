@@ -13,9 +13,12 @@ function sanitizeInput(input: string, maxLength: number = 1000): string {
 }
 
 export async function callGeminiAPI(reqBody: any, retries = 2, delay = 1000) {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const apiUrl = `${apiBase}/api/gemini`;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch('/api/gemini', {
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reqBody)

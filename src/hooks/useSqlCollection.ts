@@ -43,6 +43,14 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
         throw err;
       }
     },
+    placeholderData: () => {
+      try {
+        const cached = localStorage.getItem(`offline_cache_${key}`);
+        return cached ? (JSON.parse(cached) as T[]) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
     // Keep cached data indefinitely while offline
     staleTime: 1000 * 60 * 5,
     retry: (failureCount, error) => {
@@ -51,18 +59,7 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
     }
   });
 
-  // If query errored or is loading but cache is available, fallback gracefully
-  let finalData = data;
-  if (!finalData) {
-    try {
-      const cached = localStorage.getItem(`offline_cache_${key}`);
-      if (cached) {
-        finalData = JSON.parse(cached);
-      }
-    } catch (e) {
-      // Ignore
-    }
-  }
+  const finalData = data;
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [key] });
 

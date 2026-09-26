@@ -4,8 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { doc, getDoc, setDoc, query, where, getDocs, serverTimestamp, orderBy, onSnapshot, addDoc, limit, deleteDoc } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
 import { useTimeSlots } from './useTimeSlots';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { PDFService } from '../services/pdfService';
 import { ReportRow, Teacher, InstitutionSettings, SavedReport } from '../types/reports';
 import { cleanSchoolName } from '../lib/utils';
 
@@ -359,53 +358,15 @@ export function useDailyReport() {
 
   const handleExportPDF = async () => {
     await handleSave();
-    const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // Add a simple header
-    doc.setFontSize(18);
-    doc.text('التقرير اليومي للمخبر', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text(`التاريخ: ${date}`, 105, 30, { align: 'center' });
-    doc.text(`المؤسسة: ${institution?.school || ''}`, 105, 35, { align: 'center' });
-
-    const tableData = rows.map((row, index) => [
-      row.notes,
-      row.equipment,
-      row.activityTitle,
-      row.class,
-      row.time,
-      `${row.teacher}\n(${row.teacherSubject || ''})`,
-      index + 1
-    ]);
-
-    autoTable(doc, {
-      head: [['ملاحظات', 'الوسائل والمواد', 'النشاط', 'القسم', 'التوقيت', 'الأستاذ', 'رقم']],
-      body: tableData,
-      startY: 45,
-      styles: { 
-        font: 'helvetica', 
-        halign: 'right',
-        fontSize: 10,
-        cellPadding: 5
+    await PDFService.generateDailyReportPDF({
+      date,
+      schoolInfo: {
+        school: institution?.school,
+        directorate: institution?.directorate,
+        laboratory: 'مخبر العلوم الطبيعية والفيزيائية'
       },
-      headStyles: { 
-        fillColor: [43, 61, 34], // primary color
-        textColor: [255, 255, 255],
-        halign: 'center'
-      },
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 20 },
-        5: { cellWidth: 30 },
-        6: { cellWidth: 10, halign: 'center' }
-      },
-      theme: 'grid'
+      rows
     });
-
-    doc.save(`daily-report-${date}.pdf`);
   };
 
   const handleExportWord = async () => {

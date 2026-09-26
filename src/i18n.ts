@@ -15,13 +15,14 @@ i18n
       fr: { translation: fr },
       en: { translation: en }
     },
+    lng: 'ar',
     fallbackLng: 'ar',
     supportedLngs: ['ar', 'fr', 'en'],
     interpolation: {
       escapeValue: false, // not needed for react as it escapes by default
     },
     detection: {
-      order: ['localStorage', 'navigator'],
+      order: ['localStorage'],
       caches: ['localStorage'],
     }
   });

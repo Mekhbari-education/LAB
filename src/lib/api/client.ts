@@ -18,7 +18,9 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(url, { ...options, headers });
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const targetUrl = url.startsWith('http') ? url : `${apiBase}${url}`;
+  const response = await fetch(targetUrl, { ...options, headers });
   
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));

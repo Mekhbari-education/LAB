@@ -54,6 +54,7 @@ import Breadcrumbs from './Breadcrumbs';
 import NotificationCenter from './NotificationCenter';
 import logo from '/ministry-logo.png';
 import { ROUTES } from '../config/routes';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Layout() {
   const location = useLocation();
@@ -172,27 +173,11 @@ export default function Layout() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' || 
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
+  const { isDarkMode, setIsDarkMode } = useTheme();
   const [userRole, setUserRole] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => signOut(auth);
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
 
   useEffect(() => {
     const fetchUserRole = async () => {

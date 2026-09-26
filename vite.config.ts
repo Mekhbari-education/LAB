@@ -7,15 +7,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: './',
+    base: mode === 'production' && process.env.BUILD_TARGET === 'gh-pages' ? './' : '/',
     plugins: [
       react(), 
       tailwindcss(),
       VitePWA({ 
         registerType: 'autoUpdate', 
         workbox: { 
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,ttf}'],
-          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024
+          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024
         },
         manifest: {
           name: 'نظام تسيير المخابر',
@@ -41,6 +41,29 @@ export default defineConfig(({mode}) => {
         }
       })
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/firebase')) {
+              return 'vendor-firebase';
+            }
+            if (id.includes('node_modules/recharts')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('node_modules/jspdf') || id.includes('node_modules/xlsx')) {
+              return 'vendor-pdf-xlsx';
+            }
+            if (id.includes('node_modules/lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) {
+              return 'vendor-react';
+            }
+          }
+        }
+      }
+    },
     define: {
     },
     resolve: {

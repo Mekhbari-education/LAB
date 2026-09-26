@@ -34,10 +34,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { getChemicalIntelligence, ChemicalIntelligence, ensureApiKey } from '../services/geminiService';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
-import { PDFService } from '../services/pdfService';
 import QRScanner from '../components/QRScanner';
 import { ChemicalAddModal } from '../components/ChemicalAddModal';
 import { ChemicalBulkConfirmModal } from '../components/ChemicalBulkConfirmModal';

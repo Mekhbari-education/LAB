@@ -10,9 +10,6 @@ import { useTimeSlots } from '../hooks/useTimeSlots';
 import TimeSlotManager from '../components/TimeSlotManager';
 import ClassPicker from '../components/ClassPicker';
 import ResourcePicker from '../components/ResourcePicker';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-
 import { ReportRow, Teacher, InstitutionSettings, SavedReport } from '../types/reports';
 import { useDailyReport } from '../hooks/useDailyReport';
 

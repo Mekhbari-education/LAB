@@ -21,9 +21,11 @@ export function useFirestoreCollection<T = DocumentData>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [isPending, startTransition] = [false, (cb: any) => cb()]; // Mock transition. useTransition not always supported in the exact same way.
+  const [isPending, startTransition] = useTransition();
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const transformFnRef = useRef(transformFn);
+  transformFnRef.current = transformFn;
 
   useEffect(() => {
     setLoading(true);
@@ -34,9 +36,8 @@ export function useFirestoreCollection<T = DocumentData>(
       (snapshot) => {
         if (!mounted) return;
         
-        // startTransition prevents large renders from blocking the UI thread
         startTransition(() => {
-          const items = snapshot.docs.map(transformFn);
+          const items = snapshot.docs.map(docSnap => transformFnRef.current(docSnap));
           setData(items);
           setLoading(false);
         });
@@ -56,7 +57,7 @@ export function useFirestoreCollection<T = DocumentData>(
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, dependencies);
+  }, [query, ...dependencies]);
 
   return { data, loading, error };
 }

@@ -13,7 +13,11 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-const userEmail = 'faycalassoul@gmail.com';
+const userEmail = process.argv[2] || process.env.ADMIN_EMAIL;
+if (!userEmail) {
+  console.error('Error: Please provide user email as an argument: node scripts/setAdminClaim.js user@example.com');
+  process.exit(1);
+}
 
 async function setAdminClaim() {
   try {

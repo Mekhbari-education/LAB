@@ -39,7 +39,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { getEquipmentIntelligence, ensureApiKey } from '../services/geminiService';
-import { PDFService } from '../services/pdfService';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import QRScanner from '../components/QRScanner';
 

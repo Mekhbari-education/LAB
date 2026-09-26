@@ -7,9 +7,8 @@ import { useSchool } from '../context/SchoolContext';
 import { useSqlCollection } from './useSqlCollection';
 import * as XLSX from 'xlsx';
 import { getEquipmentIntelligence, EquipmentIntelligence, ensureApiKey } from '../services/geminiService';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { PDFService } from '../services/pdfService';
+import { PrintService } from '../services/printService';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { Equipment, MaintenanceLog } from '../types/equipment';
 
@@ -238,12 +237,6 @@ export function useEquipmentLogic(isNested = false) {
   };
 
   const handlePrintList = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بالنوافذ المنبثقة لطباعة القائمة');
-      return;
-    }
-
     const today = new Date();
     const formattedDate = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;
 
@@ -261,7 +254,7 @@ export function useEquipmentLogic(isNested = false) {
       </tr>
     `).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl" lang="ar">
         <head>
           <title>سجل جرد العتاد والزجاجيات - ${formattedDate}</title>
@@ -364,17 +357,11 @@ export function useEquipmentLogic(isNested = false) {
           </div>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: 'سجل جرد العتاد' });
   };
 
   const handlePrintInventoryCards = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('يرجى السماح بالنوافذ المنبثقة لطباعة بطاقات الجرد');
-      return;
-    }
-
     const cardsHtml = filteredEquipment.map((e) => `
       <div class="card">
         <div class="card-header">
@@ -395,7 +382,7 @@ export function useEquipmentLogic(isNested = false) {
       </div>
     `).join('');
 
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl" lang="ar">
         <head>
           <title>طباعة بطاقات الجرد</title>
@@ -466,11 +453,10 @@ export function useEquipmentLogic(isNested = false) {
         </head>
         <body>
           ${cardsHtml}
-          <script>window.onload = () => { window.print(); window.close(); }</script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: 'بطاقات جرد العتاد' });
   };
 
   const handleExportPDF = async () => {
@@ -489,7 +475,21 @@ export function useEquipmentLogic(isNested = false) {
       'تقرير جرد العتاد والزجاجيات المخبرية',
       headers,
       tableData,
-      `equipment_inventory_${new Date().toISOString().split('T')[0]}`
+      `equipment_inventory_${new Date().toISOString().split('T')[0]}`,
+      {
+        subtitle: `سجل جرد ومتابعة الأجهزة والوسائل التعليمية - العدد الإجمالي: ${filteredEquipment.length}`,
+        schoolInfo: {
+          school: schoolName,
+          directorate: directorate,
+          laboratory: 'مخبر العلوم والتكنولوجيا'
+        },
+        summaryCards: [
+          { label: 'إجمالي الأجهزة والعتاد', value: filteredEquipment.length },
+          { label: 'أجهزة سليمة وظيفياً', value: filteredEquipment.filter(e => e.status === 'functional').length },
+          { label: 'أجهزة تحت الصيانة', value: filteredEquipment.filter(e => e.status === 'maintenance').length },
+          { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
+        ]
+      }
     );
   };
 
@@ -554,10 +554,7 @@ export function useEquipmentLogic(isNested = false) {
   };
 
   const handlePrint = (e: Equipment) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    printWindow.document.write(`
+    const html = `
       <html dir="rtl">
         <head>
           <title>بطاقة تقنية - ${e.name}</title>
@@ -588,11 +585,10 @@ export function useEquipmentLogic(isNested = false) {
             <div class="item"><span class="label">الكمية التالفة:</span> <span class="value">${e.brokenQuantity}</span></div>
           </div>
           <div class="footer">طبع بتاريخ: ${new Date().toLocaleString('ar-DZ')}</div>
-          <script>window.print();</script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `;
+    PrintService.printHtml(html, { title: `بطاقة تقنية - ${e.name}` });
   };
 
   const handleSort = (field: keyof Equipment) => {

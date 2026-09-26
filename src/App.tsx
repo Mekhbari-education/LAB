@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import React, { useEffect, useState, Suspense } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { HelmetProvider } from 'react-helmet-async';
@@ -11,14 +11,15 @@ import { auth, testFirestoreConnection } from './firebase';
 
 import { ROUTES } from './config/routes';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
 import Layout from './components/Layout';
 import FirebaseSetup from './components/FirebaseSetup';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
 import OfflineBanner from './components/OfflineBanner';
+import { ThemeProvider } from './context/ThemeContext';
 
 // Lazy-loaded pages
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const DocumentLibrary = React.lazy(() => import('./pages/DocumentLibrary'));
 const Chemicals = React.lazy(() => import('./pages/Chemicals'));
 const Equipment = React.lazy(() => import('./pages/Equipment'));
@@ -66,6 +67,8 @@ const SchoolLegislation = React.lazy(() => import('./pages/SchoolLegislation'));
 const SafetyGuide = React.lazy(() => import('./pages/SafetyGuide'));
 const LabCalculators = React.lazy(() => import('./pages/LabCalculators'));
 import { SchoolProvider } from './context/SchoolContext';
+import { PrintSettingsProvider } from './context/PrintSettingsContext';
+import PrintPreviewModal from './components/PrintPreviewModal';
 const Diagnostic = React.lazy(() => import('./pages/Diagnostic'));
 const DesignSystem = React.lazy(() => import('./pages/DesignSystem'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
@@ -127,21 +130,24 @@ export default function App() {
   return (
     <HelmetProvider>
       <ErrorBoundary>
-        <SchoolProvider>
-          <Router>
-            <OfflineBanner />
+        <ThemeProvider>
+          <SchoolProvider>
+            <PrintSettingsProvider>
+              <Router>
+              <OfflineBanner />
+              <PrintPreviewModal />
             {user && connectionError && (
               <div className="fixed bottom-4 right-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black">{connectionError}</span>
                   <button onClick={() => setConnectionError(null)} className="opacity-50 hover:opacity-100">✕</button>
                 </div>
-                <a 
-                  href={ROUTES.DIAGNOSTIC} 
+                <Link 
+                  to={ROUTES.DIAGNOSTIC} 
                   className="bg-white/20 hover:bg-white/30 transition-colors py-2 px-4 rounded-xl text-[10px] font-bold text-center flex items-center justify-center gap-2"
                 >
                   تشغيل أداة التشخيص
-                </a>
+                </Link>
               </div>
             )}
             {user && !setupComplete && <FirebaseSetup onComplete={() => setSetupComplete(true)} />}
@@ -244,7 +250,9 @@ export default function App() {
           </Suspense>
             </ErrorBoundary>
           </Router>
+        </PrintSettingsProvider>
         </SchoolProvider>
+        </ThemeProvider>
       </ErrorBoundary>
     </HelmetProvider>
   );

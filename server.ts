@@ -107,9 +107,12 @@ const adminLimiter    = createRateLimiter(60_000, 5);     // 5  طلبات / د�
 
 // ─── حماية نقاط الإدارة: localhost فقط ────────────────────────────────────
 function requireLocalhost(req: Request, res: Response, next: NextFunction) {
+  const socketIp = req.socket.remoteAddress ?? '';
+  const isSocketLocal = socketIp === '127.0.0.1' || socketIp === '::1' || socketIp === '::ffff:127.0.0.1';
   const ip = req.ip ?? '';
-  const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
-  if (!isLocal) {
+  const isIpLocal = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+
+  if (!isSocketLocal || !isIpLocal) {
     return res.status(403).json({
       error: 'هذا المسار متاح من الخادم المحلي فقط.'
     });

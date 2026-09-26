@@ -37,7 +37,14 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let unsubSettings: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (unsubSettings) {
+        unsubSettings();
+        unsubSettings = null;
+      }
+
       if (user) {
         setSchoolIdState(user.uid);
         
@@ -46,9 +53,12 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
           const { db } = await import('../firebase');
           const { doc, onSnapshot } = await import('firebase/firestore');
           
-          const unsubSettings = onSnapshot(doc(db, 'settings', user.uid), (docSnap) => {
+          unsubSettings = onSnapshot(doc(db, 'settings', user.uid), (docSnap) => {
             if (docSnap.exists()) {
               const data = docSnap.data();
+              if (data.schoolId) {
+                setSchoolIdState(data.schoolId);
+              }
               setSchoolName(data.schoolName || data.school || 'ثانوية عامة');
               setDirectorate(data.directorateName || data.directorate || 'مديرية التربية');
               setCommune(data.commune || '');
@@ -59,8 +69,6 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
           }, () => {
             setLoading(false);
           });
-          
-          return () => unsubSettings();
         } catch (err) {
           logger.error("Error setting up settings listener:", err);
           setLoading(false);
@@ -69,7 +77,13 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      if (unsubSettings) {
+        unsubSettings();
+      }
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

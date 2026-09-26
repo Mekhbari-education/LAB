@@ -17,6 +17,7 @@ import { auth, db, checkIsAdmin } from '../firebase';
 import { Beaker, Lock as LockIcon, User, Eye, EyeOff, ArrowLeft, ShieldCheck, Globe, UserPlus, Facebook, Sun, Moon, AlertCircle, Copy, Check, ExternalLink } from 'lucide-react';
 import logo from '/ministry-logo.png';
 import { cn } from '../lib/utils';
+import { useTheme } from '../context/ThemeContext';
 
 declare global {
   interface Window {
@@ -39,24 +40,7 @@ export default function Login() {
   const [pendingCred, setPendingCred] = useState<any>(null);
   const [linkingMessage, setLinkingMessage] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
-
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' || 
-        (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
+  const { isDarkMode, toggleTheme } = useTheme();
 
   useEffect(() => {
     // Dynamic loading of reCAPTCHA Enterprise
@@ -478,7 +462,7 @@ export default function Login() {
       <main className="w-full lg:w-[30%] bg-surface-container-low relative flex flex-col items-center justify-center p-4 md:p-8 lg:p-10 overflow-y-auto">
         {/* Theme Toggle */}
         <button 
-          onClick={() => setIsDarkMode(!isDarkMode)}
+          onClick={toggleTheme}
           className="absolute top-4 left-4 p-3 bg-surface border border-outline/10 hover:bg-secondary-container/50 rounded-full text-primary transition-all z-20 shadow-sm"
           title={isDarkMode ? 'الوضع النهاري' : 'الوضع الليلي'}
         >

@@ -45,7 +45,7 @@ import { Link } from 'react-router-dom';
 import { PDFService } from '../services/pdfService';
 
 export default function Maintenance() {
-  const { schoolId } = useSchool();
+  const { schoolId, schoolName, directorate } = useSchool();
   const { data: logs, loading: logsLoading, invalidate: invalidateLogs } = 
     useSqlCollection<MaintenanceLog>('maintenance', '/api/db/maintenance');
   const { data: equipment } = 
@@ -169,10 +169,24 @@ export default function Maintenance() {
     ]);
 
     await PDFService.generateTablePDF(
-      'سجل الصيانة الدورية',
+      'سجل الصيانة الدورية للأجهزة المخبرية',
       headers,
       tableData,
-      `maintenance_report_${new Date().toISOString().split('T')[0]}`
+      `maintenance_report_${new Date().toISOString().split('T')[0]}.pdf`,
+      {
+        subtitle: `سجل عمليات الصيانة الدورية والتدخلات التقنية - العدد الإجمالي: ${filteredLogs.length}`,
+        schoolInfo: {
+          school: schoolName,
+          directorate: directorate,
+          laboratory: 'مخبر العلوم والتكنولوجيا'
+        },
+        summaryCards: [
+          { label: 'إجمالي البلاغات', value: filteredLogs.length },
+          { label: 'عمليات منجزة', value: filteredLogs.filter(l => l.status === 'completed').length },
+          { label: 'قيد الإنجاز', value: filteredLogs.filter(l => l.status === 'in-progress').length },
+          { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
+        ]
+      }
     );
   };
 
