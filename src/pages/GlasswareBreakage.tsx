@@ -21,7 +21,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import { 
   GlasswareItem, 
@@ -60,7 +60,7 @@ const INITIAL_GLASSWARE: Partial<GlasswareItem>[] = [
 ];
 
 export default function GlasswareBreakage({ isNested = false }: { isNested?: boolean }) {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const { data: items, loading, invalidate } = 
     useSqlCollection<GlasswareItem>('glassware_inventory', '/api/db/glassware');
 
@@ -152,7 +152,7 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
         <div className="flex justify-between items-start mb-4">
           <div className="text-right text-sm font-bold">
             <p>مديرية التربية لولاية: {directorate}</p>
-            <p>المؤسسة: {schoolName}</p>
+            <p>{formatSchoolWithCommune(schoolName, commune)}</p>
           </div>
           <div className="text-center">
             <p className="font-black text-base">الجمهورية الجزائرية الديمقراطية الشعبية</p>

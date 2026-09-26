@@ -37,7 +37,7 @@ import {
   Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { getEquipmentIntelligence, ensureApiKey } from '../services/geminiService';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import QRScanner from '../components/QRScanner';
@@ -52,6 +52,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     schoolId,
     schoolName,
     directorate,
+    commune,
     searchParams,
     navigate,
     equipment,
@@ -117,7 +118,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
         <div className="flex justify-between items-start mb-4">
           <div className="text-right text-sm font-bold">
             <p>مديرية التربية لولاية: {directorate || 'أم البواقي'}</p>
-            <p>{schoolName || 'المؤسسة التربوية'}</p>
+            <p>{formatSchoolWithCommune(schoolName, commune) || 'المؤسسة التربوية'}</p>
           </div>
           <div className="text-center">
             <p className="font-black text-base">الجمهورية الجزائرية الديمقراطية الشعبية</p>

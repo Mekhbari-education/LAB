@@ -20,6 +20,7 @@ export interface Teacher {
 export interface InstitutionSettings {
   directorate: string;
   school: string;
+  commune?: string;
   address: string;
   jobTitle: string;
 }

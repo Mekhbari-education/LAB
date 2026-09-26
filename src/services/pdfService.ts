@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatSchoolWithCommune } from '../lib/utils';
 
 /**
  * Sanitizes and normalizes text values for PDF rendering.
@@ -16,6 +17,7 @@ export interface SchoolInfo {
   ministry?: string;
   directorate?: string;
   school?: string;
+  commune?: string;
   laboratory?: string;
   academicYear?: string;
   date?: string;
@@ -186,7 +188,8 @@ export class PDFService {
 
     // Right-hand side (Directorate, School, Lab)
     doc.text(processArabic(`مديرية التربية: ${directorate}`), headerRightX, currentY + 3, { align: 'right' });
-    doc.text(processArabic(`المؤسسة: ${school}`), headerRightX, currentY + 8, { align: 'right' });
+    const formattedSchool = formatSchoolWithCommune(school, schoolInfo.commune);
+    doc.text(processArabic(formattedSchool), headerRightX, currentY + 8, { align: 'right' });
     doc.text(processArabic(`المخبر: ${laboratory}`), headerRightX, currentY + 13, { align: 'right' });
 
     // Left-hand side (Academic year, Date)

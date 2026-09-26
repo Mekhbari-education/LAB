@@ -29,9 +29,24 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     return DEFAULT_SCHOOL_ID;
   });
 
-  const [schoolName, setSchoolName] = useState('ثانوية عامة');
-  const [directorate, setDirectorate] = useState('مديرية التربية');
-  const [commune, setCommune] = useState('');
+  const [schoolName, setSchoolName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_school_name') || 'ثانوية عامة';
+    }
+    return 'ثانوية عامة';
+  });
+  const [directorate, setDirectorate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_directorate') || 'مديرية التربية';
+    }
+    return 'مديرية التربية';
+  });
+  const [commune, setCommune] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_commune') || '';
+    }
+    return '';
+  });
   const [address, setAddress] = useState('');
   const [jobTitle, setJobTitle] = useState('ملحق بالمخابر');
   const [loading, setLoading] = useState(true);
@@ -59,11 +74,21 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
               if (data.schoolId) {
                 setSchoolIdState(data.schoolId);
               }
-              setSchoolName(data.schoolName || data.school || 'ثانوية عامة');
-              setDirectorate(data.directorateName || data.directorate || 'مديرية التربية');
-              setCommune(data.commune || '');
+              const sName = data.schoolName || data.school || 'ثانوية عامة';
+              const dName = data.directorateName || data.directorate || 'مديرية التربية';
+              const cName = data.communeName || data.commune || '';
+              
+              setSchoolName(sName);
+              setDirectorate(dName);
+              setCommune(cName);
               setAddress(data.address || '');
               setJobTitle(data.jobTitle || 'ملحق بالمخابر');
+
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('algeria_lab_school_name', sName);
+                localStorage.setItem('algeria_lab_directorate', dName);
+                if (cName) localStorage.setItem('algeria_lab_commune', cName);
+              }
             }
             setLoading(false);
           }, () => {

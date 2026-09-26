@@ -18,6 +18,7 @@ import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PrintService } from '../services/printService';
 import { PDFService } from '../services/pdfService';
 import { PrintOrientation, PrintColorMode, PrintMargins, PrintScale } from '../types/printSettings';
+import { formatSchoolWithCommune } from '../lib/utils';
 import logo from '/ministry-logo.png';
 
 export default function PrintPreviewModal() {
@@ -116,6 +117,7 @@ export default function PrintPreviewModal() {
           ministry: inst.ministry,
           directorate: inst.directorate,
           school: inst.school,
+          commune: inst.commune,
           laboratory: inst.laboratory,
           academicYear: inst.academicYear
         },
@@ -240,7 +242,7 @@ export default function PrintPreviewModal() {
                     <div className="flex justify-between items-center text-[10px] text-neutral-700 mt-2 px-1">
                       <div className="text-right leading-relaxed">
                         <div><strong>مديرية التربية:</strong> {inst.directorate}</div>
-                        <div><strong>المؤسسة:</strong> {inst.school}</div>
+                        <div>{formatSchoolWithCommune(inst.school, inst.commune)}</div>
                         <div><strong>المخبر:</strong> {inst.laboratory}</div>
                       </div>
 

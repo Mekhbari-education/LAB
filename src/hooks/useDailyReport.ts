@@ -6,7 +6,7 @@ import { auth, db, handleFirestoreError, OperationType, getUserCollection } from
 import { useTimeSlots } from './useTimeSlots';
 import { PDFService } from '../services/pdfService';
 import { ReportRow, Teacher, InstitutionSettings, SavedReport } from '../types/reports';
-import { cleanSchoolName } from '../lib/utils';
+import { cleanSchoolName, formatSchoolWithCommune } from '../lib/utils';
 
 export function useDailyReport() {
   const { schoolId } = useSchool();

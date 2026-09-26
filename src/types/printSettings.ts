@@ -11,6 +11,7 @@ export interface InstitutionPrintSettings {
   ministry: string;
   directorate: string;
   school: string;
+  commune?: string;
   laboratory: string;
   academicYear: string;
   headerStyle: PrintHeaderStyle;
@@ -80,6 +81,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     ministry: 'وزارة التربية الوطنية',
     directorate: 'مديرية التربية لولاية الجزائر',
     school: 'مؤسسة التعليم الثانوي والتقني',
+    commune: '',
     laboratory: 'مخبر العلوم الفيزيائية والطبيعية',
     academicYear: '2025/2026',
     headerStyle: 'official',

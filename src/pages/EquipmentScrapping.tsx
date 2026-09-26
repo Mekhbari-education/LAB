@@ -4,6 +4,7 @@ import { onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/fi
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
 import { Helmet } from 'react-helmet-async';
+import { formatSchoolWithCommune } from '../lib/utils';
 import { 
   Plus, 
   Printer, 
@@ -66,7 +67,7 @@ interface AttachmentDoc {
 type Tab = 'list' | 'pv' | 'proposal' | 'attachments';
 
 export default function EquipmentScrapping() {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -303,7 +304,7 @@ export default function EquipmentScrapping() {
         </head>
         <body>
           <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:10px;">
-            <div>مديرية التربية لولاية: ${directorate}<br/>المؤسسة: ${schoolName}</div>
+            <div>مديرية التربية لولاية: ${directorate}<br/>${formatSchoolWithCommune(schoolName, commune)}</div>
             <div style="text-align:center">الجمهورية الجزائرية الديمقراطية الشعبية<br/>وزارة التربية الوطنية</div>
             <div style="text-align:left">السنة الدراسية: 2025-2026</div>
           </div>
@@ -370,7 +371,7 @@ export default function EquipmentScrapping() {
              <div className="flex flex-col md:flex-row justify-between gap-8 text-center md:text-right relative z-10">
                 <div className="space-y-1">
                   <p className="text-sm font-black text-primary">مديرية التربية لولاية: {directorate}</p>
-                  <p className="text-xs font-bold text-on-surface/60">{schoolName}</p>
+                  <p className="text-xs font-bold text-on-surface/60">{formatSchoolWithCommune(schoolName, commune)}</p>
                 </div>
                 <div className="space-y-1 font-black text-primary">
                   <p className="text-base uppercase tracking-wider">الجمهورية الجزائرية الديمقراطية الشعبية</p>

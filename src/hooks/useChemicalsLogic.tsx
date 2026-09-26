@@ -12,10 +12,11 @@ import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 import { Chemical, GHS_ICONS, GHS_LABELS } from '../types/chemicals';
+import { formatSchoolWithCommune } from '../lib/utils';
 import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 export function useChemicalsLogic(isNested = false) {
-  const { schoolId, schoolName, directorate: stateName } = useSchool();
+  const { schoolId, schoolName, directorate: stateName, commune } = useSchool();
   const [searchParams] = useSearchParams();
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
   const [loading, setLoading] = useState(true);
@@ -513,7 +514,7 @@ export function useChemicalsLogic(isNested = false) {
               <div class="oh-right">
                 <div>وزارة التربية الوطنية</div>
                 <div>مديرية التربية لولاية: ${stateName}</div>
-                <div>المؤسسة: ${schoolName}</div>
+                <div>${formatSchoolWithCommune(schoolName, commune)}</div>
               </div>
               <div class="oh-center">
                 <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
@@ -586,6 +587,7 @@ export function useChemicalsLogic(isNested = false) {
         subtitle: `سجل المواد والمحاليل المتوفرة في المخبر - إجمالي المواد: ${filteredChemicals.length}`,
         schoolInfo: {
           school: schoolName,
+          commune: commune,
           directorate: stateName,
           laboratory: 'مخبر الكيمياء والعلوم الفيزيائية'
         },
@@ -694,7 +696,7 @@ export function useChemicalsLogic(isNested = false) {
         <div class="pcard">
           <div class="ph-container">
             <div class="ph">
-              <div class="ph-r">مديرية التربية لولاية: ${stateName}<br>ثانوية: ${schoolName}</div>
+              <div class="ph-r">مديرية التربية لولاية: ${stateName}<br>${formatSchoolWithCommune(schoolName, commune)}</div>
               <div class="ph-c">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
               <div class="ph-l">
                 <div>السنة الدراسية: ${academicYear}</div>

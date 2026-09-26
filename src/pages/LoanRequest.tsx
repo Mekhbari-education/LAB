@@ -18,7 +18,7 @@ import {
   Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 
 interface LoanItem {
@@ -44,7 +44,7 @@ interface Equipment {
 }
 
 export default function LoanRequest() {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -210,7 +210,7 @@ export default function LoanRequest() {
           <div class="official-header">
             <div class="header-right">
               <p>مديرية التربية لولاية: ${directorate}</p>
-              <p>المؤسسة: ${schoolName}</p>
+              <p>${formatSchoolWithCommune(schoolName, commune)}</p>
             </div>
             <div class="header-center">
               <p class="rep">الجمهورية الجزائرية الديمقراطية الشعبية</p>
@@ -323,7 +323,7 @@ export default function LoanRequest() {
             <div className="flex flex-col md:flex-row justify-between items-center text-center md:text-right gap-8">
               <div className="space-y-1">
                 <p className="text-sm font-black text-primary">مديرية التربية لولاية: {directorate}</p>
-                <p className="text-xs font-bold text-on-surface/60">{schoolName}</p>
+                <p className="text-xs font-bold text-on-surface/60">{formatSchoolWithCommune(schoolName, commune)}</p>
               </div>
               <div className="space-y-1">
                 <p className="text-base font-black text-primary">الجمهورية الجزائرية الديمقراطية الشعبية</p>

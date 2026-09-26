@@ -11,9 +11,10 @@ import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { Equipment, MaintenanceLog } from '../types/equipment';
+import { formatSchoolWithCommune } from '../lib/utils';
 
 export function useEquipmentLogic(isNested = false) {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -318,7 +319,7 @@ export function useEquipmentLogic(isNested = false) {
           <div class="official-header">
             <div class="header-right">
               <p>مديرية التربية لولاية: ${directorate}</p>
-              <p>المؤسسة: ${schoolName}</p>
+              <p>${formatSchoolWithCommune(schoolName, commune)}</p>
             </div>
             <div class="header-center">
               <p class="republic">الجمهورية الجزائرية الديمقراطية الشعبية</p>
@@ -772,6 +773,7 @@ export function useEquipmentLogic(isNested = false) {
     schoolId,
     schoolName,
     directorate,
+    commune,
     searchParams,
     navigate,
     equipment,

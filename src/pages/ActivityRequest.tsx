@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 
 interface EquipItem {
@@ -57,7 +57,7 @@ interface Chemical {
 }
 
 export default function ActivityRequest() {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [chemicalsList, setChemicalsList] = useState<Chemical[]>([]);
@@ -225,7 +225,7 @@ export default function ActivityRequest() {
           <div class="header">
             <div class="side-info">
               <p>مديرية التربية لولاية: ${directorate}</p>
-              <p>المؤسسة: ${schoolName}</p>
+              <p>${formatSchoolWithCommune(schoolName, commune)}</p>
             </div>
             <div class="rep-title">
               <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
@@ -344,7 +344,7 @@ export default function ActivityRequest() {
             <div className="flex flex-col md:flex-row justify-between gap-8 text-center md:text-right">
               <div className="space-y-1">
                 <p className="text-sm font-black text-primary">مديرية التربية لولاية: {directorate}</p>
-                <p className="text-xs font-bold text-on-surface/60">{schoolName}</p>
+                <p className="text-xs font-bold text-on-surface/60">{formatSchoolWithCommune(schoolName, commune)}</p>
               </div>
               <div className="space-y-1 font-black text-primary">
                 <p className="text-base">الجمهورية الجزائرية الديمقراطية الشعبية</p>

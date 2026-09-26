@@ -17,7 +17,7 @@ import {
   ChevronsUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import logo from '/ministry-logo.png';
@@ -40,7 +40,7 @@ type SortDirection = 'asc' | 'desc' | null;
 
 export default function InventoryCardsRegistry() {
   const { t, i18n } = useTranslation();
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -265,7 +265,7 @@ export default function InventoryCardsRegistry() {
             {/* Front of Card */}
             <div className="pcard">
               <div className="ph">
-                <div className="ph-r">مديرية التربية لولاية: {directorate}<br />ثانوية: {schoolName}</div>
+                <div className="ph-r">مديرية التربية لولاية: {directorate}<br />{formatSchoolWithCommune(schoolName, commune)}</div>
                 <div className="ph-c">الجمهورية الجزائرية الديمقراطية الشعبية<br />وزارة التربية الوطنية</div>
                 <div className="ph-l">السنة الدراسية: 2025/2026</div>
               </div>
@@ -405,7 +405,7 @@ export default function InventoryCardsRegistry() {
             </div>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-primary rounded-full" />
-              {t('inventory_cards.school_label', 'المؤسسة:')} {schoolName}
+              {formatSchoolWithCommune(schoolName, commune)}
             </div>
           </div>
           

@@ -25,7 +25,7 @@ interface PrintSettingsContextType {
 const PrintSettingsContext = createContext<PrintSettingsContextType | undefined>(undefined);
 
 export function PrintSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { schoolName, directorate, jobTitle } = useSchool();
+  const { schoolName, directorate, commune, jobTitle } = useSchool();
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PrintPreviewData | null>(null);
@@ -80,6 +80,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
             institution: {
               ...prev.institution,
               school: schoolName,
+              commune: commune || prev.institution.commune || '',
               directorate: directorate && directorate !== 'مديرية التربية' ? directorate : prev.institution.directorate
             },
             signatures: {
@@ -91,7 +92,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
         return prev;
       });
     }
-  }, [schoolName, directorate, jobTitle]);
+  }, [schoolName, directorate, commune, jobTitle]);
 
   // Load from Firestore if logged in
   useEffect(() => {
@@ -187,6 +188,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
       institution: {
         ...DEFAULT_PRINT_SETTINGS.institution,
         school: schoolName !== 'ثانوية عامة' ? schoolName : DEFAULT_PRINT_SETTINGS.institution.school,
+        commune: commune || '',
         directorate: directorate !== 'مديرية التربية' ? directorate : DEFAULT_PRINT_SETTINGS.institution.directorate
       },
       signatures: {
@@ -195,7 +197,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
       }
     };
     setSettings(reset);
-  }, [schoolName, directorate, jobTitle]);
+  }, [schoolName, directorate, commune, jobTitle]);
 
   const saveSettingsToCloud = useCallback(async (): Promise<boolean> => {
     const user = auth.currentUser;

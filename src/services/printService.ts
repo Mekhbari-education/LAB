@@ -1,4 +1,5 @@
 import { PrintSettings, PrintPreviewData, DEFAULT_PRINT_SETTINGS } from '../types/printSettings';
+import { formatSchoolWithCommune } from '../lib/utils';
 import logo from '/ministry-logo.png';
 
 /**
@@ -415,7 +416,7 @@ export class PrintService {
       <div class="header-details-grid">
         <div class="header-col-right">
           <div><strong>مديرية التربية:</strong> ${inst.directorate}</div>
-          <div><strong>المؤسسة التعليمية:</strong> ${inst.school}</div>
+          <div>${formatSchoolWithCommune(inst.school, inst.commune)}</div>
           <div><strong>المخبر:</strong> ${inst.laboratory}</div>
         </div>
 
@@ -520,7 +521,7 @@ export class PrintService {
 
     <footer class="document-footer">
       <div>${sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
-      <div>${inst.school} — ${inst.laboratory}</div>
+      <div>${formatSchoolWithCommune(inst.school, inst.commune)} — ${inst.laboratory}</div>
       <div>صفحة 1 من 1</div>
     </footer>
   </div>

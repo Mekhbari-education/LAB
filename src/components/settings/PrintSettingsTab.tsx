@@ -202,6 +202,17 @@ export default function PrintSettingsTab() {
           </div>
 
           <div>
+            <label className="block text-xs font-bold text-secondary mb-1.5">البلدية</label>
+            <input
+              type="text"
+              value={inst.commune || ''}
+              onChange={(e) => updateSettings({ institution: { ...inst, commune: e.target.value } })}
+              placeholder="مثال: عين كرشة"
+              className="w-full px-4 py-3 rounded-xl bg-surface-container border border-outline-variant/30 focus:border-primary focus:ring-1 focus:ring-primary text-sm font-semibold"
+            />
+          </div>
+
+          <div>
             <label className="block text-xs font-bold text-secondary mb-1.5">اسم وتسمية المخبر</label>
             <input
               type="text"
