@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 
 import { findSmartForm, ensureApiKey } from '../services/geminiService';
 import { PDFService } from '../services/pdfService';
@@ -38,7 +38,7 @@ const TEMPLATES: FormTemplate[] = [
 ];
 
 export default function SmartForms() {
-  const { schoolName, directorate } = useSchool();
+  const { schoolName, directorate, commune } = useSchool();
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
   const [aiQuery, setAiQuery] = useState('');
@@ -48,10 +48,19 @@ export default function SmartForms() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     reference: `REF-${Math.floor(Math.random() * 10000)}`,
-    establishment: 'ثانوية الشهيد...',
+    establishment: formatSchoolWithCommune(schoolName, commune) || 'المؤسسة التربوية',
     content: '',
     items: [{ name: '', quantity: '', condition: 'سليم' }]
   });
+
+  React.useEffect(() => {
+    if (schoolName && schoolName !== 'ثانوية عامة') {
+      setFormData(prev => ({
+        ...prev,
+        establishment: formatSchoolWithCommune(schoolName, commune)
+      }));
+    }
+  }, [schoolName, commune]);
 
   const handleExportPDF = async () => {
     if (!selectedTemplate) return;
@@ -72,7 +81,8 @@ export default function SmartForms() {
       {
         subtitle: selectedTemplate.description,
         schoolInfo: {
-          school: schoolName,
+          school: formData.establishment || schoolName,
+          commune: commune,
           directorate: directorate,
           laboratory: 'مخبر العلوم والتكنولوجيا'
         },

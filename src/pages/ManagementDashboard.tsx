@@ -29,7 +29,7 @@ const managementModules = [
   },
   { 
     title: 'الميزانية والطلبيات', 
-    desc: 'تسيير وتخطيط الجانب المالي وطلبيات الشراء الخاصة بالمخبر.', 
+    desc: 'تسيير الميزانية، نماذج طلبيات الشراء المقننة (السجلات، الكواشف، الزجاجيات، الأجهزة)، وسجل الموردين.', 
     icon: Wallet, 
     color: 'bg-emerald-100 text-emerald-700', 
     path: ROUTES.BUDGET_PURCHASES 

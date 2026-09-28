@@ -18,10 +18,10 @@ import {
   BarChart3
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, formatSchoolWithCommune } from '../lib/utils';
 
 export default function Reports() {
-  const { schoolId, schoolName, directorate } = useSchool();
+  const { schoolId, schoolName, directorate, commune } = useSchool();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     chemicals: 0,
@@ -103,7 +103,7 @@ export default function Reports() {
               <p>وزارة التربية الوطنية</p>
             </div>
             <div className="space-y-1">
-              <p>{schoolName}</p>
+              <p>{formatSchoolWithCommune(schoolName, commune)}</p>
               <p>{directorate} - الجزائر</p>
             </div>
           </div>

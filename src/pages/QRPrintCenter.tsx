@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import { QRStickerPreset } from '../types/printSettings';
+import { formatSchoolWithCommune } from '../lib/utils';
 import logo from '/ministry-logo.png';
 
 interface Equipment {
@@ -40,7 +41,7 @@ interface Chemical {
 type TabType = 'equipment' | 'chemicals';
 
 export default function QRPrintCenter() {
-  const { schoolId, schoolName } = useSchool();
+  const { schoolId, schoolName, commune } = useSchool();
   const { settings, updateSettings } = usePrintSettings();
   const [activeTab, setActiveTab] = useState<TabType>('equipment');
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -513,7 +514,7 @@ export default function QRPrintCenter() {
                   <div className="flex items-center gap-1.5 mb-1">
                     {qrConfig.showLogo && <img src={logo} alt="" className="h-4 w-auto" />}
                     {qrConfig.showSchoolName && (
-                      <span className="text-[9px] font-bold text-primary truncate">{schoolName || 'المؤسسة التعليمية'}</span>
+                      <span className="text-[9px] font-bold text-primary truncate">{formatSchoolWithCommune(schoolName, commune) || 'المؤسسة التعليمية'}</span>
                     )}
                   </div>
                   <div className="text-xs font-black text-neutral-800 line-clamp-2 leading-tight mb-1">

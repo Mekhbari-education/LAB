@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileSpreadsheet, Download, Settings, RefreshCw, Printer } from 'lucide-react';
+import { useSchool } from '../context/SchoolContext';
+import { formatSchoolWithCommune } from '../lib/utils';
 
 const EASY_EQUATIONS = [
   { eq: "H2 + O2 -> H2O", ans: "2,1,2" },
@@ -18,6 +20,7 @@ const MEDIUM_EQUATIONS = [
 
 export default function WorksheetGenerator() {
   const navigate = useNavigate();
+  const { schoolName, commune } = useSchool();
   const [difficulty, setDifficulty] = useState('easy');
   const [count, setCount] = useState(5);
   const [worksheet, setWorksheet] = useState<any[]>([]);
@@ -120,6 +123,9 @@ export default function WorksheetGenerator() {
                     {/* Header */}
                     <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-12">
                        <div>
+                         {schoolName && (
+                           <p className="text-xs font-bold text-gray-600 mb-1">{formatSchoolWithCommune(schoolName, commune)}</p>
+                         )}
                          <h1 className="text-3xl font-black mb-2">ورقة عمل: الموازنة الكيميائية</h1>
                          <p className="text-gray-600 font-bold">المستوى: {difficulty === 'easy' ? 'مبتدئ' : 'متوسط'}</p>
                        </div>

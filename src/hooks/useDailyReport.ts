@@ -132,9 +132,11 @@ export function useDailyReport() {
             }
           }
 
+          const communeName = data.communeName || data.commune || '';
           setInstitution({
             directorate: directorateName,
-            school: cleanSchoolName(schoolName),
+            school: formatSchoolWithCommune(cleanSchoolName(schoolName), communeName),
+            commune: communeName,
             address: data.address || '',
             jobTitle: data.jobTitle || 'ملحق مخبري'
           });
@@ -362,6 +364,7 @@ export function useDailyReport() {
       date,
       schoolInfo: {
         school: institution?.school,
+        commune: institution?.commune,
         directorate: institution?.directorate,
         laboratory: 'مخبر العلوم الطبيعية والفيزيائية'
       },

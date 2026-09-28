@@ -659,7 +659,7 @@ export class PrintService {
           <div class="sticker-info">
             <div class="sticker-header">
               ${qrConfig.showLogo ? `<img src="${logo}" alt="" class="sticker-logo" />` : ''}
-              ${qrConfig.showSchoolName ? `<span class="sticker-institution">${settings.institution.school}</span>` : ''}
+              ${qrConfig.showSchoolName ? `<span class="sticker-institution">${formatSchoolWithCommune(settings.institution.school, settings.institution.commune)}</span>` : ''}
             </div>
             <div class="sticker-title">${item.name}</div>
             <div class="sticker-meta">
