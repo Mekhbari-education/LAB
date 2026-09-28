@@ -19,6 +19,7 @@ export interface InstitutionPrintSettings {
   showMinistry: boolean;
   showLogo: boolean;
   showDate: boolean;
+  customLogoUrl?: string;
 }
 
 export interface LayoutPrintSettings {
@@ -88,7 +89,8 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     showRepublicHeader: true,
     showMinistry: true,
     showLogo: true,
-    showDate: true
+    showDate: true,
+    customLogoUrl: ''
   },
   layout: {
     paperSize: 'a4',

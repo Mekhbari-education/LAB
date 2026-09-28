@@ -31,6 +31,7 @@ export interface SchoolPrintInfo {
   commune?: string;
   academicYear?: string;
   laboratoryName?: string;
+  customLogoUrl?: string;
 }
 
 /**
@@ -322,7 +323,7 @@ export class PurchaseOrderPrintService {
         </div>
 
         <div class="header-col-center">
-          <img src="${logo}" alt="شعار الوزارة" class="header-logo" />
+          <img src="${school.customLogoUrl || logo}" alt="شعار المؤسسة" class="header-logo" />
         </div>
 
         <div class="header-col-left" dir="rtl">

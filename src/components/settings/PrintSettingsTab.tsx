@@ -262,7 +262,12 @@ export default function PrintSettingsTab() {
               onChange={(e) => updateSettings({ institution: { ...inst, showLogo: e.target.checked } })}
               className="w-4 h-4 rounded text-primary focus:ring-primary"
             />
-            <span className="text-xs font-bold text-secondary">إظهار الشعار الرسمي</span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-secondary">إظهار الشعار في الترويسة</span>
+              {inst.customLogoUrl && (
+                <span className="text-[10px] text-emerald-700 font-bold">شعار مخصص نشط</span>
+              )}
+            </div>
           </label>
 
           <label className="flex items-center gap-3 p-3 bg-surface-container rounded-xl cursor-pointer hover:bg-secondary-container/20 transition-colors">

@@ -422,7 +422,7 @@ export class PrintService {
 
         ${inst.showLogo ? `
         <div class="header-col-center">
-          <img src="${logo}" alt="شعار وزارة التربية" class="institution-logo" />
+          <img src="${inst.customLogoUrl || logo}" alt="شعار المؤسسة" class="institution-logo" />
         </div>
         ` : ''}
 
@@ -658,7 +658,7 @@ export class PrintService {
         <div class="sticker-card">
           <div class="sticker-info">
             <div class="sticker-header">
-              ${qrConfig.showLogo ? `<img src="${logo}" alt="" class="sticker-logo" />` : ''}
+              ${qrConfig.showLogo ? `<img src="${settings.institution.customLogoUrl || logo}" alt="" class="sticker-logo" />` : ''}
               ${qrConfig.showSchoolName ? `<span class="sticker-institution">${formatSchoolWithCommune(settings.institution.school, settings.institution.commune)}</span>` : ''}
             </div>
             <div class="sticker-title">${item.name}</div>

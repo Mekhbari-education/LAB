@@ -25,7 +25,7 @@ interface PrintSettingsContextType {
 const PrintSettingsContext = createContext<PrintSettingsContextType | undefined>(undefined);
 
 export function PrintSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { schoolName, directorate, commune, jobTitle } = useSchool();
+  const { schoolName, directorate, commune, jobTitle, schoolLogo } = useSchool();
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PrintPreviewData | null>(null);
@@ -81,7 +81,8 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
               ...prev.institution,
               school: schoolName,
               commune: commune || prev.institution.commune || '',
-              directorate: directorate && directorate !== 'مديرية التربية' ? directorate : prev.institution.directorate
+              directorate: directorate && directorate !== 'مديرية التربية' ? directorate : prev.institution.directorate,
+              customLogoUrl: schoolLogo || prev.institution.customLogoUrl || ''
             },
             signatures: {
               ...prev.signatures,
@@ -89,10 +90,27 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
             }
           };
         }
+        if (schoolLogo && prev.institution.customLogoUrl !== schoolLogo) {
+          return {
+            ...prev,
+            institution: {
+              ...prev.institution,
+              customLogoUrl: schoolLogo
+            }
+          };
+        }
         return prev;
       });
+    } else if (schoolLogo) {
+      setSettings(prev => ({
+        ...prev,
+        institution: {
+          ...prev.institution,
+          customLogoUrl: schoolLogo
+        }
+      }));
     }
-  }, [schoolName, directorate, commune, jobTitle]);
+  }, [schoolName, directorate, commune, jobTitle, schoolLogo]);
 
   // Load from Firestore if logged in
   useEffect(() => {

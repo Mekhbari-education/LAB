@@ -61,7 +61,7 @@ interface BudgetConfig {
 }
 
 export default function BudgetPurchases() {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, schoolLogo } = useSchool();
   const [activeTab, setActiveTab] = useState<'orders' | 'templates' | 'suppliers' | 'budget'>('orders');
   const [loading, setLoading] = useState(true);
   
@@ -351,6 +351,7 @@ export default function BudgetPurchases() {
         directorate,
         schoolName,
         commune,
+        customLogoUrl: schoolLogo,
         academicYear: budgetConfig.fiscalYear ? `${budgetConfig.fiscalYear} / ${Number(budgetConfig.fiscalYear) + 1}` : '2025 / 2026',
         laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية'
       });
@@ -400,6 +401,7 @@ export default function BudgetPurchases() {
         directorate,
         schoolName,
         commune,
+        customLogoUrl: schoolLogo,
         academicYear: '2025 / 2026',
         laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية'
       });

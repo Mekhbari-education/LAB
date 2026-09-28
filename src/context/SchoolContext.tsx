@@ -11,6 +11,8 @@ interface SchoolContextType {
   commune: string;
   address: string;
   jobTitle: string;
+  schoolLogo: string;
+  setSchoolLogo: (logo: string) => void;
   loading: boolean;
 }
 
@@ -49,6 +51,12 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   });
   const [address, setAddress] = useState('');
   const [jobTitle, setJobTitle] = useState('ملحق بالمخابر');
+  const [schoolLogo, setSchoolLogoState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_school_logo') || '';
+    }
+    return '';
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,17 +85,24 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
               const sName = data.schoolName || data.school || 'ثانوية عامة';
               const dName = data.directorateName || data.directorate || 'مديرية التربية';
               const cName = data.communeName || data.commune || '';
+              const logoUrl = data.schoolLogo || data.institutionLogo || '';
               
               setSchoolName(sName);
               setDirectorate(dName);
               setCommune(cName);
               setAddress(data.address || '');
               setJobTitle(data.jobTitle || 'ملحق بالمخابر');
+              setSchoolLogoState(logoUrl);
 
               if (typeof window !== 'undefined') {
                 localStorage.setItem('algeria_lab_school_name', sName);
                 localStorage.setItem('algeria_lab_directorate', dName);
                 if (cName) localStorage.setItem('algeria_lab_commune', cName);
+                if (logoUrl) {
+                  localStorage.setItem('algeria_lab_school_logo', logoUrl);
+                } else {
+                  localStorage.removeItem('algeria_lab_school_logo');
+                }
               }
             }
             setLoading(false);
@@ -119,6 +134,17 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     setSchoolIdState(id);
   };
 
+  const setSchoolLogo = (logoUrl: string) => {
+    setSchoolLogoState(logoUrl);
+    if (typeof window !== 'undefined') {
+      if (logoUrl) {
+        localStorage.setItem('algeria_lab_school_logo', logoUrl);
+      } else {
+        localStorage.removeItem('algeria_lab_school_logo');
+      }
+    }
+  };
+
   return (
     <SchoolContext.Provider value={{ 
       schoolId, 
@@ -128,6 +154,8 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
       commune, 
       address, 
       jobTitle,
+      schoolLogo,
+      setSchoolLogo,
       loading
     }}>
       {loading ? (

@@ -29,8 +29,13 @@ import {
   Clock,
   ShieldAlert,
   ShieldCheck,
-  Printer
+  Printer,
+  UploadCloud,
+  Image as ImageIcon,
+  Sparkles,
+  Eye
 } from 'lucide-react';
+import ministryLogo from '/ministry-logo.png';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
 import PrintSettingsTab from '../components/settings/PrintSettingsTab';
@@ -53,7 +58,7 @@ import { cn } from '../lib/utils';
 import LocationCard, { InstitutionSuggestion } from '../components/LocationCard';
 
 export default function SettingsPage() {
-  const { schoolId } = useSchool();
+  const { schoolId, schoolLogo, setSchoolLogo } = useSchool();
   const [displayName, setDisplayName] = useState(auth.currentUser?.displayName || '');
   const [email] = useState(auth.currentUser?.email || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -61,6 +66,21 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Customized Institution Logo State
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>(schoolLogo || '');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [logoUploadSuccess, setLogoUploadSuccess] = useState(false);
+  const [showLogoHeaderPreview, setShowLogoHeaderPreview] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync customLogoUrl when schoolLogo updates from context
+  useEffect(() => {
+    if (schoolLogo) {
+      setCustomLogoUrl(schoolLogo);
+    }
+  }, [schoolLogo]);
 
   // Professional Info State
   const [jobTitle, setJobTitle] = useState('ملحق بالمخابر');
@@ -250,6 +270,91 @@ export default function SettingsPage() {
       console.error('Error uploading image:', error);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleCustomLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !auth.currentUser) return;
+
+    if (file.size > 3 * 1024 * 1024) {
+      setLogoUploadError('حجم الصورة كبير جداً، يرجى اختيار ملف بحجم أقل من 3 ميغابايت.');
+      return;
+    }
+
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      setLogoUploadError('صيغة الملف غير مدعومة. يرجى اختيار صورة بصيغة PNG أو JPG أو SVG أو WEBP.');
+      return;
+    }
+
+    try {
+      setIsUploadingLogo(true);
+      setLogoUploadError(null);
+      setLogoUploadSuccess(false);
+
+      let finalUrl = '';
+
+      try {
+        const storageRef = ref(storage, `institution_logos/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        finalUrl = await getDownloadURL(storageRef);
+      } catch (storageErr) {
+        console.warn('Firebase Storage upload failed, falling back to data URL:', storageErr);
+        finalUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      setCustomLogoUrl(finalUrl);
+      setSchoolLogo(finalUrl);
+
+      // Save immediately to Firestore
+      await setDoc(doc(db, 'settings', auth.currentUser.uid), {
+        schoolLogo: finalUrl,
+        institutionLogo: finalUrl,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      setLogoUploadSuccess(true);
+      setTimeout(() => setLogoUploadSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Error uploading institution logo:', err);
+      setLogoUploadError('فشل رفع الشعار: ' + (err.message || 'يرجى المحاولة مرة أخرى.'));
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoFileInputRef.current) logoFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveCustomLogo = async () => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في حذف شعار المؤسسة المخصص والعودة للشعار الرسمي الافتراضي؟')) return;
+
+    try {
+      setIsUploadingLogo(true);
+      setLogoUploadError(null);
+      setCustomLogoUrl('');
+      setSchoolLogo('');
+
+      if (auth.currentUser) {
+        await setDoc(doc(db, 'settings', auth.currentUser.uid), {
+          schoolLogo: null,
+          institutionLogo: null,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      setLogoUploadSuccess(true);
+      setTimeout(() => setLogoUploadSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error removing institution logo:', err);
+      setLogoUploadError('فشل حذف الشعار.');
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoFileInputRef.current) logoFileInputRef.current.value = '';
     }
   };
 
@@ -530,6 +635,10 @@ export default function SettingsPage() {
           setEmployeeId(data.employeeId || '1010101010101010');
           if (data.levels) setLevels(data.levels);
           if (data.timeSlots) setTimeSlots(data.timeSlots);
+          const logoUrl = data.schoolLogo || data.institutionLogo || '';
+          if (logoUrl) {
+            setCustomLogoUrl(logoUrl);
+          }
 
           setInitialSettings({
             directorate: data.directorate || data.directorateName || '',
@@ -624,6 +733,8 @@ export default function SettingsPage() {
         employeeId,
         levels,
         timeSlots,
+        schoolLogo: customLogoUrl || null,
+        institutionLogo: customLogoUrl || null,
         profilePhoto: auth.currentUser?.photoURL || null,
         updatedAt: new Date().toISOString()
       }, { merge: true });
@@ -1084,6 +1195,155 @@ export default function SettingsPage() {
                     <School className="text-secondary" />
                     بيانات المؤسسة التعليمية
                   </h3>
+
+                  {/* Custom Institution Logo Section */}
+                  <div className="mb-10 p-6 md:p-8 bg-surface rounded-3xl border border-outline-variant/40 shadow-sm relative overflow-hidden">
+                    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+                      
+                      {/* Logo Preview & Info */}
+                      <div className="flex items-center gap-5">
+                        <div className="relative group/logo w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-white border-2 border-outline-variant/40 p-2.5 flex items-center justify-center shadow-sm flex-shrink-0 overflow-hidden">
+                          <img 
+                            src={customLogoUrl || ministryLogo} 
+                            alt="شعار المؤسسة التعليمية" 
+                            className="w-full h-full object-contain transition-transform group-hover/logo:scale-105"
+                          />
+                          {isUploadingLogo && (
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center rounded-2xl">
+                              <Loader2 className="animate-spin text-white" size={28} />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-lg font-black text-primary">
+                              شعار المؤسسة التعليمية المخصص
+                            </h4>
+                            {customLogoUrl ? (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 size={12} /> شعار مخصص نشط
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-surface-container text-secondary border border-outline-variant/30">
+                                الشعار الوزاري الافتراضي
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-secondary leading-relaxed max-w-xl">
+                            يمكنك رفع الشعار الخاص بمؤسستك (ثانوية، متوسطة، مجمع مدرسي) ليظهر تلقائياً في الترويسات الرسمية، بطاقات الجرد، وسندات طلبيات الشراء والمطبوعات.
+                          </p>
+                          <div className="text-[11px] text-on-surface/50 font-medium">
+                            الصيغ المدعومة: PNG (مع خلفية شفافة مفضلة)، SVG، JPG، WEBP (أقل من 3 ميغابايت)
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                        <input 
+                          type="file" 
+                          ref={logoFileInputRef}
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                          onChange={handleCustomLogoUpload}
+                          className="hidden"
+                        />
+
+                        <button
+                          type="button"
+                          disabled={isUploadingLogo}
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="flex-1 lg:flex-initial px-5 py-3 rounded-2xl font-bold text-xs bg-primary text-on-primary hover:bg-primary/90 transition-all flex items-center justify-center gap-2 shadow-sm shadow-primary/20 disabled:opacity-50"
+                        >
+                          <UploadCloud size={17} />
+                          <span>{customLogoUrl ? 'تغيير الشعار' : 'رفع شعار المؤسسة'}</span>
+                        </button>
+
+                        {customLogoUrl && (
+                          <button
+                            type="button"
+                            disabled={isUploadingLogo}
+                            onClick={handleRemoveCustomLogo}
+                            className="px-4 py-3 rounded-2xl font-bold text-xs text-red-600 bg-red-50 hover:bg-red-100 transition-all border border-red-100 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                            title="حذف الشعار والعودة للافتراضي"
+                          >
+                            <Trash2 size={16} />
+                            <span>استعادة الافتراضي</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setShowLogoHeaderPreview(!showLogoHeaderPreview)}
+                          className="px-3.5 py-3 rounded-2xl font-bold text-xs bg-surface-container hover:bg-surface-container-high text-secondary transition-all border border-outline-variant/30 flex items-center gap-1.5"
+                          title="معاينة الترويسة الرسمية بالشعار"
+                        >
+                          <Eye size={15} />
+                          <span>{showLogoHeaderPreview ? 'إخفاء المعاينة' : 'معاينة الترويسة'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Messages */}
+                    {logoUploadSuccess && (
+                      <div className="mt-4 p-3 bg-emerald-50 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 border border-emerald-200">
+                        <CheckCircle2 size={16} className="text-emerald-600" />
+                        تم تحديث واعتماد شعار المؤسسة التعليمية بنجاح!
+                      </div>
+                    )}
+
+                    {logoUploadError && (
+                      <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center gap-2 border border-red-200">
+                        <AlertCircle size={16} className="text-red-600" />
+                        {logoUploadError}
+                      </div>
+                    )}
+
+                    {/* Live Official Header Preview */}
+                    {showLogoHeaderPreview && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-6 pt-6 border-t border-outline-variant/30"
+                      >
+                        <div className="text-xs font-bold text-secondary mb-3 flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-primary" />
+                          محاكاة ظهور الشعار في أعلى الوثائق والتقارير المطبوعة:
+                        </div>
+                        <div className="p-4 md:p-6 bg-white rounded-2xl border-2 border-dashed border-outline-variant/60 text-neutral-800 shadow-inner">
+                          <div className="text-center font-serif text-xs md:text-sm font-bold text-neutral-900 mb-0.5">
+                            الجمهورية الجزائرية الديمقراطية الشعبية
+                          </div>
+                          <div className="text-center font-serif text-xs md:text-sm font-bold text-primary mb-3">
+                            وزارة التربية الوطنية
+                          </div>
+
+                          <div className="flex justify-between items-center text-[11px] md:text-xs">
+                            <div className="text-right leading-relaxed font-bold">
+                              <div>مديرية التربية لولاية: {currentDirData?.name || selectedDirectorate || 'الولاية'}</div>
+                              <div className="text-primary">{customSchoolName || (schoolsList.find((s: any) => s.code === selectedSchool)?.name) || 'اسم المؤسسة التعليمية'}</div>
+                              <div className="text-neutral-500">مخبر العلوم والتكنولوجيا</div>
+                            </div>
+
+                            <div className="w-16 h-16 md:w-20 md:h-20 p-1 flex items-center justify-center">
+                              <img 
+                                src={customLogoUrl || ministryLogo} 
+                                alt="شعار المؤسسة" 
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            </div>
+
+                            <div className="text-left leading-relaxed font-bold" dir="rtl">
+                              <div>السنة الدراسية: 2025/2026</div>
+                              <div className="text-neutral-500">الصفة: {jobTitle}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* مديرية التربية */}
                     <div className="space-y-3">
