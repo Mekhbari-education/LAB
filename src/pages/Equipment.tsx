@@ -276,7 +276,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 filterStatus === stat.status && "ring-4 ring-primary/20 border-primary"
               )}
             >
-              <div className="absolute top-0 left-0 w-24 h-24 bg-surface/40 rounded-br-[80px] -ml-6 -mt-6 group-hover:scale-150 transition-transform duration-700" />
+              <div className="absolute top-0 end-0 w-24 h-24 bg-surface/40 rounded-ee-[80px] -me-6 -mt-6 group-hover:scale-150 transition-transform duration-700" />
               <div className="relative z-10 flex justify-between items-start mb-6">
                 <div className="p-4 bg-surface rounded-2xl shadow-sm text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
                   <stat.icon size={24} />
@@ -295,9 +295,9 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
       <div className="bg-surface rounded-[50px] overflow-hidden shadow-2xl border border-outline/5 relative">
         <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-6 bg-surface-container-low/30 border-b border-outline/5">
           <div className="relative w-full md:w-96 group">
-            <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" size={20} />
+            <Search className="absolute start-5 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" size={20} />
             <input 
-              className="w-full bg-surface border-2 border-outline/5 rounded-full pr-14 pl-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+              className="w-full bg-surface border-2 border-outline/5 rounded-full ps-14 pe-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner text-start"
               placeholder={t('equipment.search_placeholder', 'بحث في قائمة العتاد...')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -664,40 +664,40 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-8 py-5 rounded-[32px] shadow-2xl flex items-center gap-8 min-w-[600px]"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-6 py-4 rounded-[28px] shadow-2xl flex flex-wrap items-center justify-between gap-4 w-[calc(100vw-2rem)] max-w-2xl border border-white/10"
           >
             <div className="flex flex-col">
               <span className="text-sm font-black">{selectedIds.length} صنف مختار</span>
               <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest">عمليات جماعية</span>
             </div>
 
-            <div className="h-8 w-px bg-surface/10" />
+            <div className="h-8 w-px bg-surface/10 hidden sm:block" />
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button 
                 onClick={() => handleBulkStatusUpdate('functional')}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-success/20 text-success hover:bg-success hover:text-white transition-all font-black text-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-success/20 text-success hover:bg-success hover:text-white transition-all font-black text-xs"
               >
                 <CheckCircle size={14} />
                 سليم
               </button>
               <button 
                 onClick={() => handleBulkStatusUpdate('broken')}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs"
               >
                 <AlertTriangle size={14} />
                 تالف
               </button>
               <button 
                 onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs border border-error/30"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs border border-error/30"
               >
                 <Trash2 size={14} />
-                حذف المختار
+                حذف
               </button>
               
               <button 
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-xs"
                 onClick={() => {
                   const items = equipment.filter(e => selectedIds.includes(e.id));
                   const worksheet = XLSX.utils.json_to_sheet(items.map(e => ({
@@ -713,12 +713,13 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 }}
               >
                 <Download size={14} />
-                تصدير المختار
+                تصدير
               </button>
 
               <button 
                 onClick={() => setSelectedIds([])}
-                className="p-2 hover:bg-surface/10 rounded-full transition-all ml-2"
+                className="p-1.5 hover:bg-surface/10 rounded-full transition-all ms-2"
+                aria-label="إلغاء التحديد"
               >
                 <X size={18} />
               </button>
@@ -910,79 +911,6 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
         )}
       </AnimatePresence>
       
-      {/* Floating Bulk Action Bar */}
-      <AnimatePresence>
-        {selectedIds.length > 0 && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-8 py-5 rounded-[32px] shadow-2xl flex items-center gap-10 min-w-[600px]"
-          >
-            <div className="flex flex-col">
-              <span className="text-sm font-black">{selectedIds.length} صنف مختار</span>
-              <span className="text-[10px] text-white/60 font-bold">يمكنك إجراء عمليات جماعية على هذه التجهيزات</span>
-            </div>
-
-            <div className="h-10 w-px bg-surface/10" />
-
-            <div className="flex gap-4">
-              <button 
-                onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-red-500/20 text-red-100 hover:bg-red-500 hover:text-white transition-all font-black text-sm"
-              >
-                <Trash2 size={18} />
-                حذف المختار
-              </button>
-              
-              <div className="flex gap-1">
-                <button 
-                  onClick={() => handleBulkStatusUpdate('functional')}
-                  className="px-4 py-2.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-[10px] uppercase"
-                  title="تحديد كسليم"
-                >
-                  سليم
-                </button>
-                <button 
-                  onClick={() => handleBulkStatusUpdate('maintenance')}
-                  className="px-4 py-2.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-[10px] uppercase"
-                  title="تحديد قيد الصيانة"
-                >
-                  صيانة
-                </button>
-              </div>
-
-              <button 
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-sm"
-                onClick={() => {
-                  const items = equipment.filter(e => selectedIds.includes(e.id));
-                  const worksheet = XLSX.utils.json_to_sheet(items.map(e => ({
-                    'Equipment': e.name,
-                    'Type': e.type,
-                    'Serial': e.serialNumber,
-                    'Status': e.status,
-                    'Qty': e.totalQuantity
-                  })));
-                  const workbook = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(workbook, worksheet, "SelectedEquipment");
-                  XLSX.writeFile(workbook, `selected_equipment_${new Date().getTime()}.xlsx`);
-                }}
-              >
-                <Download size={18} />
-                تصدير المختار
-              </button>
-
-              <button 
-                onClick={() => setSelectedIds([])}
-                className="p-2.5 hover:bg-surface/10 rounded-full transition-all"
-              >
-                <X size={20} />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* History Modal */}
       <AnimatePresence>
         {isHistoryModalOpen && (

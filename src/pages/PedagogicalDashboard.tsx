@@ -111,7 +111,7 @@ export default function PedagogicalDashboard() {
     <div className="space-y-12 max-w-7xl mx-auto px-6 pb-24 rtl font-sans" dir="rtl">
       {/* Header */}
       <header className="relative flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 sm:gap-8 mb-4">
-        <div className="text-right space-y-3 relative z-10">
+        <div className="text-start space-y-3 relative z-10">
           <div className="inline-flex items-center gap-3 px-4 py-2 bg-primary/10 rounded-full text-primary text-[0.6875rem] font-black uppercase tracking-widest mb-2">
             <GraduationCap size={14} />
             الفضاء البيداغوجي الرقمي

@@ -270,9 +270,9 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
           <div className="bg-surface-container-lowest rounded-[32px] overflow-hidden border border-outline/10 shadow-sm">
             <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-6 bg-surface-container-low/30 border-b border-outline/5">
               <div className="relative w-full md:w-80">
-                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-outline/60" size={20} />
+                <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-outline/60" size={20} />
                 <input 
-                  className="w-full bg-surface-container-low border border-outline/10 rounded-full pr-12 pl-6 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all"
+                  className="w-full bg-surface-container-low border border-outline/10 rounded-full ps-12 pe-6 py-3 text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all text-start"
                   placeholder={t('chemicals.search_placeholder', 'بحث عن مادة (اسم أو صيغة)...')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -298,10 +298,10 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
               ref={parentRef}
               className="overflow-auto scrollbar-hide relative max-h-[700px] w-full"
             >
-              <table className="w-full text-right border-collapse table-auto relative">
+              <table className="w-full text-start border-collapse table-auto relative">
                 <thead className="sticky top-0 z-20 bg-surface-container-lowest">
                   <tr className="bg-surface-container-low/50 text-secondary/60 text-[11px] font-black uppercase tracking-widest">
-                    <th className="px-3 py-5 text-right w-12">
+                    <th className="px-3 py-5 text-start w-12">
                       <div 
                         onClick={handleSelectAll}
                         className={cn(
@@ -314,9 +314,9 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
                         {selectedIds.length === filteredChemicals.length && filteredChemicals.length > 0 && <Check size={12} />}
                       </div>
                     </th>
-                    <th className="px-3 py-5 text-right w-10">#</th>
+                    <th className="px-3 py-5 text-start w-10">#</th>
                     <th 
-                      className="px-3 py-5 text-right min-w-[140px] cursor-pointer hover:text-primary transition-colors"
+                      className="px-3 py-5 text-start min-w-[140px] cursor-pointer hover:text-primary transition-colors"
                       onClick={() => handleSort('nameEn')}
                     >
                       <div className="flex items-center">
@@ -702,26 +702,26 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-8 py-5 rounded-[32px] shadow-2xl flex items-center gap-10 min-w-[500px]"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-6 py-4 rounded-[28px] shadow-2xl flex flex-wrap items-center justify-between gap-4 w-[calc(100vw-2rem)] max-w-2xl border border-white/10"
           >
             <div className="flex flex-col">
               <span className="text-sm font-black">{selectedIds.length} {t('common.selected', 'مادة مختارة')}</span>
               <span className="text-[10px] text-white/60 font-bold">{t('chemicals.bulk_operations_hint', 'يمكنك إجراء عمليات جماعية على هذه المواد')}</span>
             </div>
 
-            <div className="h-10 w-px bg-surface/10" />
+            <div className="h-8 w-px bg-surface/10 hidden sm:block" />
 
-            <div className="flex gap-4">
+            <div className="flex items-center gap-2 flex-wrap">
               <button 
                 onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs"
               >
-                <Trash2 size={18} />
+                <Trash2 size={16} />
                 {t('common.delete_selected', 'حذف المختار')}
               </button>
               
               <button 
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-xs"
                 onClick={() => {
                   const items = chemicals.filter(c => selectedIds.includes(c.id));
                   const worksheet = XLSX.utils.json_to_sheet(items.map(c => ({
@@ -736,7 +736,7 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
                   XLSX.writeFile(workbook, `selected_chemicals_${new Date().getTime()}.xlsx`);
                 }}
               >
-                <Download size={18} />
+                <Download size={16} />
                 {t('common.export_selected', 'تصدير المختار')}
               </button>
 
@@ -745,17 +745,18 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
                   const items = chemicals.filter(c => selectedIds.includes(c.id));
                   handlePrintInventoryCards(items);
                 }}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-primary/20 text-primary-container hover:bg-primary hover:text-white transition-all font-black text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary/20 text-primary-container hover:bg-primary hover:text-white transition-all font-black text-xs"
               >
-                <Printer size={18} />
+                <Printer size={16} />
                 {t('chemicals.btn_print_stock_cards', 'بطاقات المختار')}
               </button>
 
               <button 
                 onClick={() => setSelectedIds([])}
-                className="p-2.5 hover:bg-surface/10 rounded-full transition-all"
+                className="p-1.5 hover:bg-surface/10 rounded-full transition-all ms-2"
+                aria-label="إلغاء التحديد"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
           </motion.div>

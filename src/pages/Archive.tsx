@@ -58,7 +58,7 @@ export default function ArchivePage() {
   return (
     <div className="space-y-12 max-w-7xl mx-auto px-4 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-4">
-        <div className="text-right space-y-1">
+        <div className="text-start space-y-1">
           <h1 className="text-5xl font-black text-primary tracking-tighter">أرشيف التقارير</h1>
           <p className="text-secondary/80 text-lg font-medium max-w-2xl">سجلات التقارير الشهرية، الإمداد، وعمليات الجرد والإتلاف المؤرشفة للسنوات الدراسية السابقة.</p>
         </div>

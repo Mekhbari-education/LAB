@@ -251,11 +251,11 @@ export default function LabExperiments() {
                 {selectedIds.length === filteredExperiments.length && filteredExperiments.length > 0 && <Check size={14} />}
               </div>
             <div className="relative w-full max-w-md">
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-secondary/40" size={18} />
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-secondary/40" size={18} />
               <input 
                 type="text" 
                 placeholder="بحث عن تجربة، أستاذ، أو قسم..." 
-                className="w-full bg-surface border border-outline/10 rounded-2xl pr-12 pl-4 py-3 font-bold text-sm focus:ring-2 focus:ring-primary/10 transition-all outline-none"
+                className="w-full bg-surface border border-outline/10 rounded-2xl ps-12 pe-4 py-3 font-bold text-sm focus:ring-2 focus:ring-primary/10 transition-all outline-none text-start"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -272,7 +272,7 @@ export default function LabExperiments() {
               transition={{ delay: i * 0.05 }}
               onClick={() => handleToggleSelect(exp.id)}
               className={cn(
-                "p-8 hover:bg-primary/5 transition-all group cursor-pointer border-r-4",
+                "p-8 hover:bg-primary/5 transition-all group cursor-pointer border-s-4",
                 selectedIds.includes(exp.id) ? "bg-primary/5 border-primary" : "border-transparent"
               )}
             >
@@ -494,26 +494,26 @@ export default function LabExperiments() {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-8 py-5 rounded-[32px] shadow-2xl flex items-center gap-10 min-w-[500px]"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-6 py-4 rounded-[28px] shadow-2xl flex flex-wrap items-center justify-between gap-4 w-[calc(100vw-2rem)] max-w-xl border border-white/10"
           >
             <div className="flex flex-col">
               <span className="text-sm font-black">{selectedIds.length} سجل مختار</span>
               <span className="text-[10px] text-white/40 font-bold">عمليات جماعية</span>
             </div>
 
-            <div className="h-10 w-px bg-surface/10" />
+            <div className="h-8 w-px bg-surface/10 hidden sm:block" />
 
-            <div className="flex gap-4">
+            <div className="flex items-center gap-2 flex-wrap">
               <button 
                 onClick={handleBulkDelete}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs"
               >
-                <Trash2 size={18} />
+                <Trash2 size={16} />
                 حذف السجلات
               </button>
               
               <button 
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface/10 hover:bg-surface/20 transition-all font-black text-xs"
                 onClick={() => {
                   const items = experiments.filter(e => selectedIds.includes(e.id));
                   const worksheet = XLSX.utils.json_to_sheet(items.map(e => ({
@@ -529,15 +529,16 @@ export default function LabExperiments() {
                   XLSX.writeFile(workbook, `selected_experiments_${new Date().getTime()}.xlsx`);
                 }}
               >
-                <FileText size={18} />
+                <FileText size={16} />
                 تصدير للملفات
               </button>
 
               <button 
                 onClick={() => setSelectedIds([])}
-                className="p-2.5 hover:bg-surface/10 rounded-full transition-all"
+                className="p-1.5 hover:bg-surface/10 rounded-full transition-all ms-2"
+                aria-label="إلغاء التحديد"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
           </motion.div>

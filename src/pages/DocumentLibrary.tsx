@@ -150,7 +150,7 @@ export default function DocumentLibrary() {
               transition={{ delay: i * 0.1 }}
               onClick={() => navigate(link.path)}
               className={cn(
-                "p-8 rounded-[40px] border-2 text-right group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1",
+                "p-8 rounded-[40px] border-2 text-start group relative overflow-hidden transition-all hover:shadow-2xl hover:-translate-y-1",
                 link.accent,
                 "bg-surface"
               )}
@@ -162,7 +162,7 @@ export default function DocumentLibrary() {
               <p className="text-sm font-bold text-secondary/70 leading-relaxed mb-6">{link.desc}</p>
               <div className="flex items-center gap-2 text-xs font-black text-primary group-hover:gap-4 transition-all">
                 <span>استعراض القسم</span>
-                <ChevronRight size={16} />
+                <ChevronRight size={16} className="rtl:rotate-180" />
               </div>
               
               {/* Decorative circle */}
@@ -305,13 +305,13 @@ export default function DocumentLibrary() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">رابط الملف (اختياري)</label>
+                      <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">رابط الملف (اختياري)</label>
                       <input className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all font-bold mt-2 text-left" dir="ltr" value={newDoc.fileUrl} onChange={e => setNewDoc({...newDoc, fileUrl: e.target.value})} placeholder="https://..." />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">وصف مختصر</label>
+                    <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">وصف مختصر</label>
                     <textarea className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all font-bold mt-2 min-h-[100px] resize-none" value={newDoc.description} onChange={e => setNewDoc({...newDoc, description: e.target.value})} placeholder="ماذا تحتوي هذه الوثيقة؟" />
                   </div>
                 </div>

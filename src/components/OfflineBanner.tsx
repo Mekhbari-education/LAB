@@ -30,14 +30,17 @@ export default function OfflineBanner() {
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: -50, opacity: 0 }}
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-orange-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-4 no-print rtl"
+        className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-orange-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center justify-between gap-4 no-print w-[calc(100vw-2rem)] max-w-lg"
         dir="rtl"
       >
-        <WifiOff size={20} className="animate-pulse" />
-        <span className="text-sm font-bold">أنت الآن في وضع عدم الاتصال (Offline). يتم حفظ البيانات محلياً.</span>
+        <div className="flex items-center gap-3">
+          <WifiOff size={20} className="animate-pulse shrink-0" />
+          <span className="text-xs sm:text-sm font-bold leading-tight">أنت الآن في وضع عدم الاتصال (Offline). يتم حفظ البيانات محلياً.</span>
+        </div>
         <button 
           onClick={() => setDismissed(true)}
-          className="mr-4 p-1 hover:bg-surface/20 rounded-full transition-all"
+          className="ms-2 p-1 hover:bg-white/20 rounded-full transition-all shrink-0"
+          aria-label="إغلاق التنبيه"
         >
           <X size={16} />
         </button>

@@ -1,27 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Users, 
   MessageSquare, 
   ShoppingCart, 
   ShieldCheck, 
+  User, 
+  Mail, 
+  Calendar, 
+  CheckCircle2, 
+  XCircle, 
+  Search, 
+  Filter, 
+  Settings, 
+  School, 
+  Database, 
+  X, 
+  KeyRound, 
+  Loader2, 
+  Download, 
+  Bell,
+  RefreshCw,
+  Activity,
+  AlertCircle,
+  Eye,
+  Send,
+  Building2,
+  Trash2,
+  Check,
+  FileSpreadsheet,
+  Layers,
+  ChevronLeft,
   ChevronRight,
-  User,
-  Mail,
-  Calendar,
-  CheckCircle,
-  XCircle,
+  TrendingUp,
+  Sparkles,
+  ExternalLink,
+  Shield,
   HelpCircle,
-  Search,
-  Filter,
-  Scale,
-  Settings,
-  School,
-  Database,
-  X,
-  KeyRound,
-  Loader2,
-  Download,
-  Bell
+  BadgeAlert,
+  GraduationCap
 } from 'lucide-react';
 import { 
   collection, 
@@ -30,1060 +46,1781 @@ import {
   orderBy, 
   doc, 
   updateDoc, 
-  addDoc,
-  Timestamp 
+  setDoc,
+  deleteDoc,
+  serverTimestamp,
+  getDocs,
+  limit
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, auth, checkIsAdmin } from '../firebase';
-import { motion } from 'motion/react';
+import { db, handleFirestoreError, OperationType, auth, checkIsAdmin, testFirestoreConnection } from '../firebase';
+import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import { cn } from '../lib/utils';
-import { format } from 'date-fns';
-import { arDZ } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import ministryLogo from '/ministry-logo.png';
+import { SCHOOL_DB } from '../data/schools';
 
-type TabType = 'users' | 'tickets' | 'purchases' | 'advanced';
+type AdminTab = 'overview' | 'users' | 'schools' | 'tickets' | 'purchases' | 'announcements' | 'system';
+
+interface AdminUser {
+  id: string;
+  displayName?: string;
+  email?: string;
+  role?: string;
+  photoURL?: string;
+  createdAt?: any;
+  lastLogin?: any;
+  disabled?: boolean;
+}
+
+interface UserSettings {
+  school?: string;
+  schoolName?: string;
+  directorate?: string;
+  directorateName?: string;
+  commune?: string;
+  communeName?: string;
+  cycle?: string;
+  jobTitle?: string;
+  employeeId?: string;
+  address?: string;
+  grade?: string;
+  specialty?: string;
+  schoolLogo?: string;
+  profilePhoto?: string;
+  updatedAt?: string;
+}
+
+interface SupportTicket {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'new' | 'in_progress' | 'resolved' | 'closed';
+  userId?: string;
+  userEmail?: string;
+  userName?: string;
+  schoolName?: string;
+  createdAt?: any;
+  adminReply?: string;
+  adminRepliedAt?: any;
+}
+
+interface PurchaseOrder {
+  id: string;
+  orderNumber?: string;
+  schoolName?: string;
+  supplierName?: string;
+  total?: number;
+  subtotal?: number;
+  status?: string;
+  date?: any;
+  items?: any[];
+  notes?: string;
+  createdAt?: any;
+}
+
+interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  category: 'urgent' | 'technical' | 'pedagogical' | 'update';
+  priority: 'normal' | 'high';
+  createdAt?: any;
+  authorName?: string;
+  active?: boolean;
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+
+  // Authentication & Access state
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<TabType>('users');
-  const [search, setSearch] = useState('');
-  const [users, setUsers] = useState<any[]>([]);
-  const [settings, setSettings] = useState<Record<string, any>>({});
-  const [tickets, setTickets] = useState<any[]>([]);
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<any | null>(null);
-  const [modalMode, setModalMode] = useState<'tech' | 'edit' | 'review'>('review');
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
 
-  // Advanced tab states
-  const [adminEmail, setAdminEmail] = useState('');
-  const [jsonKey, setJsonKey] = useState('');
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminResult, setAdminResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Live Data collections
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [settingsMap, setSettingsMap] = useState<Record<string, UserSettings>>({});
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  const [migLoading, setMigLoading] = useState(false);
-  const [migResult, setMigResult] = useState<{ success: boolean; message: string } | null>(null);
+  // Toast Notifications
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration = 3500) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), duration);
+  };
 
-  const [announcementMsg, setAnnouncementMsg] = useState('');
-  const [announcementSending, setAnnouncementSending] = useState(false);
+  // Modals & Drawers state
+  const [selectedUser, setSelectedUser] = useState<{ user: AdminUser; settings?: UserSettings } | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [ticketReplyText, setTicketReplyText] = useState('');
+  const [isReplyingTicket, setIsReplyingTicket] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState<PurchaseOrder | null>(null);
 
+  // New Announcement Modal state
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [annTitle, setAnnTitle] = useState('');
+  const [annMessage, setAnnMessage] = useState('');
+  const [annCategory, setAnnCategory] = useState<'urgent' | 'technical' | 'pedagogical' | 'update'>('pedagogical');
+  const [annPriority, setAnnPriority] = useState<'normal' | 'high'>('normal');
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+
+  // Filters & Search
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'lab_staff' | 'teacher'>('all');
+  const [schoolSearch, setSchoolSearch] = useState('');
+  const [schoolCycleFilter, setSchoolCycleFilter] = useState<'all' | 'ثانوي' | 'متوسط' | 'ابتدائي'>('all');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState<'all' | 'new' | 'in_progress' | 'resolved'>('all');
+  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState<string>('all');
+
+  // System Health state
+  const [dbHealthy, setDbHealthy] = useState<boolean | null>(null);
+  const [isPingingDb, setIsPingingDb] = useState(false);
+
+  // 1. Verify Administrator Privileges
   useEffect(() => {
     let isMounted = true;
-    checkIsAdmin(auth.currentUser).then(adminStatus => {
-      if (!isMounted) return;
-      setIsAdmin(adminStatus);
-      if (!adminStatus) {
-        navigate('/', { replace: true });
-      }
-    });
-    return () => { isMounted = false; };
-  }, [navigate]);
 
+    const verifyAdmin = async () => {
+      setIsVerifyingAuth(true);
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          if (isMounted) {
+            setIsAdmin(false);
+            setIsVerifyingAuth(false);
+          }
+          return;
+        }
+
+        const adminStatus = await checkIsAdmin(user);
+        if (isMounted) {
+          setIsAdmin(adminStatus);
+          setIsVerifyingAuth(false);
+        }
+      } catch (err) {
+        console.error('Error verifying admin rights:', err);
+        if (isMounted) {
+          setIsAdmin(false);
+          setIsVerifyingAuth(false);
+        }
+      }
+    };
+
+    verifyAdmin();
+    return () => { isMounted = false; };
+  }, []);
+
+  // 2. Fetch live data streams when admin is confirmed
   useEffect(() => {
     if (!isAdmin) return;
 
-    setIsLoading(true);
-    
+    setIsLoadingData(true);
+
     // Listen to users
-    const unsubUsers = onSnapshot(query(collection(db, 'users'), orderBy('displayName', 'asc')), (snap) => {
-      setUsers(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'users'));
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      const uList: AdminUser[] = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...(docSnap.data() as any)
+      }));
+      setUsers(uList);
+    }, (err) => {
+      console.warn('Could not subscribe to users:', err);
+    });
 
-    // Listen to settings
+    // Listen to user settings
     const unsubSettings = onSnapshot(collection(db, 'settings'), (snap) => {
-      const sMap: Record<string, any> = {};
-      snap.docs.forEach(doc => {
-        sMap[doc.id] = doc.data();
+      const sMap: Record<string, UserSettings> = {};
+      snap.docs.forEach(docSnap => {
+        sMap[docSnap.id] = docSnap.data() as UserSettings;
       });
-      setSettings(sMap);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'settings'));
+      setSettingsMap(sMap);
+    }, (err) => {
+      console.warn('Could not subscribe to settings:', err);
+    });
 
-    // Listen to tickets
-    const unsubTickets = onSnapshot(query(collection(db, 'support_tickets'), orderBy('createdAt', 'desc')), (snap) => {
-      setTickets(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'support_tickets'));
+    // Listen to support tickets
+    const unsubTickets = onSnapshot(collection(db, 'support_tickets'), (snap) => {
+      const tList: SupportTicket[] = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...(docSnap.data() as any)
+      })).sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
+      });
+      setTickets(tList);
+    }, (err) => {
+      console.warn('Could not subscribe to support_tickets:', err);
+    });
 
-    // Listen to purchases
-    const unsubPurchases = onSnapshot(query(collection(db, 'purchase_requests'), orderBy('createdAt', 'desc')), (snap) => {
-      setPurchases(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'purchase_requests'));
+    // Listen to purchase orders
+    const unsubPurchases = onSnapshot(collection(db, 'purchase_orders'), (snap) => {
+      const pList: PurchaseOrder[] = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...(docSnap.data() as any)
+      })).sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
+      });
+      setPurchases(pList);
+    }, (err) => {
+      console.warn('Could not subscribe to purchase_orders:', err);
+    });
 
-    setIsLoading(false);
+    // Listen to system announcements
+    const unsubAnnouncements = onSnapshot(collection(db, 'system_announcements'), (snap) => {
+      const aList: Announcement[] = snap.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...(docSnap.data() as any)
+      })).sort((a, b) => {
+        const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
+      });
+      setAnnouncements(aList);
+      setIsLoadingData(false);
+    }, (err) => {
+      console.warn('Could not subscribe to system_announcements:', err);
+      setIsLoadingData(false);
+    });
+
+    // Test DB connection status once on boot
+    testFirestoreConnection(1).then(ok => setDbHealthy(ok));
 
     return () => {
       unsubUsers();
       unsubSettings();
       unsubTickets();
       unsubPurchases();
+      unsubAnnouncements();
     };
-  }, []);
+  }, [isAdmin]);
 
-  const handleUpdateTicketStatus = async (ticketId: string, status: string) => {
-    try {
-      await updateDoc(doc(db, 'support_tickets', ticketId), { status });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'support_tickets');
-    }
-  };
+  // Derived Statistics
+  const stats = useMemo(() => {
+    const totalUsers = users.length;
+    const adminCount = users.filter(u => u.role === 'Admin' || u.role === 'admin').length;
+    const labStaffCount = Object.values(settingsMap).filter(s => 
+      !s.jobTitle?.includes('أستاذ') && (s.jobTitle?.includes('مخبر') || s.jobTitle?.includes('ملحق'))
+    ).length;
+    const teacherCount = Object.values(settingsMap).filter(s => s.jobTitle?.includes('أستاذ')).length;
 
-  const handleUpdatePurchaseStatus = async (requestId: string, status: string) => {
-    try {
-      await updateDoc(doc(db, 'purchase_requests', requestId), { status });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'purchase_requests');
-    }
-  };
+    // Distinct establishments
+    const uniqueSchools = new Set<string>();
+    const uniqueWilayas = new Set<string>();
+    Object.values(settingsMap).forEach(s => {
+      if (s.schoolName || s.school) uniqueSchools.add(s.schoolName || s.school || '');
+      if (s.directorateName || s.directorate) uniqueWilayas.add(s.directorateName || s.directorate || '');
+    });
 
-  const handleUpdateUserRole = async (userId: string, currentRole: string) => {
-    const newRole = currentRole === 'Admin' ? 'user' : 'Admin';
-    if (!window.confirm(`هل أنت متأكد من تغيير رتبة المستخدم إلى ${newRole === 'Admin' ? 'مدير نظام' : 'مستخدم عادي'}؟`)) return;
+    const openTicketsCount = tickets.filter(t => t.status === 'new' || t.status === 'in_progress').length;
+    const totalPurchaseVolume = purchases.reduce((acc, p) => acc + (Number(p.total) || 0), 0);
+    const pendingOrdersCount = purchases.filter(p => p.status === 'sent' || p.status === 'draft').length;
+
+    return {
+      totalUsers: Math.max(totalUsers, Object.keys(settingsMap).length),
+      adminCount: Math.max(adminCount, 1),
+      labStaffCount,
+      teacherCount,
+      totalSchools: uniqueSchools.size,
+      totalWilayas: uniqueWilayas.size,
+      openTicketsCount,
+      totalTickets: tickets.length,
+      totalPurchaseVolume,
+      pendingOrdersCount,
+      totalOrders: purchases.length,
+      activeAnnouncementsCount: announcements.filter(a => a.active !== false).length
+    };
+  }, [users, settingsMap, tickets, purchases, announcements]);
+
+  // Filtered Users List
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const s = settingsMap[u.id] || {};
+      const searchLower = userSearch.toLowerCase();
+      
+      const matchesSearch = !userSearch || 
+        (u.displayName && u.displayName.toLowerCase().includes(searchLower)) ||
+        (u.email && u.email.toLowerCase().includes(searchLower)) ||
+        (s.schoolName && s.schoolName.toLowerCase().includes(searchLower)) ||
+        (s.directorateName && s.directorateName.toLowerCase().includes(searchLower)) ||
+        (s.jobTitle && s.jobTitle.toLowerCase().includes(searchLower)) ||
+        (s.employeeId && s.employeeId.includes(searchLower));
+
+      if (!matchesSearch) return false;
+
+      if (userRoleFilter === 'admin') {
+        return u.role === 'Admin' || u.role === 'admin';
+      }
+      if (userRoleFilter === 'teacher') {
+        return s.jobTitle?.includes('أستاذ');
+      }
+      if (userRoleFilter === 'lab_staff') {
+        return !s.jobTitle?.includes('أستاذ') && (s.jobTitle?.includes('مخبر') || s.jobTitle?.includes('ملحق'));
+      }
+      return true;
+    });
+  }, [users, settingsMap, userSearch, userRoleFilter]);
+
+  // Aggregated Registered Schools List
+  const aggregatedSchools = useMemo(() => {
+    const schoolMap = new Map<string, {
+      name: string;
+      directorate: string;
+      commune: string;
+      cycle: string;
+      staffCount: number;
+      staff: { name: string; title: string; email: string }[];
+    }>();
+
+    Object.entries(settingsMap).forEach(([uid, s]) => {
+      const schoolName = s.schoolName || s.school;
+      if (!schoolName) return;
+
+      const userObj = users.find(u => u.id === uid);
+      const staffMember = {
+        name: userObj?.displayName || 'موظف مخبر',
+        title: s.jobTitle || 'ملحق بالمخابر',
+        email: userObj?.email || ''
+      };
+
+      if (!schoolMap.has(schoolName)) {
+        schoolMap.set(schoolName, {
+          name: schoolName,
+          directorate: s.directorateName || s.directorate || 'مديرية التربية',
+          commune: s.communeName || s.commune || '',
+          cycle: s.cycle || 'ثانوي',
+          staffCount: 1,
+          staff: [staffMember]
+        });
+      } else {
+        const item = schoolMap.get(schoolName)!;
+        item.staffCount += 1;
+        item.staff.push(staffMember);
+      }
+    });
+
+    const list = Array.from(schoolMap.values());
+    return list.filter(sch => {
+      const matchesSearch = !schoolSearch || 
+        sch.name.toLowerCase().includes(schoolSearch.toLowerCase()) ||
+        sch.directorate.toLowerCase().includes(schoolSearch.toLowerCase()) ||
+        sch.commune.toLowerCase().includes(schoolSearch.toLowerCase());
+      
+      const matchesCycle = schoolCycleFilter === 'all' || sch.cycle === schoolCycleFilter;
+      return matchesSearch && matchesCycle;
+    });
+  }, [settingsMap, users, schoolSearch, schoolCycleFilter]);
+
+  // Filtered Tickets
+  const filteredTickets = useMemo(() => {
+    return tickets.filter(t => {
+      if (ticketStatusFilter === 'all') return true;
+      return t.status === ticketStatusFilter;
+    });
+  }, [tickets, ticketStatusFilter]);
+
+  // Filtered Purchases
+  const filteredPurchases = useMemo(() => {
+    return purchases.filter(p => {
+      if (purchaseStatusFilter === 'all') return true;
+      return p.status === purchaseStatusFilter;
+    });
+  }, [purchases, purchaseStatusFilter]);
+
+  // User Role Management Handler
+  const handleToggleUserRole = async (targetUser: AdminUser) => {
+    const isCurrentlyAdmin = targetUser.role === 'Admin' || targetUser.role === 'admin';
+    const newRole = isCurrentlyAdmin ? 'user' : 'Admin';
     
     try {
-      await updateDoc(doc(db, 'users', userId), { role: newRole });
-      if (selectedUser) setSelectedUser({ ...selectedUser, role: newRole });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'users');
+      await updateDoc(doc(db, 'users', targetUser.id), { role: newRole });
+      
+      // Also update settings doc if exists
+      try {
+        await updateDoc(doc(db, 'settings', targetUser.id), { role: newRole });
+      } catch (e) {}
+
+      showToast(`تم تغيير رتبة ${targetUser.displayName || 'المستخدم'} إلى ${newRole === 'Admin' ? 'مدير نظام (Admin)' : 'مستخدم عادي'}.`, 'success');
+      
+      if (selectedUser?.user.id === targetUser.id) {
+        setSelectedUser({ ...selectedUser, user: { ...targetUser, role: newRole } });
+      }
+    } catch (err: any) {
+      console.error('Error updating role:', err);
+      showToast('فشل تحديث رتبة المستخدم: ' + err.message, 'error');
     }
   };
 
-  const handleAssignAdmin = async (e: React.FormEvent) => {
+  // Ticket Status & Reply Handler
+  const handleSendTicketReply = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAdminLoading(true);
-    setAdminResult(null);
+    if (!selectedTicket || !ticketReplyText.trim()) return;
 
+    setIsReplyingTicket(true);
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch('/api/setup-admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: adminEmail, serviceAccountJson: jsonKey, idToken })
+      await updateDoc(doc(db, 'support_tickets', selectedTicket.id), {
+        adminReply: ticketReplyText.trim(),
+        adminRepliedAt: serverTimestamp(),
+        adminName: auth.currentUser?.displayName || 'الإدارة المركزية',
+        status: 'resolved'
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setAdminResult({ success: true, message: data.message });
-        setAdminEmail('');
-      } else {
-        setAdminResult({ success: false, message: data.error });
-      }
+      showToast('تم إرسال الرد الرسمي وحل التذكرة بنجاح.', 'success');
+      setSelectedTicket(null);
+      setTicketReplyText('');
     } catch (err: any) {
-      setAdminResult({ success: false, message: err.message || 'شبكة الاتصال فشلت' });
+      console.error('Error replying ticket:', err);
+      showToast('فشل إرسال الرد: ' + err.message, 'error');
     } finally {
-      setAdminLoading(false);
+      setIsReplyingTicket(false);
     }
   };
 
-  const handleMigrateDb = async () => {
-    if (!jsonKey) return;
-    setMigLoading(true);
-    setMigResult(null);
-
+  const handleUpdateTicketStatus = async (ticketId: string, newStatus: SupportTicket['status']) => {
     try {
-      const idToken = await auth.currentUser?.getIdToken();
-      const response = await fetch('/api/migrate-schools', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceAccountJson: jsonKey, idToken })
+      await updateDoc(doc(db, 'support_tickets', ticketId), { status: newStatus });
+      showToast('تم تحديث حالة التذكرة بنجاح.', 'success');
+    } catch (err: any) {
+      showToast('فشل تحديث الحالة: ' + err.message, 'error');
+    }
+  };
+
+  // Broadcast Announcement Handler
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!annTitle.trim() || !annMessage.trim()) {
+      showToast('يرجى كتابة عنوان وتفاصيل الإعلان الوزاري.', 'error');
+      return;
+    }
+
+    setIsPostingAnnouncement(true);
+    try {
+      const docRef = doc(collection(db, 'system_announcements'));
+      await setDoc(docRef, {
+        title: annTitle.trim(),
+        message: annMessage.trim(),
+        category: annCategory,
+        priority: annPriority,
+        authorName: auth.currentUser?.displayName || 'مديرية البرامج والوسائل التعليمية',
+        createdAt: serverTimestamp(),
+        active: true
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setMigResult({ success: true, message: data.message });
-      } else {
-        setMigResult({ success: false, message: data.error });
-      }
+      showToast('تم نشر وتعميم الإعلان لكافة مستخدمي المنصة بنجاح.', 'success');
+      setShowAnnouncementModal(false);
+      setAnnTitle('');
+      setAnnMessage('');
     } catch (err: any) {
-      setMigResult({ success: false, message: err.message || 'شبكة الاتصال فشلت' });
+      console.error('Error creating announcement:', err);
+      showToast('فشل نشر الإعلان: ' + err.message, 'error');
     } finally {
-      setMigLoading(false);
+      setIsPostingAnnouncement(false);
     }
   };
 
-  const handleSendAnnouncement = async () => {
-    if (!announcementMsg.trim()) return;
-    setAnnouncementSending(true);
+  const handleDeleteAnnouncement = async (id: string) => {
     try {
-      // Just demo notification functionality by logging, 
-      // typically we might create a document in 'announcements' or map over users.
-      // We will pretend to broadcast.
-      await new Promise(r => setTimeout(r, 1500));
-      alert('تم بث الإشعار بنجاح لجميع المستخدمين!');
-      setAnnouncementMsg('');
-    } catch (err) {
-      console.error(err);
-      alert('حدث خطأ أثناء بث الإشعار.');
+      await deleteDoc(doc(db, 'system_announcements', id));
+      showToast('تم حذف الإعلان.', 'success');
+    } catch (err: any) {
+      showToast('فشل حذف الإعلان: ' + err.message, 'error');
+    }
+  };
+
+  // Database Connection Ping
+  const handlePingDatabase = async () => {
+    setIsPingingDb(true);
+    try {
+      const ok = await testFirestoreConnection(2);
+      setDbHealthy(ok);
+      if (ok) {
+        showToast('الاتصال بقاعدة بيانات Firestore السحابية مستقر ومثالي.', 'success');
+      } else {
+        showToast('تنبيه: تعذر اختبار الاتصال بـ Firestore.', 'error');
+      }
+    } catch (e: any) {
+      setDbHealthy(false);
+      showToast('خطأ أثناء اختبار الاتصال: ' + e.message, 'error');
     } finally {
-      setAnnouncementSending(false);
+      setIsPingingDb(false);
     }
   };
 
-  const handleExportData = () => {
-    const merged = getMergedUsers();
-    const headers = ['Name', 'Email', 'Role', 'School', 'Directorate', 'Commune', 'Created At'];
-    
-    const maxRows = 2000;
-    const csvContent = [
-      headers.join(','),
-      ...merged.slice(0, maxRows).map(u => [
-        `"${u.displayName || ''}"`,
-        `"${u.email || ''}"`,
-        `"${u.role || ''}"`,
-        `"${u.settings?.school || u.schoolName || u.schoolId || ''}"`,
-        `"${u.settings?.directorate || ''}"`,
-        `"${u.settings?.commune || ''}"`,
-        `"${u.createdAt?.toDate ? format(u.createdAt.toDate(), 'yyyy-MM-dd HH:mm') : typeof u.createdAt === 'string' ? u.createdAt : ''}"`
-      ].join(','))
-    ].join('\n');
+  // Export Users Directory to CSV
+  const handleExportUsersCSV = () => {
+    try {
+      const headers = ['المعرف', 'الاسم', 'البريد الإلكتروني', 'الرتبة', 'المؤسسة التعليمية', 'مديرية التربية', 'البلدية', 'الرتبة في النظام'];
+      const rows = users.map(u => {
+        const s = settingsMap[u.id] || {};
+        return [
+          u.id,
+          u.displayName || 'غير محدد',
+          u.email || '',
+          s.jobTitle || 'ملحق بالمخابر',
+          s.schoolName || s.school || 'غير محدد',
+          s.directorateName || s.directorate || '',
+          s.communeName || s.commune || '',
+          u.role || 'user'
+        ];
+      });
 
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `نظام_المستخدمين_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+      const csvContent = '\uFEFF' + [headers, ...rows].map(row => 
+        row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')
+      ).join('\n');
 
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `دليل_مستخدمي_المخابر_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
-  const getMergedUsers = () => {
-    return users.map(u => ({
-      ...u,
-      settings: settings[u.uid] || settings[u.id] || {}
-    }));
-  };
-
-  const filteredData = () => {
-    const q = search.toLowerCase();
-    if (activeTab === 'users') {
-      const merged = getMergedUsers();
-      return merged.filter(u => 
-        u.displayName?.toLowerCase().includes(q) || 
-        u.email?.toLowerCase().includes(q) ||
-        u.schoolId?.toLowerCase().includes(q) ||
-        u.settings?.school?.toLowerCase().includes(q)
-      );
+      showToast('تم تصدير دليل المستخدمين بنجاح بصيغة CSV.', 'success');
+    } catch (err: any) {
+      showToast('حدث خطأ أثناء تصدير البيانات: ' + err.message, 'error');
     }
-    if (activeTab === 'tickets') {
-      return tickets.filter(t => 
-        t.subject?.toLowerCase().includes(q) || 
-        t.userEmail?.toLowerCase().includes(q)
-      );
-    }
-    return purchases.filter(p => 
-      p.featureName?.toLowerCase().includes(q) || 
-      p.userEmail?.toLowerCase().includes(q)
-    );
   };
 
-  const stats = [
-    { label: 'إجمالي المستخدمين', value: users.length, icon: Users, color: 'bg-primary/10 text-primary border-primary/20' },
-    { label: 'المؤسسات التعليمية', value: new Set(users.map(u => u.schoolId).filter(id => !!id)).size, icon: School, color: 'bg-secondary-container text-primary border-primary/10' },
-    { label: 'بلاغات نشطة', value: tickets.filter(t => t.status === 'open').length, icon: MessageSquare, color: 'bg-amber-50 text-amber-600 border-amber-200' },
-    { label: 'طلبات الشراء', value: purchases.filter(p => p.status === 'pending').length, icon: ShoppingCart, color: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-  ];
-
-  if (isAdmin === null) {
+  // --- ACCESS RESTRICTED SCREEN IF NOT ADMIN ---
+  if (!isVerifyingAuth && !isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-primary" size={48} />
+      <div className="min-h-[80vh] flex items-center justify-center p-6 rtl font-sans" dir="rtl">
+        <Helmet>
+          <title>الوصول مقيد — الإدارة المركزية</title>
+        </Helmet>
+        <div className="max-w-md w-full bg-surface-container p-8 rounded-3xl border border-outline-variant/30 text-center shadow-lg">
+          <div className="w-16 h-16 bg-red-100 text-red-700 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-sm">
+            <ShieldCheck size={32} />
+          </div>
+          <h2 className="text-2xl font-black text-primary mb-2">منطقة الرقابة والإدارة المركزية</h2>
+          <p className="text-sm text-secondary leading-relaxed mb-6">
+            هذا القسم مخصص حصرياً للمشرفين والمسؤولين المركزيين المعتمدين لمتابعة منظومة المخابر المدرسية الوطنية.
+          </p>
+          <div className="p-4 bg-surface rounded-2xl border border-outline-variant/20 mb-6 text-xs text-secondary text-right">
+            <div><strong>الحساب الحالي:</strong> {auth.currentUser?.email || 'غير مسجل'}</div>
+            <div className="mt-1 text-on-surface/60">إذا كنت مشرفاً أو مديراً مخولاً، يرجى التأكد من تسجيل الدخول بالحساب الإداري المعتمد.</div>
+          </div>
+          <button 
+            onClick={() => navigate('/')}
+            className="w-full py-3.5 px-6 rounded-2xl bg-primary text-white font-bold hover:bg-primary/90 transition-all shadow-sm"
+          >
+            العودة إلى لوحة القيادة الرئيسية
+          </button>
+        </div>
       </div>
     );
-  }
-
-  if (isAdmin === false) {
-    return null; // Will redirect in useEffect
   }
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-6 pb-24 rtl font-sans" dir="rtl">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-24 rtl font-sans" dir="rtl">
       <Helmet>
-        <title>لوحة الإدارة المركزية | فيصل عسول</title>
+        <title>لوحة الإدارة المركزية والرقابة العامة — LabEducationDZ</title>
       </Helmet>
 
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 mb-12">
-        <div className="text-right space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary text-on-primary rounded-full text-[0.625rem] font-black uppercase tracking-widest mb-2 shadow-sm">
-            <ShieldCheck size={12} />
-            Command Center v2.0
+      {/* Toast Notification Banner */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={cn(
+              "fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3.5 rounded-2xl flex items-center gap-3 shadow-2xl border text-white font-bold text-sm",
+              toast.type === 'error' ? "bg-red-600 border-red-400" : toast.type === 'info' ? "bg-blue-600 border-blue-400" : "bg-primary border-primary/40"
+            )}
+          >
+            {toast.type === 'error' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            <span>{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Top Header & Official Banner */}
+      <header className="mb-8 pt-2">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 pb-6 border-b border-outline-variant/30">
+          <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center p-2.5 shadow-sm border border-outline-variant/30 flex-shrink-0">
+              <img src={ministryLogo} alt="شعار الوزارة" className="w-full h-full object-contain" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-3xl font-black text-primary tracking-tight">لوحة الإدارة المركزية والرقابة العامة</h1>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                  <ShieldCheck size={13} /> إشراف وطني
+                </span>
+              </div>
+              <p className="text-sm text-secondary mt-1 max-w-2xl leading-relaxed">
+                منظومة الرقابة والمتابعة الشاملة لموظفي المخابر العلمية، المؤسسات التعليمية، طلبيات التموين، وبلاغات الدعم التقني عبر الولايات.
+              </p>
+            </div>
           </div>
-          <h1 className="text-4xl font-black text-primary tracking-tighter">الإدارة المركزية للنظام</h1>
-          <p className="text-on-surface/50 font-bold">أهلاً بك يا فيصل. إليك نظرة شاملة على نشاط المنصة والمستخدمين.</p>
+
+          {/* Quick Action Toolbar */}
+          <div className="flex items-center gap-3 flex-wrap self-stretch lg:self-auto justify-end">
+            <button
+              onClick={handlePingDatabase}
+              disabled={isPingingDb}
+              className="px-3.5 py-2.5 rounded-xl bg-surface border border-outline-variant/30 text-xs font-bold text-secondary hover:text-primary transition-all flex items-center gap-2 shadow-xs"
+              title="فحص الاتصال بقاعدة البيانات"
+            >
+              <Activity size={15} className={cn("text-emerald-600", isPingingDb && "animate-spin")} />
+              <span>{dbHealthy ? 'Firestore: متصل' : 'فحص الاتصال'}</span>
+            </button>
+
+            <button
+              onClick={() => setShowAnnouncementModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Bell size={15} />
+              <span>نشر تعميم وزاري</span>
+            </button>
+          </div>
         </div>
 
-        <div className="flex bg-surface-container-low p-1.5 rounded-[24px] border border-outline/10 h-max overflow-hidden shadow-sm relative z-0">
-          <button 
-            onClick={() => setActiveTab('users')}
-            className={cn(
-              "px-6 py-2.5 rounded-[18px] text-sm font-black transition-all flex items-center gap-2 relative",
-              activeTab === 'users' ? "text-on-primary" : "text-on-surface/60 hover:bg-surface-container-high"
-            )}
-          >
-            {activeTab === 'users' && (
-              <motion.div layoutId="admin-tab-bubble" className="absolute inset-0 bg-primary rounded-[18px] -z-10 shadow-md" />
-            )}
-            <Users size={18} />
-            المستخدمون
-          </button>
-          <button 
-            onClick={() => setActiveTab('tickets')}
-            className={cn(
-              "px-6 py-2.5 rounded-[18px] text-sm font-black transition-all flex items-center gap-2 relative",
-              activeTab === 'tickets' ? "text-on-primary" : "text-on-surface/60 hover:bg-surface-container-high"
-            )}
-          >
-            {activeTab === 'tickets' && (
-              <motion.div layoutId="admin-tab-bubble" className="absolute inset-0 bg-primary rounded-[18px] -z-10 shadow-md" />
-            )}
-            <MessageSquare size={18} />
-            الدعم
-          </button>
-          <button 
-            onClick={() => setActiveTab('purchases')}
-            className={cn(
-              "px-6 py-2.5 rounded-[18px] text-sm font-black transition-all flex items-center gap-2 relative",
-              activeTab === 'purchases' ? "text-on-primary" : "text-on-surface/60 hover:bg-surface-container-high"
-            )}
-          >
-            {activeTab === 'purchases' && (
-              <motion.div layoutId="admin-tab-bubble" className="absolute inset-0 bg-primary rounded-[18px] -z-10 shadow-md" />
-            )}
-            <ShoppingCart size={18} />
-            المتجر
-          </button>
-          
-          <button 
-            onClick={() => setActiveTab('advanced')}
-            className={cn(
-              "px-6 py-2.5 rounded-[18px] text-sm font-black transition-all flex items-center gap-2 relative",
-              activeTab === 'advanced' ? "text-on-primary" : "text-on-surface/60 hover:bg-surface-container-high"
-            )}
-          >
-            {activeTab === 'advanced' && (
-              <motion.div layoutId="admin-tab-bubble" className="absolute inset-0 bg-primary rounded-[18px] -z-10 shadow-md" />
-            )}
-            <Settings size={18} />
-            إعدادات متقدمة
-          </button>
-        </div>
+        {/* Tab Navigation (Segmented Controls) */}
+        <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar pt-4 pb-2 border-b border-outline-variant/10 text-sm font-bold">
+          {[
+            { id: 'overview', label: 'لوحة القيادة والمؤشرات', icon: Activity, count: null },
+            { id: 'users', label: 'المستخدمون والصلاحيات', icon: Users, count: stats.totalUsers },
+            { id: 'schools', label: 'دليل المؤسسات والمخابر', icon: School, count: stats.totalSchools },
+            { id: 'tickets', label: 'تذاكر الدعم والطلبات', icon: MessageSquare, count: stats.openTicketsCount > 0 ? stats.openTicketsCount : null, alert: stats.openTicketsCount > 0 },
+            { id: 'purchases', label: 'مراقبة الميزانيات والطلبيات', icon: ShoppingCart, count: stats.pendingOrdersCount > 0 ? stats.pendingOrdersCount : null },
+            { id: 'announcements', label: 'التعميمات والإعلانات', icon: Bell, count: stats.activeAnnouncementsCount },
+            { id: 'system', label: 'صيانة وأمان النظام', icon: Database, count: null },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as AdminTab)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all whitespace-nowrap text-xs font-black relative",
+                  isActive 
+                    ? "bg-primary text-white shadow-sm" 
+                    : "text-secondary hover:text-primary hover:bg-surface-container"
+                )}
+              >
+                <Icon size={16} />
+                <span>{tab.label}</span>
+                {tab.count !== null && (
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.2 rounded-full font-bold",
+                    isActive ? "bg-white/20 text-white" : tab.alert ? "bg-red-100 text-red-700" : "bg-surface-container-high text-secondary"
+                  )}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
-      {/* Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, idx) => (
-          <motion.div
-            key={idx}
-            whileHover={{ y: -5, scale: 1.02 }}
-            className="bg-surface p-6 rounded-[32px] border border-outline/5 shadow-sm flex items-center gap-5 transition-all"
-          >
-            <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center border shadow-sm", stat.color)}>
-              <stat.icon size={26} />
+      {/* ========================================================================= */}
+      {/* TAB 1: OVERVIEW & LIVE ANALYTICS                                          */}
+      {/* ========================================================================= */}
+      {activeTab === 'overview' && (
+        <div className="space-y-8">
+          {/* Key Metrics Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-secondary">إجمالي الموظفين والمستخدمين</span>
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Users size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-primary tracking-tight mb-2">
+                {stats.totalUsers}
+              </div>
+              <div className="text-xs text-secondary flex items-center gap-2">
+                <span>{stats.labStaffCount} موظف مخبر</span>
+                <span aria-hidden="true">·</span>
+                <span>{stats.teacherCount} أستاذ</span>
+                <span aria-hidden="true">·</span>
+                <span>{stats.adminCount} مشرف</span>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase text-on-surface/40 tracking-wider mb-1 font-mono">{stat.label}</p>
-              <h3 className="text-3xl font-black text-on-surface tracking-tighter">{stat.value}</h3>
-            </div>
-          </motion.div>
-        ))}
-      </div>
 
-      {/* Search & Filter */}
-      <section className="bg-surface p-4 rounded-[24px] border border-outline/10 shadow-sm flex flex-col sm:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full group">
-          <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-on-surface/40 group-focus-within:text-primary transition-colors">
-            <Search size={20} />
+            <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-secondary">المؤسسات والولايات النشطة</span>
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <School size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-emerald-900 tracking-tight mb-2">
+                {stats.totalSchools} <span className="text-sm font-bold text-secondary">مؤسسة</span>
+              </div>
+              <div className="text-xs text-secondary flex items-center gap-2">
+                <span>عبر {stats.totalWilayas} مديرية تربية ولائية</span>
+              </div>
+            </div>
+
+            <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-secondary">تذاكر الدعم والاقتراحات</span>
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <MessageSquare size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-amber-900 tracking-tight mb-2">
+                {stats.openTicketsCount} <span className="text-sm font-bold text-secondary">قيد المتابعة</span>
+              </div>
+              <div className="text-xs text-secondary flex items-center gap-2">
+                <span>إجمالي التذاكر: {stats.totalTickets} تذكرة</span>
+              </div>
+            </div>
+
+            <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-bold text-secondary">طلبيات التموين والميزانية</span>
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center">
+                  <ShoppingCart size={20} />
+                </div>
+              </div>
+              <div className="text-3xl font-black text-indigo-900 tracking-tight mb-2">
+                {stats.pendingOrdersCount} <span className="text-sm font-bold text-secondary">طلبية جارية</span>
+              </div>
+              <div className="text-xs text-secondary flex items-center gap-2">
+                <span>القيمة المقدرة: {new Intl.NumberFormat('ar-DZ').format(stats.totalPurchaseVolume)} د.ج</span>
+              </div>
+            </div>
           </div>
-          <input 
-            type="text" 
-            placeholder="بحث عن مستخدم، تذكرة، طلب..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-surface-container-low pr-12 pl-4 py-4 rounded-[20px] border-2 border-transparent focus:border-primary/20 focus:bg-white transition-all font-bold text-on-surface outline-none"
-          />
+
+          {/* Quick Actions & Recent Highlights */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Left: Active Announcements & Ministerial Circulars */}
+            <div className="lg:col-span-2 p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-outline-variant/20">
+                <div className="flex items-center gap-2.5">
+                  <Bell size={18} className="text-primary" />
+                  <h3 className="text-base font-black text-primary">التعميمات الوزارية والإعلانات النشطة</h3>
+                </div>
+                <button
+                  onClick={() => setActiveTab('announcements')}
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  إدارة الإعلانات ({announcements.length})
+                </button>
+              </div>
+
+              {announcements.length === 0 ? (
+                <div className="py-8 text-center text-xs text-secondary">
+                  لا توجد تعميمات منشورة حالياً. انقر على "نشر تعميم وزاري" لإرسال إشعار للمستخدمين.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {announcements.slice(0, 3).map(ann => (
+                    <div key={ann.id} className="p-4 rounded-2xl bg-surface-container border border-outline-variant/20 flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-primary">{ann.title}</span>
+                          <span className="text-[10px] text-secondary">·</span>
+                          <span className="text-[10px] font-bold text-secondary">
+                            {ann.category === 'urgent' ? 'عاجل ومهم' : ann.category === 'technical' ? 'إشعار تقني' : 'توجيه بيداغوجي'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-secondary line-clamp-2 leading-relaxed">{ann.message}</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-on-surface/50 whitespace-nowrap">
+                        {ann.authorName || 'الإدارة المركزية'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Right: System & Database Health */}
+            <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs space-y-4">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-outline-variant/20">
+                <Shield size={18} className="text-primary" />
+                <h3 className="text-base font-black text-primary">حالة النظام السحابي</h3>
+              </div>
+
+              <div className="space-y-3 text-xs text-secondary">
+                <div className="flex justify-between items-center p-3 rounded-2xl bg-surface-container">
+                  <span>خادم قاعدة البيانات (Firestore)</span>
+                  <span className="font-bold text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 size={14} /> نشط ومتصل
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-2xl bg-surface-container">
+                  <span>المصادقة السحابية (Firebase Auth)</span>
+                  <span className="font-bold text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 size={14} /> مهيأة وآمنة
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-2xl bg-surface-container">
+                  <span>تخزين الشعارات والوثائق</span>
+                  <span className="font-bold text-primary flex items-center gap-1">
+                    <CheckCircle2 size={14} /> مدعوم ومحسن
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center p-3 rounded-2xl bg-surface-container">
+                  <span>النسخ الاحتياطي التلقائي</span>
+                  <span className="font-bold text-indigo-700">تلقائي يومي</span>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={handleExportUsersCSV}
+                  className="w-full py-2.5 px-4 rounded-xl bg-surface-container text-primary font-bold text-xs hover:bg-primary hover:text-white transition-all border border-outline-variant/30 flex items-center justify-center gap-2"
+                >
+                  <Download size={14} />
+                  <span>تصدير دليل المستخدمين (CSV)</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
-        <button className="w-full md:w-auto flex justify-center items-center gap-3 px-6 py-4 bg-surface-container-low rounded-[20px] text-on-surface/70 border-2 border-transparent hover:border-outline/10 hover:bg-surface-container hover:text-on-surface transition-all active:scale-95">
-          <Filter size={18} />
-          <span className="font-black text-sm">تصفية متقدمة</span>
-        </button>
-      </section>
+      )}
 
-      {/* Content Area */}
-      <section>
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-             <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-             <p className="font-black text-primary/40 text-sm">جاري مزامنة بيانات السحابة...</p>
-          </div>
-        ) : filteredData().length === 0 && activeTab !== 'advanced' ? (
-          <div className="bg-surface-container-lowest border border-dashed border-outline/20 rounded-[40px] py-24 flex flex-col items-center text-center gap-6">
-            <div className="w-24 h-24 bg-surface-container-low rounded-full flex items-center justify-center text-on-surface/20">
-               <HelpCircle size={48} />
+      {/* ========================================================================= */}
+      {/* TAB 2: USERS & PERMISSIONS MANAGEMENT                                     */}
+      {/* ========================================================================= */}
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+          {/* Search & Filter Bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 p-4 bg-surface rounded-2xl border border-outline-variant/30">
+            <div className="relative flex-1">
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-secondary" size={17} />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="البحث بالاسم، البريد الإلكتروني، المؤسسة التعليمية، أو الرمز الوظيفي..."
+                className="w-full ps-11 pe-4 py-2.5 rounded-xl bg-surface-container border-none text-xs font-bold focus:ring-1 focus:ring-primary text-start"
+              />
             </div>
-            <div>
-              <h3 className="text-xl font-black text-on-surface/60">لا يوجد بيانات</h3>
-              <p className="text-on-surface/40 font-bold">لم نجد أي سجلات تتوافق مع معايير البحث الحالية.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-6">
-            {activeTab === 'advanced' && (
-              <div className="space-y-6">
-                
-                {/* Export Card */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                  className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center border border-emerald-100">
-                      <Download size={24} />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-black text-on-surface">تصدير بيانات المستخدمين</h4>
-                      <p className="text-sm font-bold text-on-surface/50">تحميل نسخة احتياطية بصيغة CSV لجميع الحسابات المسجلة</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={handleExportData}
-                    className="w-full md:w-auto px-8 py-3 bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-2xl font-black transition-all shadow-sm flex items-center justify-center gap-2"
-                  >
-                    <Download size={18} />
-                    تصدير الآن
-                  </button>
-                </motion.div>
 
-                {/* Announcement Card */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-                  className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm space-y-6"
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'الكل' },
+                { id: 'admin', label: 'المشرفون فقط' },
+                { id: 'lab_staff', label: 'موظفو المخابر' },
+                { id: 'teacher', label: 'الأساتذة' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setUserRoleFilter(f.id as any)}
+                  className={cn(
+                    "px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    userRoleFilter === f.id
+                      ? "bg-primary text-white shadow-xs"
+                      : "bg-surface-container text-secondary hover:text-primary"
+                  )}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center border border-blue-100">
-                      <Bell size={24} />
+                  {f.label}
+                </button>
+              ))}
+
+              <button
+                onClick={handleExportUsersCSV}
+                className="p-2 rounded-xl bg-surface-container text-secondary hover:text-primary border border-outline-variant/30"
+                title="تصدير CSV"
+              >
+                <FileSpreadsheet size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Users Table */}
+          <div className="bg-surface rounded-3xl border border-outline-variant/30 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-surface-container border-b border-outline-variant/20 text-secondary font-black">
+                    <th className="py-4 px-6">المستخدم</th>
+                    <th className="py-4 px-4">المؤسسة التعليمية والولاية</th>
+                    <th className="py-4 px-4">الرتبة والصفة</th>
+                    <th className="py-4 px-4">الصلاحية في المنصة</th>
+                    <th className="py-4 px-6 text-center">الإجراءات والتحكم</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/10">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-secondary font-bold">
+                        لم يتم العثور على مستخدمين يطابقون معايير البحث.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const s = settingsMap[u.id] || {};
+                      const isUserAdmin = u.role === 'Admin' || u.role === 'admin';
+                      return (
+                        <tr key={u.id} className="hover:bg-surface-container/50 transition-colors">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center flex-shrink-0 border border-outline-variant/30">
+                                {u.photoURL || s.profilePhoto ? (
+                                  <img 
+                                    src={u.photoURL || s.profilePhoto} 
+                                    alt="" 
+                                    className="w-full h-full object-cover" 
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                  />
+                                ) : (
+                                  <User size={18} className="text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-bold text-primary text-sm">
+                                  {u.displayName || 'مستخدم مخبر'}
+                                </div>
+                                <div className="text-[11px] text-secondary opacity-70">
+                                  {u.email || 'بدون بريد'} {s.employeeId ? `· رمز: ${s.employeeId}` : ''}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-primary">
+                              {s.schoolName || s.school || 'غير محددة'}
+                            </div>
+                            <div className="text-[11px] text-secondary opacity-70">
+                              {s.directorateName || s.directorate || 'مديرية التربية'} {s.communeName ? `· ${s.communeName}` : ''}
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            <span className="font-bold text-secondary">
+                              {s.jobTitle || 'ملحق بالمخابر'}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-4">
+                            {isUserAdmin ? (
+                              <span className="font-bold text-emerald-800 flex items-center gap-1.5">
+                                <ShieldCheck size={14} className="text-emerald-600" />
+                                مدير نظام (Admin)
+                              </span>
+                            ) : (
+                              <span className="font-medium text-secondary">
+                                مستخدم عادي
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-6 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => setSelectedUser({ user: u, settings: s })}
+                                className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary font-bold transition-all text-xs flex items-center gap-1"
+                              >
+                                <Eye size={13} />
+                                <span>عرض</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleUserRole(u)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-lg font-bold transition-all text-xs",
+                                  isUserAdmin
+                                    ? "bg-red-50 text-red-700 hover:bg-red-100"
+                                    : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                                )}
+                              >
+                                {isUserAdmin ? 'تخفيض الرتبة' : 'ترقية لمشرف'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: SCHOOLS & ESTABLISHMENTS DIRECTORY                                 */}
+      {/* ========================================================================= */}
+      {activeTab === 'schools' && (
+        <div className="space-y-6">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 p-4 bg-surface rounded-2xl border border-outline-variant/30">
+            <div className="relative flex-1">
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-secondary" size={17} />
+              <input
+                type="text"
+                value={schoolSearch}
+                onChange={(e) => setSchoolSearch(e.target.value)}
+                placeholder="البحث باسم المؤسسة، الولاية، أو البلدية..."
+                className="w-full ps-11 pe-4 py-2.5 rounded-xl bg-surface-container border-none text-xs font-bold focus:ring-1 focus:ring-primary text-start"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'كافة الأطوار' },
+                { id: 'ثانوي', label: 'ثانويات' },
+                { id: 'متوسط', label: 'متوسطات' },
+                { id: 'ابتدائي', label: 'ابتدائيات' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setSchoolCycleFilter(f.id as any)}
+                  className={cn(
+                    "px-3 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    schoolCycleFilter === f.id
+                      ? "bg-primary text-white shadow-xs"
+                      : "bg-surface-container text-secondary hover:text-primary"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Schools Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {aggregatedSchools.length === 0 ? (
+              <div className="col-span-full py-16 text-center text-secondary font-bold">
+                لا توجد مؤسسات تعليمية مسجلة تطابق البحث الحالي.
+              </div>
+            ) : (
+              aggregatedSchools.map((sch, i) => (
+                <div key={i} className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs flex flex-col justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-secondary">{sch.directorate}</span>
+                      <span className="text-[11px] font-bold text-primary">طور {sch.cycle}</span>
                     </div>
-                    <div>
-                      <h4 className="text-xl font-black text-on-surface">بث إشعار عام</h4>
-                      <p className="text-sm font-bold text-on-surface/50">إرسال تنبيه أو رسالة لجميع المستخدمين النشطين في المنصة</p>
-                    </div>
+
+                    <h4 className="text-base font-black text-primary leading-tight">
+                      {sch.name}
+                    </h4>
+
+                    {sch.commune && (
+                      <p className="text-xs text-secondary opacity-70">
+                        البلدية: {sch.commune}
+                      </p>
+                    )}
                   </div>
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <input 
-                      type="text" 
-                      placeholder="اكتب رسالة الإشعار هنا..."
-                      value={announcementMsg}
-                      onChange={(e) => setAnnouncementMsg(e.target.value)}
-                      className="flex-1 bg-surface-container-low px-6 py-3 rounded-2xl border-2 border-transparent focus:border-blue-300 focus:bg-white transition-all font-bold text-on-surface outline-none"
-                    />
-                    <button 
-                      onClick={handleSendAnnouncement}
-                      disabled={announcementSending || !announcementMsg.trim()}
-                      className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+
+                  <div className="pt-3 border-t border-outline-variant/20 flex items-center justify-between text-xs">
+                    <span className="text-secondary">
+                      {sch.staffCount} موظف مسجل
+                    </span>
+                    <button
+                      onClick={() => {
+                        setUserSearch(sch.name);
+                        setActiveTab('users');
+                      }}
+                      className="font-bold text-primary hover:underline flex items-center gap-1"
                     >
-                      {announcementSending ? <Loader2 className="animate-spin" size={18} /> : <Bell size={18} />}
-                      إرسال
+                      <span>عرض الطاقم</span>
+                      <ChevronLeft size={14} />
                     </button>
                   </div>
-                </motion.div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
-                {/* Admin Role Assignment Card */}
-                <motion.div 
-                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-                   className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm space-y-6"
+      {/* ========================================================================= */}
+      {/* TAB 4: SUPPORT TICKETS & HELPDESK                                         */}
+      {/* ========================================================================= */}
+      {activeTab === 'tickets' && (
+        <div className="space-y-6">
+          {/* Status Filter Buttons */}
+          <div className="flex items-center justify-between gap-4 p-4 bg-surface rounded-2xl border border-outline-variant/30 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'كافة التذاكر' },
+                { id: 'new', label: 'جديدة وغير معالجة' },
+                { id: 'in_progress', label: 'قيد المعالجة' },
+                { id: 'resolved', label: 'تم الرد والحل' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setTicketStatusFilter(f.id as any)}
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    ticketStatusFilter === f.id
+                      ? "bg-primary text-white shadow-xs"
+                      : "bg-surface-container text-secondary hover:text-primary"
+                  )}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-primary/10 text-primary rounded-2xl flex items-center justify-center border border-primary/20">
-                      <ShieldCheck size={24} />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-black text-on-surface">إعداد صلاحيات المشرف باستخدام Service Account</h4>
-                      <p className="text-sm font-bold text-on-surface/50">منح صلاحية المشرف (Admin) لحساب إيميل محدد باستخدام مفتاح JSON.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
-                     <div>
-                       <label className="block text-sm font-black text-on-surface/70 mb-2">مفتاح الوصول JSON</label>
-                       <textarea
-                         required
-                         rows={8}
-                         value={jsonKey}
-                         onChange={(e) => setJsonKey(e.target.value)}
-                         placeholder='{"type": "service_account", "project_id": "..."}'
-                         className="w-full px-4 py-3 rounded-2xl bg-surface-container-lowest border border-outline/20 focus:border-primary/50 text-left font-mono text-xs"
-                         dir="ltr"
-                       />
-                     </div>
-                     <div className="space-y-6">
-                        <div>
-                          <label className="block text-sm font-black text-on-surface/70 mb-2">إيميل المستخدم</label>
-                          <input
-                            type="email"
-                            required
-                            value={adminEmail}
-                            onChange={(e) => setAdminEmail(e.target.value)}
-                            className="w-full px-4 py-3 rounded-2xl bg-surface-container-lowest border border-outline/20 focus:border-primary/50 text-left font-sans text-sm"
-                            dir="ltr"
-                            placeholder="user@example.com"
-                          />
-                        </div>
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-                        {adminResult && (
-                          <div className={`p-4 rounded-xl flex items-start gap-3 ${adminResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                            {adminResult.success ? <CheckCircle size={20} /> : <XCircle size={20} />}
-                            <p className="text-xs font-bold">{adminResult.message}</p>
-                          </div>
-                        )}
+            <div className="text-xs text-secondary font-bold">
+              إجمالي التذاكر: {tickets.length}
+            </div>
+          </div>
 
-                        <button
-                          onClick={handleAssignAdmin}
-                          disabled={adminLoading || !jsonKey || !adminEmail}
-                          className="w-full py-3 bg-surface-container-high text-on-surface hover:bg-primary hover:text-white disabled:opacity-50 disabled:hover:bg-surface-container-high rounded-xl font-black transition-all shadow-sm flex items-center justify-center gap-2"
-                        >
-                          {adminLoading ? <Loader2 className="animate-spin" size={18} /> : <ShieldCheck size={18} />}
-                          تفعيل الصلاحية للمستخدم
-                        </button>
-                     </div>
-                  </div>
-                </motion.div>
-
-                {/* DB Migration Card */}
-                <motion.div 
-                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-                   className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm flex flex-col sm:flex-row items-center gap-4 sm:gap-8"
+          {/* Tickets List */}
+          <div className="space-y-4">
+            {filteredTickets.length === 0 ? (
+              <div className="p-12 text-center text-secondary font-bold bg-surface rounded-3xl border border-outline-variant/30">
+                لا توجد تذاكر دعم مسجلة تطابق الفلتر الحالي.
+              </div>
+            ) : (
+              filteredTickets.map((t) => (
+                <div 
+                  key={t.id} 
+                  className={cn(
+                    "p-6 bg-surface rounded-3xl border transition-all shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6",
+                    t.status === 'new' ? "border-amber-300/80 bg-amber-50/20" : "border-outline-variant/30"
+                  )}
                 >
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center border border-amber-200">
-                        <Database size={20} />
-                      </div>
-                      <h4 className="text-xl font-black text-on-surface">نقل بيانات المؤسسات (Migration)</h4>
+                  <div className="space-y-2 flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <span className="font-bold text-base text-primary">{t.title}</span>
+                      <span className="text-xs text-secondary">·</span>
+                      <span className="text-xs font-bold text-secondary">
+                        {t.userName || t.userEmail || 'مستخدم غير معروف'}
+                      </span>
+                      {t.schoolName && (
+                        <>
+                          <span className="text-xs text-secondary">·</span>
+                          <span className="text-xs text-secondary">{t.schoolName}</span>
+                        </>
+                      )}
                     </div>
-                    <p className="text-sm font-bold text-on-surface/50">نقل بيانات +30,000 مؤسسة تربوية من الملف المحلي إلى فايرستور. (يتطلب مفتاح JSON من المربع الأعلى مسبقاً)</p>
-                    
-                    {migResult && (
-                      <div className={`mt-4 p-4 rounded-xl flex items-start gap-3 ${migResult.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-                         {migResult.success ? <CheckCircle size={20} /> : <XCircle size={20} />}
-                         <p className="text-xs font-bold">{migResult.message}</p>
+
+                    <p className="text-xs text-secondary leading-relaxed line-clamp-3">
+                      {t.description}
+                    </p>
+
+                    {t.adminReply && (
+                      <div className="mt-2 p-3 rounded-xl bg-surface-container text-xs text-emerald-900 border border-emerald-200/50">
+                        <strong>الرد الإداري:</strong> {t.adminReply}
                       </div>
                     )}
                   </div>
-                  
-                  <button
-                    onClick={handleMigrateDb}
-                    disabled={migLoading || !jsonKey}
-                    className="w-full md:w-auto px-8 py-4 bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:bg-amber-500 rounded-2xl font-black transition-all shadow-lg shadow-amber-500/20 flex flex-col items-center justify-center gap-1"
-                  >
-                    {migLoading ? <Loader2 className="animate-spin" size={20} /> : <Database size={20} />}
-                    بدء ترحيل البيانات
-                  </button>
-                </motion.div>
 
-              </div>
-            )}
-            {activeTab === 'users' && filteredData().map((u, i) => (
-              <motion.div 
-                key={u.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="bg-white p-8 rounded-[40px] border border-outline/5 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative"
-              >
-                <div className="absolute top-0 left-0 w-2 h-full bg-primary/10 group-hover:bg-primary transition-all" />
-                
-                <div className="flex flex-col xl:flex-row items-center lg:items-start gap-4 sm:gap-8">
-                  {/* User Avatar & Basic Info */}
-                  <div className="flex items-center gap-6 flex-1 w-full">
-                    <div className="relative">
-                      <div className="w-24 h-24 rounded-[32px] bg-primary/5 flex items-center justify-center text-primary text-4xl font-black shadow-inner border border-primary/10 overflow-hidden group-hover:border-primary/20 transition-colors">
-                        {(u.settings?.profilePhoto || u.photoURL) ? (
-                          <img 
-                            src={(u.settings?.profilePhoto || u.photoURL).replace(/=s\d+(-c)?/g, '=s400-c')} 
-                            alt={u.displayName} 
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 antialiased" 
-                            style={{ imageRendering: 'auto' }}
-                            onLoad={() => console.log(`Photo loaded for ${u.displayName}`)}
-                            onError={(e) => {
-                              console.error(`Photo failed to load for ${u.displayName}:`, (u.settings?.profilePhoto || u.photoURL));
-                              e.currentTarget.style.display = 'none';
-                            }}
-                            referrerPolicy="no-referrer" 
-                          />
-                        ) : (
-                          u.displayName?.charAt(0) || <User size={40} />
-                        )}
-                      </div>
-                      <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-emerald-500 border-4 border-white rounded-full shadow-sm" title="نشط حالياً" />
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                       <h4 className="text-2xl font-black text-on-surface group-hover:text-primary transition-colors tracking-tight">
-                         {u.displayName || 'مستخدم مجهول'}
-                       </h4>
-                       <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        <p className="text-sm font-bold text-on-surface/50 flex items-center gap-2">
-                          <Mail size={16} className="text-primary/40" />
-                          {u.email}
-                        </p>
-                        <p className="text-sm font-bold text-on-surface/50 flex items-center gap-2">
-                          <Calendar size={16} className="text-primary/40" />
-                          عضو منذ: {u.createdAt ? (typeof u.createdAt === 'string' ? format(new Date(u.createdAt), 'dd MMMM yyyy', { locale: arDZ }) : u.createdAt.toDate ? format(u.createdAt.toDate(), 'dd MMMM yyyy', { locale: arDZ }) : 'غير متوفر') : 'غير متوفر'}
-                        </p>
-                       </div>
-                       
-                       {/* Professional Details Section */}
-                       <div className="flex flex-wrap gap-3 mt-4">
-                          <div className="px-5 py-2 bg-secondary-container/30 text-primary rounded-2xl border border-primary/5 shadow-sm">
-                            <p className="text-[9px] font-black uppercase text-on-surface/30 mb-0.5 tracking-widest">الرتبة المهنية</p>
-                            <p className="text-sm font-black">{u.settings?.jobTitle || 'غير محدد'}</p>
-                          </div>
-                          <div className="px-5 py-2 bg-surface-container-high rounded-2xl border border-outline/5 shadow-sm">
-                            <p className="text-[9px] font-black uppercase text-on-surface/30 mb-0.5 tracking-widest">الدرجة / التخصص</p>
-                            <p className="text-sm font-bold">{u.settings?.grade || 'N/A'} — {u.settings?.specialty || 'N/A'}</p>
-                          </div>
-                          <div className="px-5 py-2 bg-surface-container-high rounded-2xl border border-outline/5 shadow-sm">
-                            <p className="text-[9px] font-black uppercase text-on-surface/30 mb-0.5 tracking-widest">الرقم الوظيفي</p>
-                            <p className="text-sm font-mono font-bold tracking-widest">{u.settings?.employeeId || '**********'}</p>
-                          </div>
-                       </div>
-                    </div>
-                  </div>
+                  <div className="flex items-center gap-3 self-end md:self-center flex-shrink-0">
+                    <span className={cn(
+                      "text-xs font-bold px-3 py-1 rounded-full",
+                      t.status === 'new' ? "bg-amber-100 text-amber-900" :
+                      t.status === 'in_progress' ? "bg-blue-100 text-blue-900" :
+                      "bg-emerald-100 text-emerald-900"
+                    )}>
+                      {t.status === 'new' ? 'جديدة' : t.status === 'in_progress' ? 'قيد المعالجة' : 'تم الرد والحل'}
+                    </span>
 
-                  {/* Institution Details */}
-                  <div className="bg-surface-container-low p-6 rounded-[32px] border border-outline/10 min-w-[300px] w-full lg:w-auto shadow-inner">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl shadow-sm">
-                        <School size={20} />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-black uppercase text-on-surface/40 tracking-widest block">الخريطة التربوية للهيكل</span>
-                        <h5 className="text-sm font-black text-on-surface">معلومات المؤسسة التعليمية</h5>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="space-y-1">
-                        <span className="text-[9px] font-black text-on-surface/30 uppercase">اسم المؤسسة</span>
-                        <p className="text-base font-black text-primary leading-tight">
-                          {u.settings?.school || u.settings?.institutionName || u.schoolName || u.schoolId || 'لم يتم ربط مؤسسة بعد'}
-                        </p>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 pt-2 border-t border-outline/5">
-                        <div className="space-y-0.5 text-right">
-                          <span className="text-[9px] font-black text-on-surface/30 uppercase tracking-tighter">الولاية</span>
-                          <p className="text-xs font-bold text-on-surface/60">{u.settings?.directorate || '—'}</p>
-                        </div>
-                        <div className="space-y-0.5 text-right">
-                          <span className="text-[9px] font-black text-on-surface/30 uppercase tracking-tighter">البلدية</span>
-                          <p className="text-xs font-bold text-on-surface/60">{u.settings?.commune || '—'}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-outline/5">
-                        <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
-                          <Scale size={12} />
-                        </div>
-                        <p className="text-[10px] font-mono text-on-surface/40 truncate">
-                          رمز المؤسسة: {u.schoolId || u.settings?.school || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Role & Actions */}
-                  <div className="flex xl:flex-col items-center xl:items-end justify-between xl:justify-start gap-6 w-full xl:w-auto">
-                    <div className="text-right">
-                      <span className="text-[9px] font-black uppercase text-on-surface/30 block mb-1 tracking-widest">صلاحيات النظام</span>
-                      <div className={cn(
-                        "px-6 py-2 rounded-2xl text-[11px] font-black flex items-center gap-2 shadow-sm border",
-                        u.role === 'Admin' ? "bg-primary text-on-primary border-primary/20" : "bg-surface-container-high text-on-surface/60 border-outline/5"
-                      )}>
-                        {u.role === 'Admin' ? <ShieldCheck size={16} /> : <User size={16} />}
-                        {u.role ? (u.role === 'Admin' ? 'مدير نظام كامل' : u.role) : 'مستخدم عادي'}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row xl:flex-col gap-2.5 w-full xl:w-auto">
-                      <button 
-                        onClick={() => { setSelectedUser(u); setModalMode('tech'); }}
-                        className="px-6 py-3 bg-surface-container-high text-on-surface/60 rounded-2xl hover:bg-primary hover:text-white transition-all shadow-sm group/btn flex items-center justify-center gap-3 text-sm font-black" 
-                      >
-                        <Database size={18} className="group-hover/btn:scale-110 transition-transform" />
-                        <span>البيانات التقنية</span>
-                      </button>
-                      <button 
-                        onClick={() => { setSelectedUser(u); setModalMode('edit'); }}
-                        className="px-6 py-3 bg-surface-container-high text-on-surface/60 rounded-2xl hover:bg-amber-500 hover:text-white transition-all shadow-sm group/btn flex items-center justify-center gap-3 text-sm font-black" 
-                      >
-                        <Settings size={18} className="group-hover/btn:scale-110 transition-transform" />
-                        <span>تعديل الحساب</span>
-                      </button>
-                      <button 
-                        onClick={() => { setSelectedUser(u); setModalMode('review'); }}
-                        className="px-6 py-3 bg-primary text-on-primary rounded-2xl hover:brightness-95 transition-all shadow-xl shadow-primary/20 group/btn flex items-center justify-center gap-3 text-sm font-black" 
-                      >
-                        <ChevronRight size={18} className="rotate-180 group-hover/btn:-translate-x-1 transition-transform" />
-                        <span>استعراض كامل</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedTicket(t);
+                        setTicketReplyText(t.adminReply || '');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-1.5 shadow-xs"
+                    >
+                      <MessageSquare size={14} />
+                      <span>{t.adminReply ? 'تعديل الرد' : 'الرد والمتابعة'}</span>
+                    </button>
                   </div>
                 </div>
-              </motion.div>
-            ))}
-
-            {activeTab === 'tickets' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredData().map((t, i) => (
-                    <motion.div 
-                      key={t.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm hover:shadow-xl transition-all flex flex-col gap-6 relative overflow-hidden group"
-                    >
-                      <div className={cn(
-                        "absolute top-0 left-0 w-full h-1.5 transition-all group-hover:h-2",
-                        t.status === 'open' ? "bg-amber-400" : "bg-emerald-400"
-                      )} />
-                      <div className="flex justify-between items-start pt-2">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner border",
-                            t.status === 'open' ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"
-                          )}>
-                            {t.status === 'open' ? <HelpCircle size={24} /> : <CheckCircle size={24} />}
-                          </div>
-                          <div>
-                            <h4 className="text-xl font-black text-on-surface tracking-tight group-hover:text-primary transition-colors">{t.subject}</h4>
-                            <div className="flex items-center gap-4 mt-1">
-                              <p className="text-sm font-bold text-on-surface/50 flex items-center gap-1.5"><Mail size={14}/>{t.userEmail}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border",
-                          t.status === 'open' ? "bg-amber-50 text-amber-700 border-amber-200 shadow-amber-100 shadow-sm" : "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-emerald-100 shadow-sm"
-                        )}>
-                          {t.status === 'open' ? 'قيد الانتظار' : 'تم الرد والمساعدة'}
-                        </div>
-                      </div>
-                      <div className="bg-surface-container-lowest p-6 rounded-3xl text-on-surface/80 font-medium leading-relaxed italic border border-outline/5 shadow-inner relative">
-                         <div className="absolute top-4 right-4 text-on-surface/10"><MessageSquare size={48} /></div>
-                         <p className="relative z-10 text-sm">"{t.message}"</p>
-                      </div>
-                      <div className="flex justify-between items-center mt-auto pt-2 border-t border-outline/5">
-                        <span className="text-xs font-bold text-on-surface/40 flex items-center gap-1.5">
-                          <Calendar size={14} />
-                          {t.createdAt?.toDate ? format(t.createdAt.toDate(), 'dd MMM yyyy — HH:mm', { locale: arDZ }) : '—'}
-                        </span>
-                        <div className="flex justify-end gap-3">
-                          {t.status === 'open' ? (
-                            <button 
-                              onClick={() => handleUpdateTicketStatus(t.id, 'closed')}
-                              className="bg-primary text-on-primary px-6 py-2.5 rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:brightness-95 active:scale-95 transition-all flex items-center gap-2"
-                            >
-                              <CheckCircle size={16} />
-                              إنهاء المعالجة
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => handleUpdateTicketStatus(t.id, 'open')}
-                              className="bg-surface-container-high text-on-surface/60 px-6 py-2.5 rounded-2xl font-black text-sm hover:bg-outline/10 active:scale-95 transition-all"
-                            >
-                              إعادة فتح
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                ))}
-              </div>
-            )}
-
-            {activeTab === 'purchases' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {filteredData().map((p, i) => (
-                    <motion.div 
-                      key={p.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="bg-surface p-8 rounded-[32px] border border-outline/5 shadow-sm hover:shadow-xl transition-all flex flex-col gap-6 relative overflow-hidden group"
-                    >
-                      <div className={cn(
-                        "absolute top-0 left-0 w-full h-1.5 transition-all group-hover:h-2",
-                        p.status === 'pending' ? "bg-blue-400" : p.status === 'approved' ? "bg-emerald-400" : "bg-red-400"
-                      )} />
-                      <div className="flex justify-between items-start pt-2">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-3">
-                            <div className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center shadow-inner border",
-                                p.status === 'pending' ? "bg-blue-50 text-blue-600 border-blue-200" : p.status === 'approved' ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-red-50 text-red-600 border-red-200"
-                            )}>
-                              <ShoppingCart size={18} />
-                            </div>
-                            <h4 className="text-xl font-black text-on-surface tracking-tight group-hover:text-primary transition-colors">{p.featureName}</h4>
-                          </div>
-                          <div className="flex items-center gap-4 mt-2">
-                            <p className="text-sm font-bold text-on-surface/50 flex items-center gap-1.5"><Mail size={14}/>{p.userEmail}</p>
-                          </div>
-                        </div>
-                        <div className={cn(
-                          "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border",
-                          p.status === 'pending' ? "bg-blue-50 text-blue-700 border-blue-200 shadow-blue-100 shadow-sm" : 
-                          p.status === 'approved' ? "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-emerald-100 shadow-sm" : 
-                          "bg-red-50 text-red-700 border-red-200 shadow-red-100 shadow-sm"
-                        )}>
-                          {p.status === 'pending' ? 'بانتظار الموافقة' : 
-                           p.status === 'approved' ? 'تمت الموافقة' : 'مرفوض'}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center mt-auto pt-4 border-t border-outline/5">
-                        <span className="text-xs font-bold text-on-surface/40 flex items-center gap-1.5">
-                          <Calendar size={14} />
-                          {p.createdAt?.toDate ? format(p.createdAt.toDate(), 'dd MMM yyyy', { locale: arDZ }) : '—'}
-                        </span>
-                        <div className="flex justify-end gap-2 text-xs">
-                          {p.status === 'pending' ? (
-                            <>
-                              <button 
-                                onClick={() => handleUpdatePurchaseStatus(p.id, 'rejected')}
-                                className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-xl font-black transition-all flex items-center gap-1"
-                              >
-                                <XCircle size={14} />
-                                رفض
-                              </button>
-                              <button 
-                                onClick={() => handleUpdatePurchaseStatus(p.id, 'approved')}
-                                className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-black shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-1"
-                              >
-                                <CheckCircle size={14} />
-                                موافقة
-                              </button>
-                            </>
-                          ) : (
-                            <button 
-                              onClick={() => handleUpdatePurchaseStatus(p.id, 'pending')}
-                              className="bg-surface-container-high text-on-surface/60 px-5 py-2 rounded-xl font-black hover:bg-outline/10 active:scale-95 transition-all"
-                            >
-                              تغيير القرار
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                ))}
-              </div>
+              ))
             )}
           </div>
-        )}
-      </section>
+        </div>
+      )}
 
-      {/* User Management Modal */}
-      {selectedUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-primary/20 backdrop-blur-sm rtl font-sans" dir="rtl">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-surface w-full max-w-4xl max-h-[90vh] rounded-[48px] shadow-2xl border border-outline/10 flex flex-col overflow-hidden"
-          >
-            {/* Modal Header */}
-            <div className="p-8 border-b border-outline/5 flex justify-between items-center bg-surface-container-low">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                  {modalMode === 'tech' ? <Database size={28} /> : modalMode === 'edit' ? <Settings size={28} /> : <User size={28} />}
-                </div>
-                <div>
-                   <h2 className="text-2xl font-black text-primary tracking-tight">
-                     {modalMode === 'tech' ? 'البيانات التقنية للمستخدم' : modalMode === 'edit' ? 'إدارة صلاحيات الحساب' : 'الملف الشخصي الكامل'}
-                   </h2>
-                   <p className="text-on-surface/50 font-bold text-sm">المستخدم: {selectedUser.displayName}</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSelectedUser(null)}
-                className="p-3 bg-surface hover:bg-red-50 hover:text-red-500 rounded-2xl transition-all shadow-sm"
-              >
-                <X size={24} />
-              </button>
+      {/* ========================================================================= */}
+      {/* TAB 5: PURCHASE ORDERS & SOURCING OVERSIGHT                                */}
+      {/* ========================================================================= */}
+      {activeTab === 'purchases' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between gap-4 p-4 bg-surface rounded-2xl border border-outline-variant/30 flex-wrap">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {[
+                { id: 'all', label: 'كافة الطلبيات' },
+                { id: 'draft', label: 'مسودة' },
+                { id: 'sent', label: 'مرسلة للمقتصد' },
+                { id: 'received', label: 'مستلمة ومكتملة' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setPurchaseStatusFilter(f.id)}
+                  className={cn(
+                    "px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                    purchaseStatusFilter === f.id
+                      ? "bg-primary text-white shadow-xs"
+                      : "bg-surface-container text-secondary hover:text-primary"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-10 space-y-8">
-              {modalMode === 'tech' && (
-                <div className="space-y-6">
-                  <div className="bg-surface-container-high p-8 rounded-[32px] font-mono text-sm overflow-x-auto border border-outline/10 shadow-inner">
-                    <pre className="text-primary/70">{JSON.stringify(selectedUser, null, 2)}</pre>
+            <div className="text-xs text-secondary font-bold">
+              إجمالي الطلبيات المسجلة: {purchases.length}
+            </div>
+          </div>
+
+          <div className="bg-surface rounded-3xl border border-outline-variant/30 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead>
+                  <tr className="bg-surface-container border-b border-outline-variant/20 text-secondary font-black">
+                    <th className="py-4 px-6">رقم السند والمؤسسة</th>
+                    <th className="py-4 px-4">المورد المقترح</th>
+                    <th className="py-4 px-4">عدد البنود</th>
+                    <th className="py-4 px-4">المبلغ التقديري</th>
+                    <th className="py-4 px-4">الحالة الإدارية</th>
+                    <th className="py-4 px-6 text-center">التفاصيل</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/10">
+                  {filteredPurchases.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-secondary font-bold">
+                        لا توجد طلبيات شراء مسجلة حالياً.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPurchases.map(p => (
+                      <tr key={p.id} className="hover:bg-surface-container/50 transition-colors">
+                        <td className="py-4 px-6">
+                          <div className="font-bold text-primary text-sm">{p.orderNumber || p.id}</div>
+                          <div className="text-[11px] text-secondary opacity-70">{p.schoolName || 'المخبر المدرسي'}</div>
+                        </td>
+                        <td className="py-4 px-4 font-bold text-secondary">{p.supplierName || 'ديوان المطبوعات / مورد معتمد'}</td>
+                        <td className="py-4 px-4 text-secondary">{p.items?.length || 0} بنود</td>
+                        <td className="py-4 px-4 font-black text-primary">
+                          {new Intl.NumberFormat('ar-DZ').format(p.total || 0)} د.ج
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className={cn(
+                            "px-2.5 py-1 rounded-full text-[11px] font-bold",
+                            p.status === 'received' ? "bg-emerald-100 text-emerald-800" :
+                            p.status === 'sent' ? "bg-blue-100 text-blue-800" : "bg-surface-container text-secondary"
+                          )}>
+                            {p.status === 'received' ? 'مستلمة' : p.status === 'sent' ? 'مرسلة للمقتصد' : 'مسودة'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6 text-center">
+                          <button
+                            onClick={() => setSelectedPurchase(p)}
+                            className="px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-primary font-bold text-xs"
+                          >
+                            معاينة
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 6: BROADCAST ANNOUNCEMENTS                                            */}
+      {/* ========================================================================= */}
+      {activeTab === 'announcements' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center p-6 bg-surface rounded-3xl border border-outline-variant/30 flex-wrap gap-4">
+            <div>
+              <h3 className="text-lg font-black text-primary">إدارة التعميمات والإعلانات المركزية</h3>
+              <p className="text-xs text-secondary mt-1">تتيح لك إرسال إشعارات وتوجيهات وزارية فورية تظهر لجميع موظفي المخابر في المنصة.</p>
+            </div>
+
+            <button
+              onClick={() => setShowAnnouncementModal(true)}
+              className="px-5 py-3 rounded-2xl bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
+            >
+              <Bell size={16} />
+              <span>إنشاء تعميم جديد</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {announcements.length === 0 ? (
+              <div className="p-12 text-center text-secondary font-bold bg-surface rounded-3xl border border-outline-variant/30">
+                لا توجد تعميمات منشورة حتى الآن.
+              </div>
+            ) : (
+              announcements.map(ann => (
+                <div key={ann.id} className="p-6 bg-surface rounded-3xl border border-outline-variant/30 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-base text-primary">{ann.title}</h4>
+                      <span className="text-xs text-secondary">·</span>
+                      <span className="text-xs text-secondary font-bold">
+                        {ann.category === 'urgent' ? 'هام وعاجل' : ann.category === 'technical' ? 'إشعار فني' : 'توجيه بيداغوجي'}
+                      </span>
+                      {ann.priority === 'high' && (
+                        <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">أولوية قصوى</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-secondary leading-relaxed">{ann.message}</p>
+                    <div className="text-[11px] text-on-surface/50 font-bold pt-1">
+                      الجهة المصدرة: {ann.authorName || 'الإدارة المركزية'}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 p-4 bg-amber-50 text-amber-700 rounded-2xl text-xs font-bold border border-amber-100">
-                    <ShieldCheck size={16} />
-                    هذه البيانات مخزنة في قواعد بياناتنا السحابية وتتضمن معلومات الجلسة والتوثيق.
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleDeleteAnnouncement(ann.id)}
+                      className="px-3.5 py-2 rounded-xl text-red-600 bg-red-50 hover:bg-red-100 transition-all text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Trash2 size={14} />
+                      <span>حذف التعميم</span>
+                    </button>
                   </div>
                 </div>
-              )}
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
-              {modalMode === 'edit' && (
-                <div className="space-y-8 max-w-2xl mx-auto py-8">
-                  <div className="p-8 bg-surface-container-low rounded-[40px] border border-outline/5 space-y-6">
-                    <div className="flex items-center justify-between">
-                       <div className="space-y-1">
-                         <h4 className="text-lg font-black text-on-surface">رتبة المستخدم</h4>
-                         <p className="text-sm font-bold text-on-surface/40">تغيير مستوى الوصول للنظام لهذا الحساب</p>
-                       </div>
-                       <div className={cn(
-                        "px-6 py-2 rounded-2xl text-xs font-black border",
-                        selectedUser.role === 'Admin' ? "bg-primary text-on-primary border-primary/20" : "bg-surface-container-high text-on-surface/60 border-outline/5"
-                       )}>
-                         {selectedUser.role === 'Admin' ? 'مدير نظام حالي' : 'مستخدم عادي'}
-                       </div>
-                    </div>
-                    
-                    <button 
-                      onClick={() => handleUpdateUserRole(selectedUser.uid || selectedUser.id, selectedUser.role)}
-                      className={cn(
-                        "w-full py-5 rounded-[24px] font-black shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3",
-                        selectedUser.role === 'Admin' ? "bg-red-500 text-white shadow-red-200" : "bg-primary text-on-primary shadow-primary/20"
-                      )}
+      {/* ========================================================================= */}
+      {/* TAB 7: SYSTEM OPERATIONS & DATABASE                                       */}
+      {/* ========================================================================= */}
+      {activeTab === 'system' && (
+        <div className="space-y-8">
+          {/* Database Inspector */}
+          <div className="p-6 bg-surface rounded-3xl border border-outline-variant/30 space-y-6">
+            <div>
+              <h3 className="text-lg font-black text-primary">فحص وصيانة قاعدة البيانات (Firestore Collections)</h3>
+              <p className="text-xs text-secondary mt-1">مراقبة سلامة المجموعات، بنية البيانات، واختبار الاتصال بالسحابة.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-surface-container flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-secondary font-bold">مجموعة المستخدمين (users)</div>
+                  <div className="text-xl font-black text-primary mt-1">{users.length} وثيقة</div>
+                </div>
+                <Users size={24} className="text-primary/40" />
+              </div>
+
+              <div className="p-4 rounded-2xl bg-surface-container flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-secondary font-bold">مجموعة الإعدادات (settings)</div>
+                  <div className="text-xl font-black text-primary mt-1">{Object.keys(settingsMap).length} وثيقة</div>
+                </div>
+                <Settings size={24} className="text-primary/40" />
+              </div>
+
+              <div className="p-4 rounded-2xl bg-surface-container flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-secondary font-bold">تذاكر الدعم (support_tickets)</div>
+                  <div className="text-xl font-black text-primary mt-1">{tickets.length} وثيقة</div>
+                </div>
+                <MessageSquare size={24} className="text-primary/40" />
+              </div>
+
+              <div className="p-4 rounded-2xl bg-surface-container flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-secondary font-bold">طلبيات الشراء (purchase_orders)</div>
+                  <div className="text-xl font-black text-primary mt-1">{purchases.length} وثيقة</div>
+                </div>
+                <ShoppingCart size={24} className="text-primary/40" />
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center gap-4 flex-wrap">
+              <button
+                onClick={handlePingDatabase}
+                disabled={isPingingDb}
+                className="px-5 py-3 rounded-2xl bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2"
+              >
+                <Activity size={16} className={cn(isPingingDb && "animate-spin")} />
+                <span>اختبار استجابة قاعدة البيانات الآن</span>
+              </button>
+
+              <button
+                onClick={handleExportUsersCSV}
+                className="px-5 py-3 rounded-2xl bg-surface-container text-primary border border-outline-variant/30 font-bold text-xs hover:bg-surface-container-high transition-all flex items-center gap-2"
+              >
+                <FileSpreadsheet size={16} />
+                <span>تصدير نسخة احتياطية من الدليل الإداري (CSV)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: USER DETAILS & ROLE DRAWER                                         */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {selectedUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-surface rounded-3xl border border-outline-variant/40 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center">
+                    {selectedUser.user.photoURL || selectedUser.settings?.profilePhoto ? (
+                      <img src={selectedUser.user.photoURL || selectedUser.settings?.profilePhoto} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={24} className="text-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-lg text-primary">{selectedUser.user.displayName || 'مستخدم مخبر'}</h3>
+                    <p className="text-xs text-secondary">{selectedUser.user.email}</p>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedUser(null)}
+                  className="p-2 rounded-full hover:bg-surface-container text-secondary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* User details grid */}
+              <div className="space-y-3 text-xs">
+                <div className="p-3 rounded-2xl bg-surface-container flex justify-between">
+                  <span className="text-secondary font-bold">الرتبة والصفة المهنية:</span>
+                  <span className="font-black text-primary">{selectedUser.settings?.jobTitle || 'ملحق بالمخابر'}</span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-surface-container flex justify-between">
+                  <span className="text-secondary font-bold">المؤسسة التعليمية:</span>
+                  <span className="font-black text-primary">{selectedUser.settings?.schoolName || selectedUser.settings?.school || 'غير محددة'}</span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-surface-container flex justify-between">
+                  <span className="text-secondary font-bold">مديرية التربية والبلدية:</span>
+                  <span className="font-black text-primary">
+                    {selectedUser.settings?.directorateName || selectedUser.settings?.directorate || 'مديرية التربية'} {selectedUser.settings?.communeName ? `· ${selectedUser.settings?.communeName}` : ''}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-surface-container flex justify-between">
+                  <span className="text-secondary font-bold">الرمز الوظيفي للموظف:</span>
+                  <span className="font-black text-primary font-mono">{selectedUser.settings?.employeeId || 'غير مسجل'}</span>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-surface-container flex justify-between">
+                  <span className="text-secondary font-bold">الصلاحية الحالية في المنصة:</span>
+                  <span className={cn(
+                    "font-bold",
+                    selectedUser.user.role === 'Admin' || selectedUser.user.role === 'admin' ? "text-emerald-700" : "text-secondary"
+                  )}>
+                    {selectedUser.user.role === 'Admin' || selectedUser.user.role === 'admin' ? 'مدير نظام (Admin)' : 'مستخدم عادي'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-4 flex items-center gap-3">
+                <button
+                  onClick={() => handleToggleUserRole(selectedUser.user)}
+                  className={cn(
+                    "flex-1 py-3 px-4 rounded-2xl font-bold text-xs transition-all",
+                    selectedUser.user.role === 'Admin' || selectedUser.user.role === 'admin'
+                      ? "bg-red-50 text-red-700 hover:bg-red-100"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700"
+                  )}
+                >
+                  {selectedUser.user.role === 'Admin' || selectedUser.user.role === 'admin'
+                    ? 'إلغاء صفة مدير النظام'
+                    : 'ترقية إلى مدير نظام مركزي (Admin)'}
+                </button>
+
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="py-3 px-5 rounded-2xl bg-surface-container text-secondary font-bold text-xs hover:bg-surface-container-high"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL: TICKET RESPONSE & RESOLUTION                                       */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {selectedTicket && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-xl bg-surface rounded-3xl border border-outline-variant/40 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/20">
+                <div>
+                  <h3 className="font-black text-lg text-primary">{selectedTicket.title}</h3>
+                  <p className="text-xs text-secondary mt-0.5">من: {selectedTicket.userName || selectedTicket.userEmail} · {selectedTicket.schoolName || 'المخبر'}</p>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedTicket(null)}
+                  className="p-2 rounded-full hover:bg-surface-container text-secondary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Inquiry details */}
+              <div className="p-4 rounded-2xl bg-surface-container text-xs text-secondary leading-relaxed">
+                <strong>نص الطلب أو الاستفسار:</strong>
+                <p className="mt-2 text-primary whitespace-pre-wrap">{selectedTicket.description}</p>
+              </div>
+
+              {/* Reply Form */}
+              <form onSubmit={handleSendTicketReply} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-secondary mb-2">
+                    الرد الإداري أو الحل المقترح للمستخدم:
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={ticketReplyText}
+                    onChange={(e) => setTicketReplyText(e.target.value)}
+                    placeholder="اكتب رد الإدارة المركزية وتوجيهات الحل الفني هنا..."
+                    className="w-full p-4 rounded-2xl bg-surface-container border-none text-xs font-bold text-primary focus:ring-1 focus:ring-primary resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateTicketStatus(selectedTicket.id, 'in_progress')}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 text-blue-800 hover:bg-blue-100"
                     >
-                      {selectedUser.role === 'Admin' ? (
-                        <><XCircle size={20} /> سحب صلاحية المدير</>
-                      ) : (
-                        <><ShieldCheck size={20} /> ترقية إلى مدير نظام</>
-                      )}
+                      تعيين كـ قيد المعالجة
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                     <button className="p-6 bg-surface border border-outline/10 rounded-[32px] text-right hover:border-primary/40 transition-all flex flex-col gap-2">
-                        <Mail className="text-primary" size={24} />
-                        <span className="font-black text-sm">إرسال بريد رسمي</span>
-                        <span className="text-[10px] text-on-surface/40 font-bold">للتواصل بخصوص تنبيهات النظام</span>
-                     </button>
-                     <button className="p-6 bg-surface border border-outline/10 rounded-[32px] text-right hover:border-red-400 transition-all flex flex-col gap-2">
-                        <XCircle className="text-red-500" size={24} />
-                        <span className="font-black text-sm text-red-500">حظر الحساب مؤقتاً</span>
-                        <span className="text-[10px] text-on-surface/40 font-bold">منع الوصول لجميع المميزات</span>
-                     </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="submit"
+                      disabled={isReplyingTicket}
+                      className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isReplyingTicket ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                      <span>إرسال الرد واعتماد الحل</span>
+                    </button>
                   </div>
                 </div>
-              )}
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-              {modalMode === 'review' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                   <div className="space-y-8">
-                      <div className="relative group">
-                        <div className="w-full aspect-square rounded-[48px] bg-primary/5 flex items-center justify-center overflow-hidden border-2 border-outline/5 shadow-xl">
-                          {(selectedUser.settings?.profilePhoto || selectedUser.photoURL) ? (
-                            <img 
-                              src={(selectedUser.settings?.profilePhoto || selectedUser.photoURL).replace(/=s\d+(-c)?/g, '=s800-c')} 
-                              alt={selectedUser.displayName} 
-                              className="w-full h-full object-cover antialiased" 
-                              style={{ imageRendering: 'auto' }}
-                              onLoad={() => console.log(`Modal photo loaded for ${selectedUser.displayName}`)}
-                              onError={(e) => {
-                                console.error(`Modal photo failed to load for ${selectedUser.displayName}:`, (selectedUser.settings?.profilePhoto || selectedUser.photoURL));
-                                e.currentTarget.style.display = 'none';
-                              }}
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <User size={120} className="text-primary/20" />
-                          )}
-                        </div>
-                        <div className="absolute top-6 right-6 px-4 py-2 bg-white/90 backdrop-blur rounded-2xl shadow-lg border border-outline/10">
-                           <span className="text-xs font-black text-primary">المعرف الفريد: {selectedUser.uid?.slice(0, 8)}...</span>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-primary/5 p-8 rounded-[40px] border border-primary/10">
-                         <h5 className="text-lg font-black text-primary mb-4">جهة الاتصال</h5>
-                         <div className="space-y-4">
-                            <div className="flex items-center gap-4 text-on-surface/70">
-                               <div className="p-2 bg-white rounded-xl shadow-sm"><Mail size={18} /></div>
-                               <span className="font-bold">{selectedUser.email}</span>
-                            </div>
-                            <div className="flex items-center gap-4 text-on-surface/70">
-                               <div className="p-2 bg-white rounded-xl shadow-sm"><Calendar size={18} /></div>
-                               <span className="font-bold tracking-tight" dir="ltr">
-                                 {selectedUser.createdAt ? (typeof selectedUser.createdAt === 'string' ? format(new Date(selectedUser.createdAt), 'PPPP', { locale: arDZ }) : selectedUser.createdAt.toDate ? format(selectedUser.createdAt.toDate(), 'PPPP', { locale: arDZ }) : '—') : '—'}
-                               </span>
-                            </div>
-                         </div>
-                      </div>
-                   </div>
-
-                   <div className="space-y-8">
-                      <div className="bg-surface-container-low p-8 rounded-[40px] border border-outline/5 shadow-inner">
-                         <div className="flex items-center gap-3 mb-6">
-                            <School className="text-primary" size={28} />
-                            <h4 className="text-xl font-black text-primary">تفاصيل المؤسسة</h4>
-                         </div>
-                         <div className="space-y-6">
-                            <div>
-                               <span className="text-[10px] font-black uppercase text-on-surface/30 tracking-widest block mb-1">اسم الهيكل</span>
-                               <p className="text-lg font-black text-on-surface">{selectedUser.settings?.school || '—'}</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-6">
-                               <div>
-                                  <span className="text-[10px] font-black uppercase text-on-surface/30 tracking-widest block mb-1">المديرية</span>
-                                  <p className="font-bold text-on-surface/70">{selectedUser.settings?.directorate || '—'}</p>
-                               </div>
-                               <div>
-                                  <span className="text-[10px] font-black uppercase text-on-surface/30 tracking-widest block mb-1">البلدية</span>
-                                  <p className="font-bold text-on-surface/70">{selectedUser.settings?.commune || '—'}</p>
-                               </div>
-                            </div>
-                            <div>
-                               <span className="text-[10px] font-black uppercase text-on-surface/30 tracking-widest block mb-1">تاريخ ربط المؤسسة</span>
-                               <p className="font-mono text-xs text-on-surface/40">Registered System Key: {selectedUser.schoolId || 'N/A'}</p>
-                            </div>
-                         </div>
-                      </div>
-
-                      <div className="bg-surface p-8 rounded-[40px] border border-outline/10 shadow-sm">
-                         <div className="flex items-center gap-3 mb-6">
-                            <ShieldCheck className="text-amber-500" size={28} />
-                            <h4 className="text-xl font-black text-on-surface">الحالة والنشاط</h4>
-                         </div>
-                         <div className="grid grid-cols-2 gap-6">
-                            <div className="p-4 bg-emerald-50 rounded-[28px] text-center border border-emerald-100">
-                               <p className="text-emerald-700 font-black text-sm">درجة التحقق</p>
-                               <span className="text-[10px] font-bold text-emerald-600/60 uppercase">Verified Account</span>
-                            </div>
-                            <div className="p-4 bg-blue-50 rounded-[28px] text-center border border-blue-100">
-                               <p className="text-blue-700 font-black text-sm">آخر نشاط</p>
-                               <span className="text-[10px] font-bold text-blue-600/60 uppercase">System Sync Ok</span>
-                            </div>
-                         </div>
-                      </div>
-
-                      <div className="pt-4">
-                         <button 
-                          onClick={() => { setModalMode('edit'); }}
-                          className="w-full bg-primary text-on-primary py-5 rounded-full font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
-                         >
-                            <Settings size={20} />
-                            تغيير إعدادات الحساب
-                         </button>
-                      </div>
-                   </div>
+      {/* ========================================================================= */}
+      {/* MODAL: BROADCAST ANNOUNCEMENT                                             */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showAnnouncementModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-lg bg-surface rounded-3xl border border-outline-variant/40 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/20">
+                <div className="flex items-center gap-2.5">
+                  <Bell size={20} className="text-primary" />
+                  <h3 className="font-black text-lg text-primary">نشر تعميم أو إشعار وزاري مركزي</h3>
                 </div>
-              )}
-            </div>
 
-            {/* Modal Footer */}
-            <div className="px-10 py-6 border-t border-outline/5 bg-surface-container-lowest text-center">
-               <p className="text-[10px] font-bold text-on-surface/30 uppercase tracking-[0.2em]">Secure Administrator Access Only • Laboratory Digital Platform v2</p>
-            </div>
-          </motion.div>
-        </div>
-      )}
+                <button 
+                  onClick={() => setShowAnnouncementModal(false)}
+                  className="p-2 rounded-full hover:bg-surface-container text-secondary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateAnnouncement} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-secondary mb-1.5">عنوان التعميم أو الإشعار</label>
+                  <input
+                    type="text"
+                    value={annTitle}
+                    onChange={(e) => setAnnTitle(e.target.value)}
+                    placeholder="مثال: تعليمات الجرد السنوي الشامل لمخابر الفيزياء والكيمياء"
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-container border-none text-xs font-bold text-primary focus:ring-1 focus:ring-primary"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">تصنيف التعميم</label>
+                    <select
+                      value={annCategory}
+                      onChange={(e) => setAnnCategory(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-2xl bg-surface-container border-none text-xs font-bold text-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="pedagogical">توجيه بيداغوجي ومخبري</option>
+                      <option value="urgent">هام وعاجل</option>
+                      <option value="technical">إشعار فني ونظامي</option>
+                      <option value="update">تحديث وميزات المنصة</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-secondary mb-1.5">مستوى الأولوية</label>
+                    <select
+                      value={annPriority}
+                      onChange={(e) => setAnnPriority(e.target.value as any)}
+                      className="w-full px-4 py-3 rounded-2xl bg-surface-container border-none text-xs font-bold text-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="normal">أولوية عادية</option>
+                      <option value="high">أولوية قصوى (تمييز أحمر)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-secondary mb-1.5">نص وتفاصيل التعميم</label>
+                  <textarea
+                    rows={4}
+                    value={annMessage}
+                    onChange={(e) => setAnnMessage(e.target.value)}
+                    placeholder="أدخل نص التوجيه والتعليمات الإدارية الموجهة لمسؤولي المخابر..."
+                    className="w-full p-4 rounded-2xl bg-surface-container border-none text-xs font-bold text-primary focus:ring-1 focus:ring-primary resize-none"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-3">
+                  <button
+                    type="submit"
+                    disabled={isPostingAnnouncement}
+                    className="flex-1 py-3 px-5 rounded-2xl bg-primary text-white font-bold text-xs hover:bg-primary/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isPostingAnnouncement ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                    <span>نشر التعميم للجميع</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAnnouncementModal(false)}
+                    className="py-3 px-5 rounded-2xl bg-surface-container text-secondary font-bold text-xs hover:bg-surface-container-high"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL: PURCHASE ORDER INSPECTION                                          */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {selectedPurchase && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-2xl bg-surface rounded-3xl border border-outline-variant/40 shadow-2xl p-6 md:p-8 space-y-6 relative overflow-hidden max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-outline-variant/20">
+                <div>
+                  <h3 className="font-black text-lg text-primary">سند طلب تموين: {selectedPurchase.orderNumber || selectedPurchase.id}</h3>
+                  <p className="text-xs text-secondary mt-0.5">المؤسسة: {selectedPurchase.schoolName || 'مخبر مدرسي'} · المورد: {selectedPurchase.supplierName || 'معتمد'}</p>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedPurchase(null)}
+                  className="p-2 rounded-full hover:bg-surface-container text-secondary"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-secondary">البنود والمواد المطلوبة:</h4>
+                <div className="bg-surface-container rounded-2xl overflow-hidden border border-outline-variant/20">
+                  <table className="w-full text-right text-xs">
+                    <thead>
+                      <tr className="bg-surface-container-high text-secondary font-black">
+                        <th className="py-2.5 px-4">#</th>
+                        <th className="py-2.5 px-4">المادة / التجهيز</th>
+                        <th className="py-2.5 px-4">الكمية</th>
+                        <th className="py-2.5 px-4">السعر التقديري</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/10">
+                      {selectedPurchase.items?.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="py-2.5 px-4 text-secondary">{idx + 1}</td>
+                          <td className="py-2.5 px-4 font-bold text-primary">{item.name}</td>
+                          <td className="py-2.5 px-4 text-secondary">{item.quantity} {item.unit || ''}</td>
+                          <td className="py-2.5 px-4 font-mono font-bold text-primary">
+                            {new Intl.NumberFormat('ar-DZ').format(item.unitPrice || 0)} د.ج
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-between items-center p-4 rounded-2xl bg-primary/10 border border-primary/20 text-primary font-black text-sm">
+                  <span>المبلغ الإجمالي التقديري للطلبية:</span>
+                  <span>{new Intl.NumberFormat('ar-DZ').format(selectedPurchase.total || 0)} د.ج</span>
+                </div>
+              </div>
+
+              <div className="pt-3 flex justify-end">
+                <button
+                  onClick={() => setSelectedPurchase(null)}
+                  className="py-2.5 px-6 rounded-xl bg-surface-container text-secondary font-bold text-xs hover:bg-surface-container-high"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

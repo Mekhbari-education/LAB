@@ -143,7 +143,7 @@ export default function LocationCard({
       animate={{ opacity: 1, y: 0 }}
       className="bg-surface p-8 rounded-[40px] border border-outline/5 shadow-xl relative overflow-hidden group h-full"
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+      <div className="absolute top-0 end-0 w-32 h-32 bg-primary/5 rounded-full -me-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
       
       <div className="flex justify-between items-start mb-10 relative z-10">
         <div className="w-20 h-20 rounded-[28px] bg-primary/5 flex items-center justify-center shadow-inner transition-all duration-500 group-hover:rotate-12 group-hover:scale-110">

@@ -228,7 +228,7 @@ export default function VirtualLab() {
                        key={chemical.id}
                        onClick={() => addChemical(chemical)}
                        disabled={!selectedContainerId}
-                       className="text-right bg-surface border border-outline/10 p-4 rounded-[20px] hover:border-primary/50 hover:bg-primary/5 transition-all flex items-center justify-between group disabled:opacity-50 disabled:pointer-events-none"
+                       className="text-start bg-surface border border-outline/10 p-4 rounded-[20px] hover:border-primary/50 hover:bg-primary/5 transition-all flex items-center justify-between group disabled:opacity-50 disabled:pointer-events-none"
                      >
                        <div className="flex items-center gap-4">
                          <div 

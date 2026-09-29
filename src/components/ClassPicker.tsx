@@ -85,19 +85,19 @@ export default function ClassPicker({ isOpen, onClose, onSelect, initialValue }:
           <div className="p-6 space-y-4 bg-surface border-b border-outline/5">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
+                <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
                 <input 
                   type="text" 
                   placeholder="بحث سريع عن قسم..."
-                  className="w-full bg-surface-container-low border-none rounded-2xl pr-12 pl-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-surface-container-low border-none rounded-2xl ps-12 pe-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all text-start"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               <div className="w-full md:w-48 relative">
-                <Filter className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
+                <Filter className="absolute start-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
                 <select 
-                  className="w-full bg-surface-container-low border-none rounded-2xl pr-12 pl-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all appearance-none"
+                  className="w-full bg-surface-container-low border-none rounded-2xl ps-12 pe-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all appearance-none text-start"
                   value={selectedLevelId}
                   onChange={(e) => setSelectedLevelId(e.target.value)}
                 >
@@ -161,7 +161,7 @@ export default function ClassPicker({ isOpen, onClose, onSelect, initialValue }:
 
           {/* Footer */}
           <div className="p-6 border-t border-outline/10 bg-surface-container-low/30 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div className="text-right">
+            <div className="text-start">
               {tempSelected && (
                 <div className="flex items-center gap-2 text-primary font-black">
                   <Check size={18} />

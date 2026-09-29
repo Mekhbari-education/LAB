@@ -43,7 +43,7 @@ export function ChemicalAddModal({
           className="relative bg-surface w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden border border-outline/10"
         >
           <div className="p-8 flex justify-between items-center bg-surface-container-low border-b border-outline/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-[100px] -mr-8 -mt-8"></div>
+            <div className="absolute top-0 end-0 w-32 h-32 bg-primary/5 rounded-ee-[100px] -me-8 -mt-8"></div>
             <div className="relative z-10 flex items-center gap-3">
               <div className="bg-primary/10 p-2.5 rounded-2xl text-primary">
                 <Wand2 size={24} />
@@ -59,10 +59,10 @@ export function ChemicalAddModal({
               <X size={24} />
             </button>
           </div>
-          <form onSubmit={onSubmit} className="p-12 grid grid-cols-1 md:grid-cols-2 gap-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+          <form onSubmit={onSubmit} className="p-8 sm:p-12 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 max-h-[70vh] overflow-y-auto no-scrollbar">
             <div className="md:col-span-2 flex items-end gap-4">
               <div className="flex-1 space-y-2">
-                <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">PRODUIT CHIMIQUE</label>
+                <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">PRODUIT CHIMIQUE</label>
                 <input 
                   required
                   className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
@@ -86,15 +86,15 @@ export function ChemicalAddModal({
               </button>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الاسم العربي</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الاسم العربي</label>
               <input 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                 value={newChemical.nameAr || ''}
                 onChange={e => onChange('nameAr', e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الصيغة الكيميائية</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الصيغة الكيميائية</label>
               <input 
                 className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
                 value={newChemical.formula || ''}
@@ -102,7 +102,7 @@ export function ChemicalAddModal({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">رقم CAS</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">رقم CAS</label>
               <input 
                 className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
                 value={newChemical.casNumber || ''}
@@ -110,17 +110,17 @@ export function ChemicalAddModal({
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">درجة حرارة التخزين</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">درجة حرارة التخزين</label>
               <input 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                 value={newChemical.storageTemp || ''}
                 onChange={e => onChange('storageTemp', e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الحالة</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الحالة</label>
               <select 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold appearance-none cursor-pointer"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold appearance-none cursor-pointer text-start"
                 value={newChemical.state || 'solid'}
                 onChange={e => onChange('state', e.target.value)}
               >
@@ -130,12 +130,12 @@ export function ChemicalAddModal({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الكمية</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الكمية</label>
               <div className="flex gap-3">
                 <input 
                   type="number"
                   required
-                  className="flex-1 bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                  className="flex-1 bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                   value={newChemical.quantity || 0}
                   onChange={e => onChange('quantity', Number(e.target.value))}
                 />
@@ -153,9 +153,9 @@ export function ChemicalAddModal({
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">تصنيف الخطورة</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">تصنيف الخطورة</label>
               <select 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold appearance-none cursor-pointer"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold appearance-none cursor-pointer text-start"
                 value={newChemical.hazardClass || 'safe'}
                 onChange={e => onChange('hazardClass', e.target.value)}
               >
@@ -164,35 +164,35 @@ export function ChemicalAddModal({
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">GHS (فواصل بين الرموز)</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">GHS (فواصل بين الرموز)</label>
               <input 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                 placeholder="GHS01, GHS02..."
                 value={newChemical.ghs?.join(', ') || ''}
                 onChange={e => onChange('ghs', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الرف</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الرف</label>
               <input 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                 value={newChemical.shelf || ''}
                 onChange={e => onChange('shelf', e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">الصلاحية ⚠</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">الصلاحية ⚠</label>
               <input 
                 type="date"
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold text-start"
                 value={newChemical.expiryDate || ''}
                 onChange={e => onChange('expiryDate', e.target.value)}
               />
             </div>
             <div className="md:col-span-2 space-y-2">
-              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">ملاحظات</label>
+              <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">ملاحظات</label>
               <textarea 
-                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold min-h-[100px]"
+                className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all font-bold min-h-[100px] text-start"
                 value={newChemical.notes || ''}
                 onChange={e => onChange('notes', e.target.value)}
               />

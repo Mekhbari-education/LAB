@@ -188,7 +188,7 @@ export default function LabAssistant() {
                 <button
                   key={i}
                   onClick={() => handleSend(p.text)}
-                  className="bg-surface hover:bg-primary/5 p-4 rounded-2xl border border-outline/10 text-right text-xs font-bold text-secondary hover:text-primary transition-all flex items-center gap-3 group"
+                  className="bg-surface hover:bg-primary/5 p-4 rounded-2xl border border-outline/10 text-start text-xs font-bold text-secondary hover:text-primary transition-all flex items-center gap-3 group"
                 >
                   <div className="p-2 bg-surface-container rounded-lg text-primary/40 group-hover:text-primary transition-colors">
                     <p.icon size={16} />

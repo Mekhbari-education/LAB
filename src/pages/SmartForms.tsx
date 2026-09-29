@@ -188,14 +188,14 @@ export default function SmartForms() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
         {/* Templates Picker */}
         <div className="lg:col-span-4 space-y-4">
-          <h3 className="text-xs font-black text-secondary/40 uppercase tracking-widest mr-4">اختر النموذج المطلوب</h3>
+          <h3 className="text-xs font-black text-secondary/40 uppercase tracking-widest ms-2">اختر النموذج المطلوب</h3>
           <div className="grid grid-cols-1 gap-4">
             {TEMPLATES.map((tmpl) => (
               <button
                 key={tmpl.id}
                 onClick={() => setSelectedTemplate(tmpl)}
                 className={cn(
-                  "p-6 rounded-[32px] border-2 text-right transition-all group relative overflow-hidden",
+                  "p-6 rounded-[32px] border-2 text-start transition-all group relative overflow-hidden",
                   selectedTemplate?.id === tmpl.id 
                     ? "border-primary bg-primary/5 shadow-xl -translate-y-1" 
                     : "border-outline/5 bg-surface hover:border-primary/20"
@@ -208,7 +208,7 @@ export default function SmartForms() {
                 <p className="text-xs font-bold text-secondary/60 leading-relaxed">{tmpl.description}</p>
                 
                 {selectedTemplate?.id === tmpl.id && (
-                  <div className="absolute top-6 left-6 text-primary">
+                  <div className="absolute top-6 end-6 text-primary">
                     <CheckCircle2 size={24} />
                   </div>
                 )}

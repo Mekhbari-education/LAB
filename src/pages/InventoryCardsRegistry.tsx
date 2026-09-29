@@ -417,7 +417,7 @@ export default function InventoryCardsRegistry() {
             <p className="text-lg font-bold">وزارة التربية الوطنية</p>
           </div>
 
-          <div className="space-y-2 text-left md:text-right">
+          <div className="space-y-2 text-start md:text-end">
             <p className="bg-primary/5 px-4 py-1.5 rounded-full inline-block">
               {t('inventory_cards.academic_year', 'السنة الدراسية:')} <span className="font-black">2025 - 2026</span>
             </p>

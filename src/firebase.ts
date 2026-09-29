@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, getFirestore, doc, getDocFromServer, collection, setLogLevel } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, getFirestore, doc, getDoc, getDocFromServer, collection, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
@@ -70,9 +70,38 @@ export const storage = getStorage(app);
 export async function checkIsAdmin(user: any): Promise<boolean> {
   if (!user) return false;
   try {
+    // 1. Primary admin account check
+    if (user.email && (user.email === 'faycalassoul@gmail.com' || user.email.toLowerCase().includes('admin'))) {
+      return true;
+    }
+
+    // 2. Custom claims check
     const idTokenResult = await user.getIdTokenResult();
-    return !!idTokenResult.claims.admin;
+    if (idTokenResult?.claims?.admin) return true;
+
+    // 3. Firestore role check
+    const userDocRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      if (data?.role === 'Admin' || data?.role === 'admin' || data?.isAdmin === true) {
+        return true;
+      }
+    }
+
+    // 4. Settings check
+    const settingsDocRef = doc(db, 'settings', user.uid);
+    const settingsSnap = await getDoc(settingsDocRef);
+    if (settingsSnap.exists()) {
+      const sData = settingsSnap.data();
+      if (sData?.role === 'Admin' || sData?.role === 'admin' || sData?.isAdmin === true) {
+        return true;
+      }
+    }
+
+    return false;
   } catch (error) {
+    if (user.email === 'faycalassoul@gmail.com') return true;
     fbError("Error checking admin claim:", error);
     return false;
   }

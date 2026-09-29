@@ -95,11 +95,11 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
           <div className="p-6 space-y-4 bg-surface border-b border-outline/5">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
+                <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
                 <input 
                   type="text" 
                   placeholder="بحث عن وسيلة أو مادة كيميائية..."
-                  className="w-full bg-surface-container-low border-none rounded-2xl pr-12 pl-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="w-full bg-surface-container-low border-none rounded-2xl ps-12 pe-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all text-start"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -153,7 +153,7 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
             {/* Selection List */}
             <div className="space-y-4">
               <h4 className="text-xs font-black text-on-surface/40 uppercase tracking-widest px-2">النتائج ({filteredResources.length})</h4>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+              <div className="space-y-2 max-h-[400px] overflow-y-auto pe-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
@@ -168,7 +168,7 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
                         key={item.id}
                         onClick={() => toggleItem(item)}
                         className={cn(
-                          "w-full p-4 rounded-2xl text-right transition-all border-2 flex items-center justify-between group",
+                          "w-full p-4 rounded-2xl text-start transition-all border-2 flex items-center justify-between group",
                           isSelected 
                             ? "bg-primary/5 border-primary/20 shadow-sm" 
                             : "bg-surface border-outline/5 hover:border-primary/20"
@@ -185,7 +185,7 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
                               ? (item.category === 'glassware' ? <Beaker size={18} /> : <Package size={18} />) 
                               : <FlaskConical size={18} />}
                           </div>
-                          <div className="text-right">
+                          <div className="text-start">
                             <p className="font-bold text-on-surface text-sm">{item.name}</p>
                             <p className="text-[10px] text-on-surface/40 font-black uppercase">{item.category || (item.type === 'equipment' ? 'جهاز' : 'مادة')}</p>
                           </div>

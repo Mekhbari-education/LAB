@@ -61,7 +61,7 @@ export default function Support() {
       </Helmet>
 
       {/* Header */}
-      <header className="text-right space-y-4">
+      <header className="text-start space-y-4">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary text-xs font-black uppercase tracking-widest shadow-sm">
           <HelpCircle size={14} />
           مركز المساعدة والتواصل

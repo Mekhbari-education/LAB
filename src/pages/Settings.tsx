@@ -64,9 +64,15 @@ export default function SettingsPage() {
   const [userPhotoUrl, setUserPhotoUrl] = useState<string>(auth.currentUser?.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success', duration = 4000) => {
+    setToastNotification({ message, type });
+    setTimeout(() => setToastNotification(null), duration);
+  };
 
   // Sync userPhotoUrl when auth state changes
   useEffect(() => {
@@ -381,7 +387,7 @@ export default function SettingsPage() {
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('تعذر معالجة الصورة، يرجى اختيار ملف صورة صالح.');
+      showToast('تعذر معالجة الصورة، يرجى اختيار ملف صورة صالح.', 'error');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -394,12 +400,14 @@ export default function SettingsPage() {
 
     if (file.size > 5 * 1024 * 1024) {
       setLogoUploadError('حجم الصورة كبير جداً، يرجى اختيار ملف بحجم أقل من 5 ميغابايت.');
+      showToast('حجم الصورة كبير جداً، يرجى اختيار ملف بحجم أقل من 5 ميغابايت.', 'error');
       return;
     }
 
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
     if (!validTypes.includes(file.type)) {
       setLogoUploadError('صيغة الملف غير مدعومة. يرجى اختيار صورة بصيغة PNG أو JPG أو SVG أو WEBP.');
+      showToast('صيغة الملف غير مدعومة. يرجى اختيار صورة بصيغة PNG أو JPG أو SVG أو WEBP.', 'error');
       return;
     }
 
@@ -443,10 +451,12 @@ export default function SettingsPage() {
       }
 
       setLogoUploadSuccess(true);
+      showToast('تم رفع وتحديث شعار المؤسسة التعليمية بنجاح!', 'success');
       setTimeout(() => setLogoUploadSuccess(false), 4000);
     } catch (err: any) {
       console.error('Error uploading institution logo:', err);
       setLogoUploadError('فشل رفع الشعار: ' + (err.message || 'يرجى المحاولة مرة أخرى.'));
+      showToast('فشل رفع الشعار، يرجى المحاولة مرة أخرى.', 'error');
     } finally {
       setIsUploadingLogo(false);
       if (logoFileInputRef.current) logoFileInputRef.current.value = '';
@@ -454,8 +464,6 @@ export default function SettingsPage() {
   };
 
   const handleRemoveCustomLogo = async () => {
-    if (!window.confirm('هل أنت متأكد من رغبتك في حذف شعار المؤسسة المخصص والعودة للشعار الرسمي الافتراضي؟')) return;
-
     try {
       setIsUploadingLogo(true);
       setLogoUploadError(null);
@@ -471,10 +479,12 @@ export default function SettingsPage() {
       }
 
       setLogoUploadSuccess(true);
+      showToast('تمت استعادة الشعار الرسمي الافتراضي بنجاح.', 'success');
       setTimeout(() => setLogoUploadSuccess(false), 3000);
     } catch (err: any) {
       console.error('Error removing institution logo:', err);
       setLogoUploadError('فشل حذف الشعار.');
+      showToast('فشل استعادة الشعار.', 'error');
     } finally {
       setIsUploadingLogo(false);
       if (logoFileInputRef.current) logoFileInputRef.current.value = '';
@@ -555,10 +565,10 @@ export default function SettingsPage() {
         });
 
         await batch.commit();
-        alert(`تم استيراد ${data.length} سجل بنجاح!`);
+        showToast(`تم استيراد ${data.length} سجل بنجاح!`, 'success');
       } catch (error) {
         console.error('Error importing XLS:', error);
-        alert('حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف.');
+        showToast('حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف.', 'error');
       } finally {
         setIsImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -878,7 +888,7 @@ export default function SettingsPage() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error: any) {
       if (error.code === 'auth/requires-recent-login') {
-        alert('يجب عليك تسجيل الخروج ثم الدخول مرة أخرى لتغيير كلمة المرور لأسباب أمنية.');
+        showToast('يجب عليك تسجيل الخروج ثم الدخول مرة أخرى لتغيير كلمة المرور لأسباب أمنية.', 'error');
       } else {
         handleFirestoreError(error, OperationType.WRITE, `settings/${auth.currentUser.uid}`);
       }
@@ -892,10 +902,10 @@ export default function SettingsPage() {
     setIsResettingPassword(true);
     try {
       await sendPasswordResetEmail(auth, auth.currentUser.email);
-      alert('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.');
+      showToast('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.', 'success');
     } catch (error: any) {
       console.error('Error sending reset email:', error);
-      alert('حدث خطأ أثناء إرسال البريد الإلكتروني.');
+      showToast('حدث خطأ أثناء إرسال البريد الإلكتروني.', 'error');
     } finally {
       setIsResettingPassword(false);
     }
@@ -944,7 +954,7 @@ export default function SettingsPage() {
   const unlinkAccount = async (providerId: string) => {
     if (!auth.currentUser) return;
     if (auth.currentUser.providerData.length <= 1) {
-      alert('يجب أن يظل هناك وسيلة واحدة على الأقل لتسجيل الدخول.');
+      showToast('يجب أن يظل هناك وسيلة واحدة على الأقل لتسجيل الدخول.', 'error');
       return;
     }
     try {
@@ -953,7 +963,7 @@ export default function SettingsPage() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error('Error unlinking account:', error);
-      alert('حدث خطأ أثناء إلغاء ربط الحساب.');
+      showToast('حدث خطأ أثناء إلغاء ربط الحساب.', 'error');
     }
   };
 
@@ -1069,6 +1079,25 @@ export default function SettingsPage() {
           >
             <CheckCircle2 size={24} className="text-primary-fixed" />
             <span className="font-bold text-lg">تم تحديث كافة الإعدادات بنجاح</span>
+          </motion.div>
+        )}
+
+        {toastNotification && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className={cn(
+              "fixed top-8 left-1/2 -translate-x-1/2 z-[100] px-8 py-4 rounded-2xl flex items-center gap-3 shadow-2xl border text-white font-bold text-base",
+              toastNotification.type === 'error' ? "bg-red-600 border-red-400" : "bg-primary border-white/10"
+            )}
+          >
+            {toastNotification.type === 'error' ? (
+              <AlertCircle size={22} className="text-white" />
+            ) : (
+              <CheckCircle2 size={22} className="text-primary-fixed" />
+            )}
+            <span>{toastNotification.message}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2189,18 +2218,18 @@ export default function SettingsPage() {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">لغة الواجهة</label>
-                      <select className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none">
+                      <label className="text-sm font-black text-secondary ms-1">لغة الواجهة</label>
+                      <select className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold appearance-none text-start">
                         <option>العربية (الافتراضية)</option>
                         <option>Français (قريباً)</option>
                         <option>English (قريباً)</option>
                       </select>
                     </div>
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">الوضع الليلي</label>
+                      <label className="text-sm font-black text-secondary ms-1">الوضع الليلي</label>
                       <div className="flex items-center gap-4 bg-background p-4 rounded-[20px] border-2 border-transparent">
                         <div className="w-12 h-6 bg-outline-variant rounded-full relative cursor-not-allowed opacity-50">
-                          <div className="absolute left-1 top-1 w-4 h-4 bg-surface rounded-full" />
+                          <div className="absolute start-1 top-1 w-4 h-4 bg-surface rounded-full" />
                         </div>
                         <span className="text-sm font-bold text-secondary opacity-50">غير متاح حالياً</span>
                       </div>

@@ -554,8 +554,8 @@ export default function Dashboard() {
       )}
 
       {/* Header */}
-      <header className="relative flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 sm:gap-4 sm:gap-8 mb-4">
-        <div className="text-right space-y-3 relative z-10">
+      <header className="relative flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 sm:gap-6 lg:gap-8 mb-4">
+        <div className="text-start space-y-3 relative z-10">
           <div className="inline-flex items-center gap-3 px-4 py-2 bg-primary/10 rounded-full text-primary text-xs font-black uppercase tracking-widest mb-2">
             <LayoutDashboard size={14} />
             نظرة عامة على النظام
@@ -601,7 +601,7 @@ export default function Dashboard() {
             <div className="p-2 bg-primary/10 rounded-full text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
               {isSmartUpdating ? <RefreshCw size={18} className="animate-spin" /> : <Sparkles size={18} />}
             </div>
-            <div className="flex flex-col text-right">
+            <div className="flex flex-col text-start">
               <span className="text-[0.6875rem] font-black text-on-surface-variant uppercase tracking-widest">محرك الذكاء الاصطناعي</span>
               <span className="text-[0.875rem] font-black text-primary leading-tight">تحديث المعرفات</span>
             </div>
@@ -609,20 +609,20 @@ export default function Dashboard() {
         </div>
 
         {/* Decorative elements */}
-        <div className="absolute -top-20 -right-20 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute -top-20 -end-20 w-96 h-96 bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
       </header>
 
       {/* Alerts Bar */}
       {(counts.lowStock > 0 || counts.brokenEquip > 0 || expiringItems.length > 0) && (
         <section className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-4 sm:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
             {counts.lowStock > 0 && (
               <motion.div 
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 className="bg-[oklch(0.97_0.02_20)] text-on-error-container p-6 rounded-md3-card flex items-center gap-6 shadow-ambient hover:shadow-ambient-hover hover:-translate-y-[2px] transition-all duration-300 ease-out relative overflow-hidden group"
               >
-                <div className="absolute top-0 left-0 w-32 h-32 bg-error/5 rounded-br-[100px] -ml-10 -mt-10 group-hover:scale-150 transition-transform duration-700" />
+                <div className="absolute top-0 end-0 w-32 h-32 bg-error/5 rounded-ee-[100px] -me-10 -mt-10 group-hover:scale-150 transition-transform duration-700" />
                 <div className="bg-error p-5 rounded-[20px] text-white shadow-ambient relative z-10 w-16 h-16 flex items-center justify-center">
                   <AlertTriangle size={24} />
                 </div>
@@ -646,7 +646,7 @@ export default function Dashboard() {
                 transition={{ delay: 0.1 }}
                 className="bg-primary/5 text-primary p-6 rounded-md3-card flex items-center gap-6 shadow-ambient hover:shadow-ambient-hover hover:-translate-y-[2px] transition-all duration-300 ease-out relative overflow-hidden group"
               >
-                <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-br-[100px] -ml-10 -mt-10 group-hover:scale-150 transition-transform duration-700" />
+                <div className="absolute top-0 end-0 w-32 h-32 bg-primary/5 rounded-ee-[100px] -me-10 -mt-10 group-hover:scale-150 transition-transform duration-700" />
                 <div className="bg-primary p-5 rounded-[20px] text-on-primary shadow-ambient relative z-10 w-16 h-16 flex items-center justify-center">
                   <Hammer size={24} />
                 </div>

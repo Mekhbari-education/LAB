@@ -179,6 +179,21 @@ export default function Layout() {
 
   const handleLogout = () => signOut(auth);
 
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    if (isProfileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isProfileMenuOpen]);
+
   useEffect(() => {
     const fetchUserRole = async () => {
       if (auth.currentUser) {
@@ -249,29 +264,47 @@ export default function Layout() {
       <aside 
         dir={isRtl ? "rtl" : "ltr"}
         className={cn(
-          "fixed start-0 top-0 h-full z-40 flex flex-col bg-surface-container-low transition-all duration-300 no-print border-e border-outline-variant/10",
+          "fixed start-0 top-0 h-full z-40 flex flex-col bg-surface-container-low transition-all duration-300 no-print border-e border-outline-variant/10 shadow-sm",
           isSidebarOpen 
             ? "translate-x-0 w-72" 
             : "rtl:translate-x-full ltr:-translate-x-full lg:translate-x-0 lg:w-20"
         )}
       >
-        <div className="p-6 flex flex-col items-center gap-2">
+        <div className={cn(
+          "flex flex-col items-center gap-2 transition-all relative border-b border-outline-variant/10",
+          isSidebarOpen ? "p-6" : "px-2 py-4"
+        )}>
+          {isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden absolute top-4 end-4 p-2 text-secondary hover:text-primary rounded-full hover:bg-secondary-container/40 transition-colors"
+              aria-label="إغلاق القائمة"
+            >
+              <X size={20} />
+            </button>
+          )}
           <img 
-            className={cn("object-contain transition-all", isSidebarOpen ? "w-16 h-16" : "w-10 h-10")}
+            className={cn("object-contain transition-all shrink-0", isSidebarOpen ? "w-16 h-16" : "w-10 h-10")}
             src={logo}
             alt="Logo" 
           />
           {isSidebarOpen && (
-            <div className="text-center mt-2">
-              <h1 className="text-lg font-bold text-primary">{t('header.platform_title', 'الأرضية الرقمية — فضاء موظفوا المخابر')}</h1>
-              <p className="text-[10px] text-secondary font-medium leading-tight">{t('header.ministry', 'وزارة التربية الوطنية')}</p>
+            <div className="text-center mt-1 px-2">
+              <h1 className="text-base sm:text-lg font-black text-primary leading-tight">{t('header.platform_title', 'الأرضية الرقمية — فضاء موظفوا المخابر')}</h1>
+              <p className="text-[10px] text-secondary font-bold leading-tight mt-1">{t('header.ministry', 'وزارة التربية الوطنية')}</p>
             </div>
           )}
         </div>
 
-        <nav role="navigation" aria-label="القائمة الرئيسية" className="flex-1 px-4 py-6 space-y-4 overflow-y-auto no-scrollbar">
+        <nav role="navigation" aria-label="القائمة الرئيسية" className={cn(
+          "flex-1 overflow-y-auto no-scrollbar space-y-3 transition-all",
+          isSidebarOpen ? "px-4 py-4" : "px-2 py-3"
+        )}>
           {navigationGroups.map((group) => {
             const isExpanded = expandedGroups.includes(group.title);
+            const hasActiveItem = group.items.some(item => !item.external && location.pathname === item.path);
+            const GroupIcon = group.icon;
+
             const toggleGroup = () => {
               if (!isSidebarOpen) {
                 setIsSidebarOpen(true);
@@ -285,8 +318,6 @@ export default function Layout() {
               );
             };
 
-            const GroupIcon = group.icon;
-
             return (
               <div key={group.title} className="space-y-1">
                 {isSidebarOpen ? (
@@ -294,19 +325,20 @@ export default function Layout() {
                     <button
                       onClick={toggleGroup}
                       className={cn(
-                        "w-full flex items-center justify-between px-4 py-2 rounded-xl transition-all duration-200 group/title",
-                        isExpanded ? "text-primary bg-primary/5" : "text-secondary hover:bg-secondary-container/30"
+                        "w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl transition-all duration-200 group/title",
+                        isExpanded ? "text-primary bg-primary/10 font-black" : hasActiveItem ? "text-primary font-bold bg-primary/5" : "text-secondary hover:bg-secondary-container/30 hover:text-primary"
                       )}
                     >
-                      <div className="flex items-center gap-4">
-                        <GroupIcon size={20} className={cn(isExpanded && "text-primary")} />
-                        <span className="text-sm font-bold">{group.title}</span>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <GroupIcon size={19} className={cn("shrink-0", (isExpanded || hasActiveItem) && "text-primary")} />
+                        <span className="text-xs font-bold truncate">{group.title}</span>
                       </div>
                       <motion.div
                         animate={{ rotate: isExpanded ? 180 : 0 }}
                         transition={{ duration: 0.2 }}
+                        className="shrink-0"
                       >
-                        <ChevronDown size={16} className="text-secondary/50 group-hover/title:text-primary" />
+                        <ChevronDown size={15} className="text-secondary/60 group-hover/title:text-primary" />
                       </motion.div>
                     </button>
 
@@ -317,17 +349,17 @@ export default function Layout() {
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2, ease: "easeInOut" }}
-                          className="overflow-hidden pe-4 flex flex-col gap-1 mt-1"
+                          className="overflow-hidden ps-3 ms-2.5 border-s-2 border-outline-variant/30 flex flex-col gap-1 mt-1.5"
                         >
                           {group.items.map((item) => {
                             const isActive = !item.external && location.pathname === item.path;
                             const ItemIcon = item.icon;
                             
                             const linkClasses = cn(
-                              "flex items-center gap-3 px-4 py-2 rounded-full transition-all duration-200 group/item",
+                              "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group/item text-xs",
                               isActive 
-                                ? "bg-secondary-container text-primary font-bold shadow-sm" 
-                                : "text-secondary/80 hover:bg-secondary-container/20 hover:text-primary"
+                                ? "bg-secondary-container text-primary font-black shadow-xs" 
+                                : "text-secondary hover:bg-secondary-container/20 hover:text-primary font-bold"
                             );
 
                             if (item.external) {
@@ -339,8 +371,8 @@ export default function Layout() {
                                   rel="noopener noreferrer"
                                   className={linkClasses}
                                 >
-                                  <ItemIcon size={18} />
-                                  <span className="text-[13px]">{item.name}</span>
+                                  <ItemIcon size={16} className="shrink-0" />
+                                  <span className="truncate">{item.name}</span>
                                 </a>
                               );
                             }
@@ -349,11 +381,15 @@ export default function Layout() {
                               <Link
                                 key={item.path}
                                 to={item.path}
-                                onClick={() => setIsSidebarOpen(false)}
+                                onClick={() => {
+                                  if (window.innerWidth < 1024) {
+                                    setIsSidebarOpen(false);
+                                  }
+                                }}
                                 className={linkClasses}
                               >
-                                <ItemIcon size={18} className={cn(isActive && "text-primary")} />
-                                <span className="text-[13px]">{item.name}</span>
+                                <ItemIcon size={16} className={cn("shrink-0", isActive && "text-primary")} />
+                                <span className="truncate">{item.name}</span>
                               </Link>
                             );
                           })}
@@ -362,24 +398,32 @@ export default function Layout() {
                     </AnimatePresence>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center py-2">
+                  <div className="flex flex-col items-center py-1 relative group/collapsed">
                     <button
                       onClick={() => {
-                        if (!isSidebarOpen) {
-                          setIsSidebarOpen(true);
-                          setExpandedGroups([group.title]);
-                        }
+                        setIsSidebarOpen(true);
+                        setExpandedGroups([group.title]);
                       }}
                       title={group.title}
+                      aria-label={group.title}
                       className={cn(
-                        "p-3 rounded-xl transition-all duration-200 hover:scale-110",
-                        expandedGroups.includes(group.title)
-                          ? "bg-primary text-on-primary shadow-lg" 
-                          : "text-secondary bg-surface hover:bg-secondary-container/30 shadow-sm"
+                        "w-12 h-12 flex items-center justify-center rounded-2xl transition-all duration-200 relative",
+                        hasActiveItem
+                          ? "bg-primary text-on-primary shadow-sm"
+                          : expandedGroups.includes(group.title)
+                          ? "bg-secondary-container text-primary shadow-xs" 
+                          : "text-secondary hover:bg-secondary-container/30 hover:text-primary"
                       )}
                     >
-                      <GroupIcon size={24} />
+                      <GroupIcon size={22} />
+                      {hasActiveItem && (
+                        <span className="absolute top-1 end-1 w-2.5 h-2.5 bg-error rounded-full ring-2 ring-surface-container-low" />
+                      )}
                     </button>
+                    {/* Tooltip on hover for collapsed state */}
+                    <div className="absolute start-full top-1/2 -translate-y-1/2 ms-3 px-3 py-1.5 bg-surface-container-highest text-primary text-xs font-bold rounded-xl shadow-xl border border-outline-variant/30 whitespace-nowrap opacity-0 pointer-events-none group-hover/collapsed:opacity-100 group-hover/collapsed:pointer-events-auto transition-all z-50">
+                      {group.title}
+                    </div>
                   </div>
                 )}
               </div>
@@ -387,13 +431,18 @@ export default function Layout() {
           })}
         </nav>
 
-        <div className="p-4">
+        <div className={cn("transition-all border-t border-outline-variant/10", isSidebarOpen ? "p-4" : "p-2 flex justify-center")}>
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center gap-4 text-error py-3 px-4 hover:bg-error/10 transition-all rounded-full"
+            title={t('header.logout', 'تسجيل الخروج')}
+            aria-label={t('header.logout', 'تسجيل الخروج')}
+            className={cn(
+              "flex items-center text-error hover:bg-error/10 transition-all rounded-2xl",
+              isSidebarOpen ? "w-full gap-3 py-2.5 px-3.5 justify-start" : "w-12 h-12 justify-center"
+            )}
           >
-            <LogOut size={22} />
-            {isSidebarOpen && <span className="font-medium text-sm">{t('header.logout', 'تسجيل الخروج')}</span>}
+            <LogOut size={20} className="shrink-0" />
+            {isSidebarOpen && <span className="font-bold text-xs truncate">{t('header.logout', 'تسجيل الخروج')}</span>}
           </button>
         </div>
       </aside>
@@ -469,7 +518,9 @@ export default function Layout() {
               <NotificationCenter />
               <button 
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/10 hover:border-primary/30 transition-all active:scale-95 ms-2"
+                aria-expanded={isProfileMenuOpen}
+                aria-label="قائمة الملف الشخصي"
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary/50 transition-all active:scale-95 ms-1 shrink-0"
               >
                 <img 
                   className="w-full h-full object-cover antialiased" 
@@ -486,7 +537,7 @@ export default function Layout() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute start-0 top-full mt-2 w-56 bg-surface-container-highest rounded-2xl shadow-xl border border-outline-variant p-2 z-50"
+                    className="absolute end-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/40 p-2 z-50 text-start"
                   >
                     <div className="px-4 py-3 border-b border-outline-variant/50 mb-2">
                       <p className="text-sm font-bold text-primary truncate">{auth.currentUser?.displayName || 'مستخدم'}</p>
@@ -500,6 +551,17 @@ export default function Layout() {
                       )}
                     </div>
                     
+                    {isAdmin && (
+                      <Link 
+                        to={ROUTES.ADMIN} 
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2 text-sm text-emerald-800 font-bold hover:bg-emerald-50 rounded-xl transition-colors mb-1"
+                      >
+                        <ShieldCheck size={18} className="text-emerald-600" />
+                        <span>لوحة الإدارة المركزية</span>
+                      </Link>
+                    )}
+
                     <Link 
                       to={ROUTES.SETTINGS} 
                       onClick={() => setIsProfileMenuOpen(false)}

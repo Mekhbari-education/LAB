@@ -389,7 +389,7 @@ export default function DailyReport() {
                       <td className="border-2 border-primary/20 p-2 relative group/activity">
                         <div className="flex flex-col gap-2">
                           <select 
-                            className="w-full border-none bg-surface-container-low/30 text-right text-sm font-bold outline-none focus:bg-surface-container-low/50 rounded-lg py-2 px-3 transition-all appearance-none"
+                            className="w-full border-none bg-surface-container-low/30 text-start text-sm font-bold outline-none focus:bg-surface-container-low/50 rounded-lg py-2 px-3 transition-all appearance-none"
                             value={row.activityType}
                             onChange={(e) => updateRow(row.id, 'activityType', e.target.value)}
                           >
@@ -401,14 +401,14 @@ export default function DailyReport() {
                           </select>
                           <input 
                             type="text"
-                            className="w-full border-none bg-transparent text-right text-sm font-bold outline-none focus:bg-surface-container-low/50 rounded-lg py-2 px-3 transition-all"
+                            className="w-full border-none bg-transparent text-start text-sm font-bold outline-none focus:bg-surface-container-low/50 rounded-lg py-2 px-3 transition-all"
                             placeholder="عنوان النشاط..."
                             value={row.activityTitle}
                             onChange={(e) => updateRow(row.id, 'activityTitle', e.target.value)}
                           />
                         </div>
                         <button 
-                          className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-primary/10 text-primary rounded-lg opacity-0 group-hover/activity:opacity-100 transition-all hover:bg-primary hover:text-on-primary no-print"
+                          className="absolute end-2 top-1/2 -translate-y-1/2 p-2 bg-primary/10 text-primary rounded-lg opacity-0 group-hover/activity:opacity-100 transition-all hover:bg-primary hover:text-on-primary no-print"
                           title="وصف النشاط"
                         >
                           <BookOpen size={14} />
@@ -419,7 +419,7 @@ export default function DailyReport() {
                           <div 
                             onClick={() => setResourcePickerState({ isOpen: true, rowId: row.id })}
                             className={cn(
-                              "w-full min-h-[60px] bg-surface-container-low/30 rounded-xl p-3 text-right text-sm font-bold cursor-pointer hover:bg-surface-container-low/50 transition-all border-2 border-transparent",
+                              "w-full min-h-[60px] bg-surface-container-low/30 rounded-xl p-3 text-start text-sm font-bold cursor-pointer hover:bg-surface-container-low/50 transition-all border-2 border-transparent",
                               !row.equipment && "flex items-center justify-center italic text-on-surface/30"
                             )}
                           >

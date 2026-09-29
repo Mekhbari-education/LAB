@@ -129,8 +129,8 @@ export default function Breadcrumbs() {
   }
 
   return (
-    <nav className="flex mb-6 no-print rtl" dir="rtl" aria-label="Breadcrumb">
-      <ol className="flex items-center flex-wrap gap-2">
+    <nav className="flex mb-6 no-print" aria-label="Breadcrumb">
+      <ol className="flex items-center flex-wrap gap-2 text-start">
         <li className="flex items-center">
           <Link 
             to={ROUTES.HOME} 
@@ -148,7 +148,7 @@ export default function Breadcrumbs() {
 
           return (
             <li key={name} className="flex items-center">
-              <ChevronLeft size={14} className="text-outline/30 mx-1 flex-shrink-0" />
+              <ChevronLeft size={14} className="text-outline/30 mx-1 flex-shrink-0 rtl:rotate-0 ltr:rotate-180" />
               {isLast ? (
                 <span className="text-primary font-black text-xs">
                   {displayName}

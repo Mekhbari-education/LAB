@@ -16,7 +16,7 @@ export default function ChemicalWaste({ isNested = false }: { isNested?: boolean
       {/* Header */}
       {!isNested && (
         <header className="relative flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-4">
-          <div className="text-right space-y-3 relative z-10">
+          <div className="text-start space-y-3 relative z-10">
             <div className="inline-flex items-center gap-3 px-4 py-2 bg-error/10 rounded-full text-error text-xs font-black uppercase tracking-widest mb-2">
               <Trash2 size={14} />
               إدارة النفايات الكيميائية

@@ -213,7 +213,7 @@ export default function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                           <h4 className="font-black text-primary">{result.title}</h4>
                           <p className="text-xs text-secondary font-bold">{result.subtitle}</p>
                         </div>
-                        <ArrowRight size={18} className="text-outline opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                        <ArrowRight size={18} className="text-outline opacity-0 group-hover:opacity-100 transition-all rtl:rotate-180 -translate-x-2 group-hover:translate-x-0 rtl:translate-x-2 rtl:group-hover:translate-x-0" />
                       </Link>
                     );
                   })}

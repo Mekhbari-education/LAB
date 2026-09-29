@@ -238,9 +238,9 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
         {/* Table Actions (Screen Only) */}
         <div className="p-8 border-b border-outline/5 flex flex-col md:flex-row justify-between items-center gap-6 bg-surface-container-low/30 print:hidden">
           <div className="relative w-full md:w-96">
-            <Search className="absolute right-5 top-1/2 -translate-y-1/2 text-primary/40" size={20} />
+            <Search className="absolute start-5 top-1/2 -translate-y-1/2 text-primary/40" size={20} />
             <input 
-              className="w-full bg-surface border-2 border-outline/5 rounded-full pr-14 pl-6 py-3 text-sm font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all"
+              className="w-full bg-surface border-2 border-outline/5 rounded-full ps-14 pe-6 py-3 text-sm font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all text-start"
               placeholder="بحث بالاسم أو النوع..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -262,7 +262,7 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-right border-collapse">
+          <table className="w-full text-start border-collapse">
             <thead>
               <tr className="bg-surface-container-low/50 text-on-surface/40 text-[10px] font-black uppercase tracking-[0.2em]">
                 <th className="px-6 py-4 text-center">رقم</th>

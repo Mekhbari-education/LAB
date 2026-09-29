@@ -137,7 +137,7 @@ export default function App() {
               <OfflineBanner />
               <PrintPreviewModal />
             {user && connectionError && (
-              <div className="fixed bottom-4 right-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm">
+              <div className="fixed bottom-4 end-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm w-[calc(100vw-2rem)]">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black">{connectionError}</span>
                   <button onClick={() => setConnectionError(null)} className="opacity-50 hover:opacity-100">✕</button>
@@ -216,6 +216,7 @@ export default function App() {
                 <Route path={ROUTES.DAILY_REPORT.substring(1)} element={<DailyReport />} />
                 <Route path={ROUTES.PROFESSIONAL_EXAMS.substring(1)} element={<ProfessionalExams />} />
                 <Route path={ROUTES.SETTINGS.substring(1)} element={<Settings />} />
+                <Route path={ROUTES.ADMIN.substring(1)} element={<AdminDashboard />} />
                 <Route path={ROUTES.DESIGN_SYSTEM.substring(1)} element={<DesignSystem />} />
                 <Route path={ROUTES.DIAGNOSTIC.substring(1)} element={<Diagnostic />} />
                 {/* Catch-all 404 route for authenticated users */}
