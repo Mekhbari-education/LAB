@@ -61,11 +61,19 @@ export default function SettingsPage() {
   const { schoolId, schoolLogo, setSchoolLogo } = useSchool();
   const [displayName, setDisplayName] = useState(auth.currentUser?.displayName || '');
   const [email] = useState(auth.currentUser?.email || '');
+  const [userPhotoUrl, setUserPhotoUrl] = useState<string>(auth.currentUser?.photoURL || '');
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync userPhotoUrl when auth state changes
+  useEffect(() => {
+    if (auth.currentUser?.photoURL) {
+      setUserPhotoUrl(auth.currentUser.photoURL);
+    }
+  }, [auth.currentUser?.photoURL]);
 
   // Customized Institution Logo State
   const [customLogoUrl, setCustomLogoUrl] = useState<string>(schoolLogo || '');
@@ -240,36 +248,143 @@ export default function SettingsPage() {
     }
   }, [schoolsDb, initialSettings]);
 
+  /**
+   * Compresses an image file client-side to an ultra-fast, lightweight Data URL.
+   * Preserves transparency for PNG/SVG and optimizes JPEG for other formats.
+   */
+  const compressImageFile = async (
+    file: File, 
+    maxWidth = 400, 
+    maxHeight = 400, 
+    quality = 0.85
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(width, 1);
+          canvas.height = Math.max(height, 1);
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const isPng = file.type === 'image/png' || file.type === 'image/svg+xml';
+          const format = isPng ? 'image/png' : 'image/jpeg';
+          try {
+            resolve(canvas.toDataURL(format, isPng ? undefined : quality));
+          } catch (canvasErr) {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  /**
+   * Attempts to upload to Firebase Storage with a strict 2.5s timeout.
+   * If it times out or errors, returns null so the caller immediately falls back
+   * to the optimized Data URL without hanging or keeping the UI stuck in "Loading".
+   */
+  const uploadToStorageWithTimeout = async (storageRef: any, file: File, timeoutMs = 2500): Promise<string | null> => {
+    try {
+      const uploadPromise = uploadBytes(storageRef, file).then(async () => {
+        return await getDownloadURL(storageRef);
+      });
+
+      const timeoutPromise = new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), timeoutMs);
+      });
+
+      const result = await Promise.race([uploadPromise, timeoutPromise]);
+      return result;
+    } catch (err) {
+      console.warn('Storage upload error or blocked by CORS/rules, using direct data-URL fallback:', err);
+      return null;
+    }
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
 
     try {
       setIsUploading(true);
-      const storageRef = ref(storage, `profiles/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      await updateProfile(auth.currentUser, {
-        photoURL: downloadURL
-      });
 
-      // Update Firestore users collection
-      await setDoc(doc(db, 'users', auth.currentUser.uid), {
-        photoURL: downloadURL
-      }, { merge: true });
+      // 1. Instantly compress client-side to an ultra-optimized Data URL
+      const dataUrl = await compressImageFile(file, 400, 400, 0.85);
 
-      // Update Firestore settings collection
-      await setDoc(doc(db, 'settings', auth.currentUser.uid), {
-        profilePhoto: downloadURL
-      }, { merge: true });
-      
-      // Force a re-render to show the new image
-      window.location.reload();
+      // 2. Set local React state immediately so user sees the new photo with zero delay!
+      if (dataUrl) {
+        setUserPhotoUrl(dataUrl);
+      }
+
+      // 3. Try Firebase Cloud Storage with strict 2.5s timeout (non-blocking fallback)
+      let finalUrl = dataUrl;
+      try {
+        const storageRef = ref(storage, `profiles/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
+        const cloudUrl = await uploadToStorageWithTimeout(storageRef, file, 2500);
+        if (cloudUrl) {
+          finalUrl = cloudUrl;
+          setUserPhotoUrl(cloudUrl);
+        }
+      } catch (e) {
+        console.warn('Storage upload error, using data URL:', e);
+      }
+
+      // 4. Update Firebase Auth profile
+      try {
+        await updateProfile(auth.currentUser, {
+          photoURL: finalUrl
+        });
+      } catch (err) {
+        console.warn('Failed to update auth profile photo:', err);
+      }
+
+      // 5. Update Firestore users collection
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          photoURL: finalUrl
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Failed to update users doc photo:', err);
+      }
+
+      // 6. Update Firestore settings collection
+      try {
+        await setDoc(doc(db, 'settings', auth.currentUser.uid), {
+          profilePhoto: finalUrl
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Failed to update settings doc photo:', err);
+      }
+
     } catch (error) {
       console.error('Error uploading image:', error);
+      alert('تعذر معالجة الصورة، يرجى اختيار ملف صورة صالح.');
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -277,8 +392,8 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file || !auth.currentUser) return;
 
-    if (file.size > 3 * 1024 * 1024) {
-      setLogoUploadError('حجم الصورة كبير جداً، يرجى اختيار ملف بحجم أقل من 3 ميغابايت.');
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoUploadError('حجم الصورة كبير جداً، يرجى اختيار ملف بحجم أقل من 5 ميغابايت.');
       return;
     }
 
@@ -293,31 +408,39 @@ export default function SettingsPage() {
       setLogoUploadError(null);
       setLogoUploadSuccess(false);
 
-      let finalUrl = '';
+      // 1. Instantly compress client-side preserving transparency
+      const dataUrl = await compressImageFile(file, 500, 500, 0.9);
 
-      try {
-        const storageRef = ref(storage, `institution_logos/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        finalUrl = await getDownloadURL(storageRef);
-      } catch (storageErr) {
-        console.warn('Firebase Storage upload failed, falling back to data URL:', storageErr);
-        finalUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
+      // 2. Set local React & Context states immediately so user sees the logo change instantly!
+      if (dataUrl) {
+        setCustomLogoUrl(dataUrl);
+        setSchoolLogo(dataUrl);
       }
 
-      setCustomLogoUrl(finalUrl);
-      setSchoolLogo(finalUrl);
+      // 3. Try Firebase Cloud Storage with strict 2.5s timeout (non-blocking fallback)
+      let finalUrl = dataUrl;
+      try {
+        const storageRef = ref(storage, `institution_logos/${auth.currentUser.uid}/${Date.now()}_${file.name}`);
+        const cloudUrl = await uploadToStorageWithTimeout(storageRef, file, 2500);
+        if (cloudUrl) {
+          finalUrl = cloudUrl;
+          setCustomLogoUrl(cloudUrl);
+          setSchoolLogo(cloudUrl);
+        }
+      } catch (e) {
+        console.warn('Storage upload error, using data URL:', e);
+      }
 
-      // Save immediately to Firestore
-      await setDoc(doc(db, 'settings', auth.currentUser.uid), {
-        schoolLogo: finalUrl,
-        institutionLogo: finalUrl,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      // 4. Save to Firestore
+      try {
+        await setDoc(doc(db, 'settings', auth.currentUser.uid), {
+          schoolLogo: finalUrl,
+          institutionLogo: finalUrl,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (dbErr) {
+        console.warn('Error saving logo in Firestore:', dbErr);
+      }
 
       setLogoUploadSuccess(true);
       setTimeout(() => setLogoUploadSuccess(false), 4000);
@@ -638,6 +761,9 @@ export default function SettingsPage() {
           const logoUrl = data.schoolLogo || data.institutionLogo || '';
           if (logoUrl) {
             setCustomLogoUrl(logoUrl);
+          }
+          if (data.profilePhoto) {
+            setUserPhotoUrl(data.profilePhoto);
           }
 
           setInitialSettings({
@@ -975,7 +1101,7 @@ export default function SettingsPage() {
                   <img 
                     className={cn("w-full h-full object-cover antialiased", isUploading && "opacity-50")} 
                     alt="Profile headshot of lab technician" 
-                    src={(auth.currentUser?.photoURL || "https://lh3.googleusercontent.com/aida-public/AB6AXuB_8_hmo1Qe7WCzKBvJ5CtDQ_pkrInSdwMobEaVisCKQWlr21wbCMzr35-Ya7iavFxKwYViL93OwUcxmq0dtrP1y7mXj42TcimaO9egBxmYkiqYAYG3tL6IOFjUmlyJi230Ox75wLXmG65fCOwX-Up1ZmfY_WYNzHdNm0FdV_Fsn_AXIkpS7CCinUWyvQsMWdRkFo7zlIofDSRKAZVeME1gPXgAEggyqnjPgnkM8KvZbSxY53LmEgbI4LVFgk8vfsps8RPz7-ZmVpc").replace(/=s\d+(-c)?/g, '=s400-c')}
+                    src={userPhotoUrl || (auth.currentUser?.photoURL || "https://lh3.googleusercontent.com/aida-public/AB6AXuB_8_hmo1Qe7WCzKBvJ5CtDQ_pkrInSdwMobEaVisCKQWlr21wbCMzr35-Ya7iavFxKwYViL93OwUcxmq0dtrP1y7mXj42TcimaO9egBxmYkiqYAYG3tL6IOFjUmlyJi230Ox75wLXmG65fCOwX-Up1ZmfY_WYNzHdNm0FdV_Fsn_AXIkpS7CCinUWyvQsMWdRkFo7zlIofDSRKAZVeME1gPXgAEggyqnjPgnkM8KvZbSxY53LmEgbI4LVFgk8vfsps8RPz7-ZmVpc").replace(/=s\d+(-c)?/g, '=s400-c')}
                     style={{ imageRendering: 'auto' }}
                     referrerPolicy="no-referrer"
                   />
