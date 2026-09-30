@@ -69,6 +69,8 @@ const LabCalculators = React.lazy(() => import('./pages/LabCalculators'));
 import { SchoolProvider } from './context/SchoolContext';
 import { PrintSettingsProvider } from './context/PrintSettingsContext';
 import PrintPreviewModal from './components/PrintPreviewModal';
+import { PdfPreviewProvider } from './context/PdfPreviewContext';
+import PdfReviewModal from './components/PdfReviewModal';
 const Diagnostic = React.lazy(() => import('./pages/Diagnostic'));
 const DesignSystem = React.lazy(() => import('./pages/DesignSystem'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
@@ -133,9 +135,11 @@ export default function App() {
         <ThemeProvider>
           <SchoolProvider>
             <PrintSettingsProvider>
-              <Router>
-              <OfflineBanner />
-              <PrintPreviewModal />
+              <PdfPreviewProvider>
+                <Router>
+                <OfflineBanner />
+                <PrintPreviewModal />
+                <PdfReviewModal />
             {user && connectionError && (
               <div className="fixed bottom-4 end-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm w-[calc(100vw-2rem)]">
                 <div className="flex items-center justify-between">
@@ -251,6 +255,7 @@ export default function App() {
           </Suspense>
             </ErrorBoundary>
           </Router>
+              </PdfPreviewProvider>
         </PrintSettingsProvider>
         </SchoolProvider>
         </ThemeProvider>

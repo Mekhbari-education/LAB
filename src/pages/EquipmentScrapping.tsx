@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../context/SchoolContext';
 import { onSnapshot, query, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
+import { saveFileWithResilientFallback } from '../lib/fileStorage';
 import { Helmet } from 'react-helmet-async';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { 
@@ -36,6 +36,7 @@ import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import { Equipment } from '../types/equipment';
 import { createEquipmentScrapping, EquipmentScrappingRecord } from '../lib/api/equipmentScrapping';
+import { usePdfPreview } from '../context/PdfPreviewContext';
 
 interface ScrapItem {
   id: string;
@@ -68,10 +69,32 @@ type Tab = 'list' | 'pv' | 'proposal' | 'attachments';
 
 export default function EquipmentScrapping() {
   const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { openPdfPreview } = usePdfPreview();
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [previewDoc, setPreviewDoc] = useState<AttachmentDoc | null>(null);
+
+  const handleOpenDocPreview = (doc: AttachmentDoc) => {
+    if (doc.file) {
+      openPdfPreview({
+        file: doc.file,
+        title: doc.name,
+        fileName: doc.file.name,
+        fileSize: doc.file.size,
+        fileType: doc.type,
+        category: 'محضر إسقاط'
+      });
+    } else if (doc.data) {
+      openPdfPreview({
+        url: doc.data,
+        title: doc.name,
+        fileName: `${doc.name}.pdf`,
+        fileType: doc.type,
+        category: 'محضر إسقاط'
+      });
+    }
+  };
 
   // Lists for autocomplete
   const [equipmentList, setEquipmentList] = useState<any[]>([]);
@@ -179,13 +202,15 @@ export default function EquipmentScrapping() {
     try {
       const finalAttachments = { ...attachments };
       const uploadPromises = Object.entries(attachments).map(async ([key, doc]) => {
-        if (doc.file && auth.currentUser) {
-          const fileRef = ref(storage, `users/${auth.currentUser.uid}/scrapping/${Date.now()}_${doc.file.name}`);
-          await uploadBytes(fileRef, doc.file);
-          const downloadUrl = await getDownloadURL(fileRef);
+        if (doc.file) {
+          const stored = await saveFileWithResilientFallback(
+            doc.file, 
+            `users/${auth.currentUser?.uid || 'user'}/scrapping`, 
+            2500
+          );
           finalAttachments[key] = {
             name: doc.name,
-            data: downloadUrl,
+            data: stored.fileUrl,
             type: doc.file.type
           };
         }
@@ -541,8 +566,8 @@ export default function EquipmentScrapping() {
                            </label>
                          ) : (
                            <>
-                              <button onClick={() => setPreviewDoc(doc)} className="flex-1 py-4 bg-primary text-on-primary rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
-                                 <Eye size={18}/> عرض
+                              <button onClick={() => handleOpenDocPreview(doc)} className="flex-1 py-4 bg-primary text-on-primary rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg shadow-primary/20">
+                                 <Eye size={18}/> معاينة ومراجعة
                               </button>
                               <button title="مسح المرفق" aria-label="مسح المرفق" onClick={() => removeAttachment(key)} className="p-4 bg-error/10 text-error rounded-2xl hover:bg-error/20 transition-all">
                                  <Trash2 size={18}/>
@@ -587,32 +612,6 @@ export default function EquipmentScrapping() {
       </div>
 
       <AnimatePresence>
-        {previewDoc && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[200] bg-on-surface/60 backdrop-blur-xl flex items-center justify-center p-8">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-surface w-full max-w-5xl h-[85vh] rounded-[48px] shadow-2xl flex flex-col relative overflow-hidden">
-               <div className="p-8 border-b-2 border-primary/10 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                     <div className="p-4 bg-primary/10 text-primary rounded-2xl"><FileCheck size={24}/></div>
-                     <h2 className="text-2xl font-black text-primary">{previewDoc.name}</h2>
-                  </div>
-                  <button title="إغلاق التلميح" aria-label="إغلاق التلميح" onClick={() => setPreviewDoc(null)} className="p-4 bg-surface-container-high rounded-full hover:bg-error/10 hover:text-error transition-all"><X size={24}/></button>
-               </div>
-               
-               <div className="flex-grow p-4 bg-surface-container-low/30 overflow-auto flex items-center justify-center">
-                  {previewDoc.type.includes('pdf') ? (
-                    <iframe src={previewDoc.data!} className="w-full h-full rounded-2xl" title="document-preview" />
-                  ) : (
-                    <img src={previewDoc.data!} alt="document-preview" className="max-w-full max-h-full object-contain rounded-2xl shadow-xl" />
-                  )}
-               </div>
-               
-               <div className="p-8 border-t-2 border-primary/10 bg-surface-container-low/30 text-center">
-                  <p className="text-sm font-black text-on-surface/40 uppercase tracking-widest leading-none">معاينة نظامية — الأرشيف الرقمي للمخبر</p>
-               </div>
-            </motion.div>
-          </motion.div>
-        )}
-
         {notification && (
           <motion.div initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 50 }} className={cn("fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] px-10 py-5 rounded-[32px] shadow-2xl flex items-center gap-4 font-black transition-all", notification.type === 'success' ? "bg-primary text-on-primary" : "bg-error text-white")}>
             {notification.type === 'success' ? <RefreshCw className="animate-spin" size={24} /> : <AlertTriangle size={24} />}

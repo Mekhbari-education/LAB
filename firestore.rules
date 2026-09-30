@@ -88,6 +88,15 @@ service cloud.firestore {
       allow read: if isSignedIn();
     }
 
+    // Public National Legislation (Shared official decrees, circulars and laws across all schools)
+    match /public_legislation/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    match /public_legislation {
+      allow list: if isSignedIn();
+    }
+
     // Global Collections
     match /support_tickets/{id} {
       allow create: if isSignedIn();

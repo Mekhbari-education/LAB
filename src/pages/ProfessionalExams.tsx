@@ -1,14 +1,55 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, Award, Calendar, FileText, Bell, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Award, Calendar, FileText, Bell, ChevronDown, Eye } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
 
 export default function ProfessionalExams() {
   const navigate = useNavigate();
+  const { openPdfPreview } = usePdfPreview();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
+  const [loadingPdfId, setLoadingPdfId] = useState<number | null>(null);
+
+  const handlePreviewReference = async (refItem: typeof referencesList[0]) => {
+    try {
+      setLoadingPdfId(refItem.id);
+      const doc = await PDFService.exportLabReportPDF({
+        title: refItem.title,
+        subtitle: 'الأرضية الرقمية للمخابر — مراجع ودلائل الامتحانات المهنية',
+        headers: ['المحور / الموضوع', 'التفاصيل التوجيهية', 'الأهمية'],
+        rows: [
+          ['علوم التربية والبيداغوجيا', 'الأسس النظرية للتعليمية والتقويم المخبري والتعلم النشط والتجارب البيداغوجية.', 'إلزامي'],
+          ['التشريع والتنظيم التربوي', 'القوانين الأساسية المنظمة لموظفي قطاع التربية الوطنية ومخابر التعليم.', 'أساسي'],
+          ['الأمن والسلامة المخبرية', 'إجراءات الوقاية، التخزين الكيميائي الآمن، وبروتوكولات الطوارئ والنفايات الخطرة.', 'هام جداً'],
+          ['الثقافة العامة ومنهجية التحرير', 'خطوات إعداد مقال تحليلي ومناقشة الإشكاليات المعاصرة وفق المنهجية الرسمية.', 'شامل']
+        ],
+        summaryCards: [
+          { label: 'نوع الوثيقة', value: refItem.type },
+          { label: 'حجم الملف التقديري', value: refItem.size },
+          { label: 'سنة الدورة', value: '2026' }
+        ],
+        notes: refItem.desc,
+        save: false
+      });
+      const blob = doc.output('blob');
+      openPdfPreview({
+        file: blob,
+        title: refItem.title,
+        fileName: `${refItem.title}.pdf`,
+        category: 'امتحانات مهنية',
+        fileSize: refItem.size,
+        description: refItem.desc
+      });
+    } catch (e) {
+      console.error('Error generating preview PDF:', e);
+    } finally {
+      setLoadingPdfId(null);
+    }
+  };
 
   const examResources = [
     {
@@ -217,9 +258,8 @@ export default function ProfessionalExams() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {referencesList.map((ref, i) => (
-                <motion.a
+                <motion.div
                   key={ref.id}
-                  href="#"
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: i * 0.05 }}
@@ -238,12 +278,21 @@ export default function ProfessionalExams() {
                     <span className="text-xs font-bold px-2.5 py-1 bg-surface-container-highest rounded-lg text-on-surface-variant">
                       {ref.type} • {ref.size}
                     </span>
-                    <span className="text-primary text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">
-                      تحميل
-                      <ArrowLeft size={16} />
-                    </span>
+                    <button
+                      type="button"
+                      disabled={loadingPdfId === ref.id}
+                      onClick={() => handlePreviewReference(ref)}
+                      className="px-4 py-2 bg-primary/10 hover:bg-primary hover:text-white text-primary rounded-xl text-sm font-black flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
+                    >
+                      {loadingPdfId === ref.id ? (
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                      معاينة ومراجعة
+                    </button>
                   </div>
-                </motion.a>
+                </motion.div>
               ))}
             </div>
           </motion.div>

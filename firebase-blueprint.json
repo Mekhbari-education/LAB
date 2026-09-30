@@ -99,6 +99,23 @@
         "details": { "type": "string" },
         "timestamp": { "type": "object" }
       }
+    },
+    "legislation": {
+      "title": "Legislation Entity",
+      "description": "School legislation documents, circulars, decrees, and laws.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "reference": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "storageType": { "type": "string" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["title", "category"]
     }
   },
   "firestore": {
@@ -109,6 +126,10 @@
     "schools/{userId}/equipment": {
       "schema": "equipment",
       "description": "User-isolated equipment inventory."
+    },
+    "schools/{userId}/legislation": {
+      "schema": "legislation",
+      "description": "User-isolated school legislation documents."
     },
     "schools/{userId}/teachers": {
       "schema": "teacher",

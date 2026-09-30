@@ -12,9 +12,11 @@ import {
   RotateCcw,
   Palette,
   Layout,
-  PenTool
+  PenTool,
+  Eye
 } from 'lucide-react';
 import { usePrintSettings } from '../context/PrintSettingsContext';
+import { usePdfPreview } from '../context/PdfPreviewContext';
 import { PrintService } from '../services/printService';
 import { PDFService } from '../services/pdfService';
 import { PrintOrientation, PrintColorMode, PrintMargins, PrintScale } from '../types/printSettings';
@@ -28,6 +30,7 @@ export default function PrintPreviewModal() {
     previewData, 
     settings: globalSettings 
   } = usePrintSettings();
+  const { openPdfPreview } = usePdfPreview();
 
   // Local overrides for this specific print job
   const [localOrientation, setLocalOrientation] = useState<PrintOrientation | null>(null);
@@ -38,6 +41,7 @@ export default function PrintPreviewModal() {
   const [localShowSignatures, setLocalShowSignatures] = useState<boolean | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isReviewingPdf, setIsReviewingPdf] = useState(false);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState(true);
 
   if (!isPreviewOpen || !previewData) {
@@ -137,6 +141,44 @@ export default function PrintPreviewModal() {
     }
   };
 
+  const handleReviewPdf = async () => {
+    setIsReviewingPdf(true);
+    try {
+      const doc = await PDFService.exportLabReportPDF({
+        title: previewData.title,
+        subtitle: previewData.subtitle,
+        schoolInfo: {
+          country: inst.country,
+          ministry: inst.ministry,
+          directorate: inst.directorate,
+          school: inst.school,
+          commune: inst.commune,
+          laboratory: inst.laboratory,
+          academicYear: inst.academicYear
+        },
+        headers: previewData.headers || [],
+        rows: previewData.rows || [],
+        fileName: `${previewData.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+        orientation: orientation === 'landscape' ? 'l' : 'p',
+        summaryCards: previewData.summaryCards || [],
+        showSignatures,
+        notes: previewData.notes,
+        save: false
+      });
+      const blob = doc.output('blob');
+      openPdfPreview({
+        file: blob,
+        title: previewData.title,
+        fileName: `${previewData.title.replace(/\s+/g, '_')}.pdf`,
+        category: 'تقرير مخبري'
+      });
+    } catch (e) {
+      console.error('PDF review error:', e);
+    } finally {
+      setIsReviewingPdf(false);
+    }
+  };
+
   const handleResetOverrides = () => {
     setLocalOrientation(null);
     setLocalColorMode(null);
@@ -180,6 +222,16 @@ export default function PrintPreviewModal() {
               >
                 <Sliders size={18} />
                 <span className="hidden sm:inline">خيارات الطباعة</span>
+              </button>
+
+              <button
+                onClick={handleReviewPdf}
+                disabled={isReviewingPdf}
+                className="px-4 py-2.5 bg-tertiary/15 text-tertiary border border-tertiary/30 rounded-xl font-bold hover:bg-tertiary hover:text-white transition-all flex items-center gap-2 text-sm shadow-sm disabled:opacity-50"
+                title="معاينة ومراجعة ملف PDF بملء الشاشة مع خيارات التكبير والتدوير"
+              >
+                <Eye size={18} />
+                <span className="hidden md:inline">{isReviewingPdf ? 'جاري التجهيز...' : 'معاينة PDF تفاعلية'}</span>
               </button>
 
               <button

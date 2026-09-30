@@ -17,7 +17,10 @@ import {
   X,
   ExternalLink,
   ChevronRight,
-  Info
+  Info,
+  Eye,
+  UploadCloud,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +28,8 @@ import { ROUTES } from '../config/routes';
 import { db, getUserCollection, handleFirestoreError, OperationType } from '../firebase';
 import { onSnapshot, query, addDoc, serverTimestamp, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { cn } from '../lib/utils';
+import { usePdfPreview } from '../context/PdfPreviewContext';
+import { saveFileWithResilientFallback, openOrDownloadFile } from '../lib/fileStorage';
 
 
 interface UserDoc {
@@ -67,10 +72,13 @@ const QUICK_LINKS = [
 export default function DocumentLibrary() {
   const { schoolId } = useSchool();
   const navigate = useNavigate();
+  const { openPdfPreview } = usePdfPreview();
   const [userDocs, setUserDocs] = useState<UserDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [newDoc, setNewDoc] = useState<Partial<UserDoc>>({
     title: '',
     category: 'أخرى',
@@ -96,14 +104,35 @@ export default function DocumentLibrary() {
   const handleAddDoc = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      setIsSaving(true);
+      let finalFileUrl = newDoc.fileUrl || '';
+      let finalFileName = newDoc.fileName || '';
+      let finalStorageType = 'external';
+
+      if (selectedFile) {
+        const saved = await saveFileWithResilientFallback(
+          selectedFile,
+          `user_documents/${Date.now()}_${selectedFile.name}`
+        );
+        finalFileUrl = saved.fileUrl;
+        finalFileName = saved.fileName;
+        finalStorageType = saved.storageType;
+      }
+
       await addDoc(getUserCollection(schoolId, 'user_documents'), {
         ...newDoc,
+        fileUrl: finalFileUrl,
+        fileName: finalFileName,
+        storageType: finalStorageType,
         date: serverTimestamp(),
       });
       setIsModalOpen(false);
+      setSelectedFile(null);
       setNewDoc({ title: '', category: 'أخرى', description: '', fileUrl: '', fileName: '' });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'user_documents');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -240,15 +269,30 @@ export default function DocumentLibrary() {
                     <span>{doc.date.toLocaleDateString('ar-DZ')}</span>
                   </div>
                   {doc.fileUrl ? (
-                    <a 
-                      href={doc.fileUrl} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="inline-flex items-center gap-2 text-sm font-black text-primary hover:gap-3 transition-all"
-                    >
-                      <Download size={16} />
-                      تحميل
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => openPdfPreview({
+                          url: doc.fileUrl,
+                          title: doc.title,
+                          fileName: doc.fileName || `${doc.title}.pdf`,
+                          category: doc.category,
+                          date: doc.date?.toLocaleDateString ? doc.date.toLocaleDateString('ar-DZ') : undefined,
+                          description: doc.description
+                        })}
+                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary hover:text-white text-primary rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-xs"
+                        title="معاينة ومراجعة ملف PDF"
+                      >
+                        <Eye size={14} />
+                        معاينة
+                      </button>
+                      <button
+                        onClick={() => openOrDownloadFile(doc.fileUrl!, doc.fileName || doc.title)}
+                        className="p-1.5 bg-secondary-container hover:bg-surface-container-highest text-secondary rounded-xl transition-all"
+                        title="تحميل المرفق"
+                      >
+                        <Download size={14} />
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-xs font-black text-secondary/30 italic">رابط فقط</span>
                   )}
@@ -293,7 +337,7 @@ export default function DocumentLibrary() {
                     <input required className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all font-bold mt-2" value={newDoc.title} onChange={e => setNewDoc({...newDoc, title: e.target.value})} placeholder="مثال: دليل استعمال المجهر الضوئي..." />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-black text-secondary/60 uppercase tracking-widest mr-2">التصنيف</label>
                       <select className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all font-bold mt-2 appearance-none" value={newDoc.category} onChange={e => setNewDoc({...newDoc, category: e.target.value})}>
@@ -305,9 +349,51 @@ export default function DocumentLibrary() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">رابط الملف (اختياري)</label>
+                      <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">رابط خارجي (اختياري)</label>
                       <input className="w-full bg-surface-container-low border border-outline/10 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none transition-all font-bold mt-2 text-left" dir="ltr" value={newDoc.fileUrl} onChange={e => setNewDoc({...newDoc, fileUrl: e.target.value})} placeholder="https://..." />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-black text-secondary/60 uppercase tracking-widest ms-1">أو إرفاق ملف مستند (PDF / صور)</label>
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-outline/20 border-dashed rounded-2xl cursor-pointer bg-surface-container-low hover:bg-surface-container transition-all mt-2 group">
+                      <div className="flex items-center gap-3 text-secondary group-hover:text-primary">
+                        <UploadCloud size={24} />
+                        <span className="text-xs font-bold">{selectedFile ? selectedFile.name : 'إضغط لاختيار ملف PDF أو مستند'}</span>
+                      </div>
+                      <input type="file" className="hidden" accept=".pdf,image/*,.doc,.docx" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setSelectedFile(file);
+                      }} />
+                    </label>
+
+                    {selectedFile && (
+                      <div className="flex items-center justify-between text-xs text-primary font-bold mt-2 px-3 py-2 bg-surface-container rounded-xl border border-outline/10">
+                        <span className="flex items-center gap-1.5 truncate max-w-[200px]">
+                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                          <span className="truncate">{selectedFile.name}</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openPdfPreview({
+                              file: selectedFile,
+                              title: newDoc.title || selectedFile.name,
+                              fileName: selectedFile.name,
+                              fileSize: selectedFile.size,
+                              fileType: selectedFile.type,
+                              category: newDoc.category,
+                              description: newDoc.description
+                            })}
+                            className="px-2.5 py-1 bg-tertiary/15 hover:bg-tertiary hover:text-white text-tertiary rounded-lg font-black transition-all flex items-center gap-1"
+                          >
+                            <Eye size={13} />
+                            معاينة ومراجعة
+                          </button>
+                          <button type="button" onClick={() => setSelectedFile(null)} className="text-error hover:underline text-xs">إلغاء</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -316,9 +402,13 @@ export default function DocumentLibrary() {
                   </div>
                 </div>
 
-                <button type="submit" className="w-full bg-primary text-on-primary py-6 rounded-full font-black shadow-2xl shadow-primary/20 hover:bg-primary-container transition-all active:scale-[0.98] flex items-center justify-center gap-3 mt-4">
-                  <Check size={24} />
-                  حفظ في الأرشيف
+                <button 
+                  type="submit" 
+                  disabled={isSaving}
+                  className="w-full bg-primary text-on-primary py-5 rounded-full font-black shadow-2xl shadow-primary/20 hover:bg-primary-container transition-all active:scale-[0.98] flex items-center justify-center gap-3 mt-4 disabled:opacity-50"
+                >
+                  <Check size={20} />
+                  {isSaving ? 'جاري رفع وحفظ الوثيقة...' : 'حفظ في الأرشيف'}
                 </button>
               </form>
             </motion.div>
