@@ -176,6 +176,60 @@ export default function Layout() {
   const { isDarkMode, setIsDarkMode } = useTheme();
   const [userRole, setUserRole] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const [hoveredGroupFlyout, setHoveredGroupFlyout] = useState<{
+    group: (typeof navigationGroups)[0];
+    top: number;
+  } | null>(null);
+  const [hoveredItemTooltip, setHoveredItemTooltip] = useState<{
+    name: string;
+    top: number;
+  } | null>(null);
+  const flyoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleGroupMouseEnter = (group: (typeof navigationGroups)[0], e: React.MouseEvent<HTMLElement>) => {
+    if (!isSidebarOpen) {
+      if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
+      const rect = e.currentTarget.getBoundingClientRect();
+      setHoveredItemTooltip(null);
+      setHoveredGroupFlyout({
+        group,
+        top: Math.max(70, Math.min(window.innerHeight - 240, rect.top + rect.height / 2))
+      });
+    }
+  };
+
+  const handleGroupMouseLeave = () => {
+    if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
+    flyoutTimeoutRef.current = setTimeout(() => {
+      setHoveredGroupFlyout(null);
+    }, 200);
+  };
+
+  const handleFlyoutMouseEnter = () => {
+    if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
+  };
+
+  const handleFlyoutMouseLeave = () => {
+    if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
+    flyoutTimeoutRef.current = setTimeout(() => {
+      setHoveredGroupFlyout(null);
+    }, 150);
+  };
+
+  const handleItemMouseEnter = (name: string, e: React.MouseEvent<HTMLElement>) => {
+    if (!isSidebarOpen) {
+      if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
+      const rect = e.currentTarget.getBoundingClientRect();
+      setHoveredItemTooltip({
+        name,
+        top: rect.top + rect.height / 2
+      });
+    }
+  };
+
+  const handleItemMouseLeave = () => {
+    setHoveredItemTooltip(null);
+  };
 
   const handleLogout = () => signOut(auth);
 
@@ -266,18 +320,18 @@ export default function Layout() {
         className={cn(
           "fixed start-0 top-0 h-full z-40 flex flex-col bg-surface-container-low transition-all duration-300 no-print border-e border-outline-variant/10 shadow-sm",
           isSidebarOpen 
-            ? "translate-x-0 w-72" 
-            : "rtl:translate-x-full ltr:-translate-x-full lg:translate-x-0 lg:w-20"
+            ? "w-72 translate-x-0" 
+            : "rtl:max-md:translate-x-full ltr:max-md:-translate-x-full md:translate-x-0 md:w-20 w-72 md:transform-none"
         )}
       >
         <div className={cn(
-          "flex flex-col items-center gap-2 transition-all relative border-b border-outline-variant/10",
+          "flex flex-col items-center gap-2 transition-all relative border-b border-outline-variant/10 shrink-0",
           isSidebarOpen ? "p-6" : "px-2 py-4"
         )}>
           {isSidebarOpen && (
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden absolute top-4 end-4 p-2 text-secondary hover:text-primary rounded-full hover:bg-secondary-container/40 transition-colors"
+              className="md:hidden absolute top-4 end-4 p-2 text-secondary hover:text-primary rounded-full hover:bg-secondary-container/40 transition-colors"
               aria-label="إغلاق القائمة"
             >
               <X size={20} />
@@ -289,28 +343,27 @@ export default function Layout() {
             alt="Logo" 
           />
           {isSidebarOpen && (
-            <div className="text-center mt-1 px-2">
+            <div className="text-center mt-1 px-2 overflow-hidden">
               <h1 className="text-base sm:text-lg font-black text-primary leading-tight">{t('header.platform_title', 'الأرضية الرقمية — فضاء موظفوا المخابر')}</h1>
               <p className="text-[10px] text-secondary font-bold leading-tight mt-1">{t('header.ministry', 'وزارة التربية الوطنية')}</p>
             </div>
           )}
         </div>
 
-        <nav role="navigation" aria-label="القائمة الرئيسية" className={cn(
-          "flex-1 overflow-y-auto no-scrollbar space-y-3 transition-all",
-          isSidebarOpen ? "px-4 py-4" : "px-2 py-3"
-        )}>
+        <nav 
+          role="navigation" 
+          aria-label="القائمة الرئيسية" 
+          className={cn(
+            "flex-1 overflow-y-auto no-scrollbar transition-all",
+            isSidebarOpen ? "px-4 py-4 space-y-3" : "px-2 py-3 space-y-2 overflow-x-hidden"
+          )}
+        >
           {navigationGroups.map((group) => {
             const isExpanded = expandedGroups.includes(group.title);
             const hasActiveItem = group.items.some(item => !item.external && location.pathname === item.path);
             const GroupIcon = group.icon;
 
             const toggleGroup = () => {
-              if (!isSidebarOpen) {
-                setIsSidebarOpen(true);
-                setExpandedGroups([group.title]);
-                return;
-              }
               setExpandedGroups(prev => 
                 prev.includes(group.title) 
                   ? prev.filter(t => t !== group.title)
@@ -319,7 +372,7 @@ export default function Layout() {
             };
 
             return (
-              <div key={group.title} className="space-y-1">
+              <div key={group.title} className="space-y-1 w-full">
                 {isSidebarOpen ? (
                   <>
                     <button
@@ -382,7 +435,7 @@ export default function Layout() {
                                 key={item.path}
                                 to={item.path}
                                 onClick={() => {
-                                  if (window.innerWidth < 1024) {
+                                  if (window.innerWidth < 768) {
                                     setIsSidebarOpen(false);
                                   }
                                 }}
@@ -398,32 +451,88 @@ export default function Layout() {
                     </AnimatePresence>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center py-1 relative group/collapsed">
+                  <div className="flex flex-col items-center w-full">
+                    {/* Collapsed Category Icon Button */}
                     <button
-                      onClick={() => {
-                        setIsSidebarOpen(true);
-                        setExpandedGroups([group.title]);
-                      }}
+                      onClick={toggleGroup}
+                      onMouseEnter={(e) => handleGroupMouseEnter(group, e)}
+                      onMouseLeave={handleGroupMouseLeave}
                       title={group.title}
                       aria-label={group.title}
                       className={cn(
-                        "w-12 h-12 flex items-center justify-center rounded-2xl transition-all duration-200 relative",
+                        "w-11 h-11 flex items-center justify-center rounded-2xl transition-all duration-200 relative shrink-0",
                         hasActiveItem
                           ? "bg-primary text-on-primary shadow-sm"
-                          : expandedGroups.includes(group.title)
-                          ? "bg-secondary-container text-primary shadow-xs" 
+                          : isExpanded
+                          ? "bg-secondary-container text-primary shadow-xs ring-1 ring-primary/20" 
                           : "text-secondary hover:bg-secondary-container/30 hover:text-primary"
                       )}
                     >
-                      <GroupIcon size={22} />
+                      <GroupIcon size={20} className="shrink-0" />
                       {hasActiveItem && (
                         <span className="absolute top-1 end-1 w-2.5 h-2.5 bg-error rounded-full ring-2 ring-surface-container-low" />
                       )}
                     </button>
-                    {/* Tooltip on hover for collapsed state */}
-                    <div className="absolute start-full top-1/2 -translate-y-1/2 ms-3 px-3 py-1.5 bg-surface-container-highest text-primary text-xs font-bold rounded-xl shadow-xl border border-outline-variant/30 whitespace-nowrap opacity-0 pointer-events-none group-hover/collapsed:opacity-100 group-hover/collapsed:pointer-events-auto transition-all z-50">
-                      {group.title}
-                    </div>
+
+                    {/* Sub-items in collapsed sidebar shown when group is expanded */}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="flex flex-col items-center gap-1.5 py-1.5 my-1 w-full bg-surface-container/50 rounded-2xl border border-outline-variant/15"
+                        >
+                          {group.items.map((item) => {
+                            const isActive = !item.external && location.pathname === item.path;
+                            const ItemIcon = item.icon;
+                            
+                            const collapsedItemClasses = cn(
+                              "w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200 shrink-0 relative",
+                              isActive
+                                ? "bg-primary text-on-primary shadow-xs"
+                                : "text-secondary hover:bg-secondary-container/50 hover:text-primary"
+                            );
+
+                            if (item.external) {
+                              return (
+                                <a
+                                  key={item.path}
+                                  href={item.path}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onMouseEnter={(e) => handleItemMouseEnter(item.name, e)}
+                                  onMouseLeave={handleItemMouseLeave}
+                                  title={item.name}
+                                  aria-label={item.name}
+                                  className={collapsedItemClasses}
+                                >
+                                  <ItemIcon size={15} className="shrink-0" />
+                                </a>
+                              );
+                            }
+
+                            return (
+                              <Link
+                                key={item.path}
+                                to={item.path}
+                                onMouseEnter={(e) => handleItemMouseEnter(item.name, e)}
+                                onMouseLeave={handleItemMouseLeave}
+                                title={item.name}
+                                aria-label={item.name}
+                                className={collapsedItemClasses}
+                              >
+                                <ItemIcon size={15} className={cn("shrink-0", isActive && "text-on-primary")} />
+                                {isActive && (
+                                  <span className="absolute -start-1 top-1/2 -translate-y-1/2 w-1 h-3 bg-primary rounded-full" />
+                                )}
+                              </Link>
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 )}
               </div>
@@ -431,14 +540,14 @@ export default function Layout() {
           })}
         </nav>
 
-        <div className={cn("transition-all border-t border-outline-variant/10", isSidebarOpen ? "p-4" : "p-2 flex justify-center")}>
+        <div className={cn("transition-all border-t border-outline-variant/10 shrink-0", isSidebarOpen ? "p-4" : "p-2 flex justify-center")}>
           <button 
             onClick={handleLogout}
             title={t('header.logout', 'تسجيل الخروج')}
             aria-label={t('header.logout', 'تسجيل الخروج')}
             className={cn(
               "flex items-center text-error hover:bg-error/10 transition-all rounded-2xl",
-              isSidebarOpen ? "w-full gap-3 py-2.5 px-3.5 justify-start" : "w-12 h-12 justify-center"
+              isSidebarOpen ? "w-full gap-3 py-2.5 px-3.5 justify-start" : "w-11 h-11 justify-center shrink-0"
             )}
           >
             <LogOut size={20} className="shrink-0" />
@@ -450,17 +559,18 @@ export default function Layout() {
       {/* Main Content Area */}
       <div className={cn(
         "flex-1 flex flex-col transition-all duration-300 print:ms-0 min-w-0 w-full",
-        isSidebarOpen ? "lg:ms-72" : "lg:ms-20"
+        isSidebarOpen ? "md:ms-72" : "md:ms-20"
       )}>
         {/* TopAppBar */}
         <header className="h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 flex justify-between items-center px-4 md:px-8 no-print">
           <div className="flex items-center gap-2 md:gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-secondary-container/50 rounded-full text-primary"
+              aria-label={isSidebarOpen ? "طي القائمة الجانبية" : "توسيع القائمة الجانبية"}
+              title={isSidebarOpen ? "طي القائمة الجانبية" : "توسيع القائمة الجانبية"}
+              className="p-2 hover:bg-secondary-container/50 rounded-full text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
-              <Menu size={20} className={cn("transition-transform", isSidebarOpen ? "hidden lg:block" : "")} />
-              <X size={20} className={cn("transition-transform", !isSidebarOpen ? "hidden lg:hidden" : "lg:hidden")} />
+              <Menu size={20} className={cn("transition-transform duration-200", isSidebarOpen ? "rotate-90 md:rotate-0" : "")} />
             </button>
             <h2 className="text-base md:text-lg font-bold text-primary truncate max-w-[150px] sm:max-w-none">
               {t('header.app_title', 'نظام تسيير المخابر')}
@@ -603,6 +713,93 @@ export default function Layout() {
       </div>
 
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      
+      {/* Collapsed Sidebar Flyout Menu - Rendered at top level so it is NEVER clipped */}
+      <AnimatePresence>
+        {!isSidebarOpen && hoveredGroupFlyout && (
+          <motion.div
+            initial={{ opacity: 0, x: isRtl ? 12 : -12, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: isRtl ? 12 : -12, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            onMouseEnter={handleFlyoutMouseEnter}
+            onMouseLeave={handleFlyoutMouseLeave}
+            style={{
+              position: 'fixed',
+              top: hoveredGroupFlyout.top,
+              [isRtl ? 'right' : 'left']: '5.25rem',
+              transform: 'translateY(-50%)',
+            }}
+            className="z-50 min-w-[210px] max-w-[280px] bg-surface-container-highest/95 backdrop-blur-md rounded-2xl shadow-2xl border border-outline-variant/30 p-2 text-foreground no-print"
+          >
+            <div className="flex items-center gap-2.5 px-2.5 py-1.5 border-b border-outline-variant/20 mb-1.5">
+              <hoveredGroupFlyout.group.icon size={18} className="text-primary shrink-0" />
+              <span className="text-xs font-black text-primary truncate">
+                {hoveredGroupFlyout.group.title}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1 max-h-[320px] overflow-y-auto no-scrollbar">
+              {hoveredGroupFlyout.group.items.map((item) => {
+                const isActive = !item.external && location.pathname === item.path;
+                const ItemIcon = item.icon;
+                
+                if (item.external) {
+                  return (
+                    <a
+                      key={item.path}
+                      href={item.path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold text-secondary hover:bg-secondary-container/40 hover:text-primary transition-colors"
+                    >
+                      <ItemIcon size={15} className="shrink-0" />
+                      <span className="truncate">{item.name}</span>
+                    </a>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setHoveredGroupFlyout(null)}
+                    className={cn(
+                      "flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-bold transition-colors",
+                      isActive
+                        ? "bg-primary text-on-primary shadow-xs font-black"
+                        : "text-secondary hover:bg-secondary-container/40 hover:text-primary"
+                    )}
+                  >
+                    <ItemIcon size={15} className="shrink-0" />
+                    <span className="truncate">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Collapsed Sub-Item Single Tooltip */}
+      <AnimatePresence>
+        {!isSidebarOpen && hoveredItemTooltip && !hoveredGroupFlyout && (
+          <motion.div
+            initial={{ opacity: 0, x: isRtl ? 8 : -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: isRtl ? 8 : -8 }}
+            transition={{ duration: 0.1 }}
+            style={{
+              position: 'fixed',
+              top: hoveredItemTooltip.top,
+              [isRtl ? 'right' : 'left']: '5.25rem',
+              transform: 'translateY(-50%)',
+            }}
+            className="z-50 px-3 py-1.5 bg-surface-container-highest/95 backdrop-blur-md text-primary text-xs font-black rounded-xl shadow-xl border border-outline-variant/30 whitespace-nowrap pointer-events-none no-print"
+          >
+            {hoveredItemTooltip.name}
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* QR Scanner Modal Placeholder */}
       <AnimatePresence>
