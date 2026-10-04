@@ -520,6 +520,161 @@ export class PDFService {
       showSignatures: true
     });
   }
+
+  /**
+   * Generates a formal official document archive card (بطاقة توثيق وأرشفة نص تشريعي)
+   * used when rendering legislation documents or as a zero-failure preview fallback.
+   */
+  static async generateLegislationSheetPDF(options: {
+    title: string;
+    reference?: string;
+    category?: string;
+    date?: string;
+    description?: string;
+    fileName?: string;
+    isPublic?: boolean;
+    schoolInfo?: SchoolInfo;
+  }): Promise<Blob> {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+      putOnlyUsedFonts: true
+    });
+
+    const hasFont = await this.init(doc);
+    const fontName = hasFont ? 'ManaraDocs' : 'helvetica';
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 16;
+    const contentWidth = pageWidth - margin * 2;
+    let currentY = 16;
+
+    // Header: Algerian Republic & Ministry
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(30, 45, 25);
+    doc.text(processArabic('الجمهورية الجزائرية الديمقراطية الشعبية'), pageWidth / 2, currentY, { align: 'center' });
+
+    currentY += 6;
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(60, 75, 55);
+    doc.text(processArabic('وزارة التربية الوطنية — الأرشيف الرقمي للمخابر والتشريع المدرسي'), pageWidth / 2, currentY, { align: 'center' });
+
+    currentY += 8;
+    doc.setDrawColor(200, 215, 195);
+    doc.setLineWidth(0.6);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
+    currentY += 8;
+
+    // Document Banner
+    doc.setFillColor(43, 61, 34);
+    doc.roundedRect(margin, currentY, contentWidth, 14, 3, 3, 'F');
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.text(processArabic('بطاقة تعريف وأرشفة النص التشريعي'), pageWidth / 2, currentY + 9, { align: 'center' });
+
+    currentY += 20;
+
+    // Title Card
+    doc.setFillColor(248, 250, 246);
+    doc.setDrawColor(215, 225, 210);
+    doc.roundedRect(margin, currentY, contentWidth, 18, 3, 3, 'FD');
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(30, 45, 25);
+    const titleLines = doc.splitTextToSize(processArabic(options.title || 'وثيقة تشريعية'), contentWidth - 10);
+    doc.text(titleLines, pageWidth / 2, currentY + 8, { align: 'center' });
+
+    currentY += 24;
+
+    // Details Grid / Key-Value rows
+    const details = [
+      { label: 'طبيعة النص التشريعي:', value: options.category || 'نص تشريعي رسمي' },
+      { label: 'الرقم المرجعي:', value: options.reference || 'غير محدد' },
+      { label: 'تاريخ الإصدار / النشر:', value: options.date || new Date().toISOString().split('T')[0] },
+      { label: 'اسم الملف المرفق:', value: options.fileName || 'المرفق الرقمي الأصلي' },
+      { label: 'نطاق النشر:', value: options.isPublic ? 'نص رسمي عام (متاح لكافة المدارس والمستخدمين)' : 'أرشيف محلي خاص بالمؤسسة' }
+    ];
+
+    details.forEach(item => {
+      doc.setFillColor(252, 253, 250);
+      doc.setDrawColor(230, 235, 225);
+      doc.roundedRect(margin, currentY, contentWidth, 10, 2, 2, 'FD');
+
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(70, 85, 65);
+      doc.text(processArabic(item.label), pageWidth - margin - 6, currentY + 6.5, { align: 'right' });
+
+      doc.setFont(fontName, 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(20, 30, 15);
+      doc.text(processArabic(item.value), margin + 6, currentY + 6.5, { align: 'left' });
+
+      currentY += 12;
+    });
+
+    currentY += 4;
+
+    // Summary / Description Box
+    if (options.description) {
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(43, 61, 34);
+      doc.text(processArabic('خلاصة وفحوى الوثيقة:'), pageWidth - margin, currentY, { align: 'right' });
+      currentY += 4;
+
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(210, 220, 205);
+      doc.roundedRect(margin, currentY, contentWidth, 26, 2, 2, 'FD');
+
+      doc.setFont(fontName, 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(50, 60, 45);
+      const descLines = doc.splitTextToSize(processArabic(options.description), contentWidth - 12);
+      doc.text(descLines, pageWidth - margin - 6, currentY + 7, { align: 'right' });
+
+      currentY += 32;
+    }
+
+    // Notice Box
+    doc.setFillColor(240, 246, 238);
+    doc.setDrawColor(180, 205, 175);
+    doc.roundedRect(margin, currentY, contentWidth, 20, 3, 3, 'FD');
+
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(43, 61, 34);
+    doc.text(processArabic('إشعار الأرشفة والتوثيق الرقمي:'), pageWidth - margin - 6, currentY + 6, { align: 'right' });
+
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 95, 75);
+    const noticeText = 'هذه البطاقة تمثل التوثيق الرقمي الرسمي المعتمد في منصة تسيير المخابر المدرسية والتشريع التربوي. المرفق الرقمي الأصلي محفوظ ومؤرشف في قاعدة البيانات. يمكنك إعادة إرفاق أو تحديث ملف PDF الأصلي عند توفره.';
+    const noticeLines = doc.splitTextToSize(processArabic(noticeText), contentWidth - 12);
+    doc.text(noticeLines, pageWidth - margin - 6, currentY + 12, { align: 'right' });
+
+    // Official Stamp box at bottom
+    currentY += 26;
+    const stampWidth = 60;
+    const stampX = margin + 10;
+    doc.setDrawColor(160, 180, 150);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(stampX, currentY, stampWidth, 22, 2, 2, 'D');
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 120, 95);
+    doc.text(processArabic('ختم وتأشيرة الأرشيف الرقمي'), stampX + stampWidth / 2, currentY + 6, { align: 'center' });
+    doc.setFontSize(7.5);
+    doc.setFont(fontName, 'normal');
+    doc.text(processArabic('معتمد رقمياً'), stampX + stampWidth / 2, currentY + 11.5, { align: 'center' });
+    doc.text(processArabic(new Date().toLocaleDateString('ar-DZ')), stampX + stampWidth / 2, currentY + 17, { align: 'center' });
+
+    return doc.output('blob');
+  }
 }
 
 /**

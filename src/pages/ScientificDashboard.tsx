@@ -173,6 +173,32 @@ const cards = [
     category: 'بيولوجيا',
     actionText: 'عرض النماذج',
     path: ROUTES.ANATOMY
+  },
+  {
+    id: 'lab-calculators',
+    title: 'الحاسبة المخبرية والكواشف',
+    subtitle: 'تراكيز، تمديد، وحسابات المحاليل',
+    desc: 'حسابات دقيقة لتحضير المحاليل، التمديد، وتحويل التراكيز الكتلية والمولية للمخبريين والأساتذة.',
+    icon: Calculator,
+    iconColor: 'text-emerald-600',
+    bgIcon: 'bg-emerald-600/10',
+    gradient: 'from-emerald-600/20 to-transparent',
+    category: 'أدوات',
+    actionText: 'فتح الحاسبة المخبرية',
+    path: ROUTES.CALCULATORS
+  },
+  {
+    id: 'educational-map-card',
+    title: 'الخريطة التربوية التفاعلية',
+    subtitle: 'توزيع المنشآت والمخابر',
+    desc: 'استكشاف التوزيع المكاني للأقسام، المخابر العلمية، وقاعات التجارب والعتاد في المؤسسة.',
+    icon: Map,
+    iconColor: 'text-blue-600',
+    bgIcon: 'bg-blue-600/10',
+    gradient: 'from-blue-600/20 to-transparent',
+    category: 'استكشاف',
+    actionText: 'عرض الخريطة',
+    path: ROUTES.EDUCATIONAL_MAP
   }
 ];
 

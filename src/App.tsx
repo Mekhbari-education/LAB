@@ -66,6 +66,7 @@ const ChemicalStorage = React.lazy(() => import('./pages/ChemicalStorage'));
 const SchoolLegislation = React.lazy(() => import('./pages/SchoolLegislation'));
 const SafetyGuide = React.lazy(() => import('./pages/SafetyGuide'));
 const LabCalculators = React.lazy(() => import('./pages/LabCalculators'));
+const AdministrativeDocuments = React.lazy(() => import('./pages/AdministrativeDocuments'));
 import { SchoolProvider } from './context/SchoolContext';
 import { PrintSettingsProvider } from './context/PrintSettingsContext';
 import PrintPreviewModal from './components/PrintPreviewModal';
@@ -199,6 +200,7 @@ export default function App() {
                 <Route path={ROUTES.EDUCATIONAL_MAP.substring(1)} element={<EducationalMap />} />
                 <Route path={ROUTES.CONSUMABLES_SDS.substring(1)} element={<ConsumablesSDS />} />
                 <Route path={ROUTES.BACKUP_CENTER.substring(1)} element={<BackupCenter />} />
+                <Route path={ROUTES.ADMIN_TEMPLATES.substring(1)} element={<AdministrativeDocuments />} />
                 <Route path={ROUTES.BUDGET_PURCHASES.substring(1)} element={<BudgetPurchases />} />
                 <Route path={ROUTES.DATABASE_MANAGEMENT.substring(1)} element={<DatabaseManagement />} />
                 <Route path={ROUTES.QR_PRINT_CENTER.substring(1)} element={<QRPrintCenter />} />

@@ -4,7 +4,14 @@ import {
   ShieldAlert, 
   Trash2, 
   ArrowLeft,
-  LifeBuoy
+  LifeBuoy,
+  ShieldCheck,
+  Package,
+  Beaker,
+  AlertTriangle,
+  Flame,
+  Activity,
+  Wrench
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -12,24 +19,59 @@ import { cn } from '../lib/utils';
 const safetyModules = [
   { 
     title: 'الأمن والسلامة', 
-    desc: 'متابعة سجل الحوادث، المعدات وطفيات الحريق.', 
+    desc: 'متابعة سجل الحوادث، المعدات الوقائية، مطافئ الحريق، والإسعافات الأولية.', 
     icon: ShieldAlert, 
     color: 'bg-error/10 text-error', 
     path: ROUTES.SAFETY 
   },
   { 
-    title: 'إدارة النفايات الكيميائية', 
-    desc: 'نظام للتعامل مع المواد المنتهية والمهملة وفق بروتوكولات التحييد.', 
+    title: 'دليل السلامة الشامل', 
+    desc: 'دليل مرجعي شامل لقواعد السلوك الآمن وبروتوكولات الطوارئ المخبرية.', 
+    icon: LifeBuoy, 
+    color: 'bg-primary/10 text-primary', 
+    path: ROUTES.SAFETY_GUIDE 
+  },
+  { 
+    title: 'مصفوفة التوافق الكيميائي', 
+    desc: 'قواعد التخزين الآمن للمواد الكيميائية وتفادي التفاعلات الخطرة والانفجارات.', 
+    icon: ShieldCheck, 
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', 
+    path: ROUTES.CHEMICAL_STORAGE 
+  },
+  { 
+    title: 'إدارة وتصريف النفايات الكيميائية', 
+    desc: 'نظام آمن لمعالجة وتحييد المواد المنتهية والمخلفات السامة بيئياً.', 
     icon: Trash2, 
-    color: 'bg-surface-container-high', 
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', 
     path: ROUTES.CHEMICAL_WASTE 
   },
   { 
-    title: 'دليل السلامة', 
-    desc: 'دليل شامل لإجراءات الأمن والسلامة في المخابر المدرسية.', 
-    icon: LifeBuoy, 
-    color: 'bg-primary/10', 
-    path: ROUTES.SAFETY_GUIDE 
+    title: 'بطاقات بيانات السلامة (SDS)', 
+    desc: 'سجل بطاقات السلامة لجميع المواد الكيميائية والمستهلكات وإرشادات الخطورة.', 
+    icon: Package, 
+    color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300', 
+    path: ROUTES.CONSUMABLES_SDS 
+  },
+  { 
+    title: 'سجل الزجاجيات والكسور', 
+    desc: 'متابعة الكسور والتلفيات أثناء الحصص وتفادي مخاطر الإصابات والشظايا.', 
+    icon: Beaker, 
+    color: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300', 
+    path: ROUTES.GLASSWARE_BREAKAGE 
+  },
+  { 
+    title: 'الصيانة والمعايرة الوقائية', 
+    desc: 'الفحص الدوري لعزل الأجهزة، التوصيلات الكهربائية ومعايرة الحساسات لتفادي الحوادث.', 
+    icon: Wrench, 
+    color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300', 
+    path: ROUTES.MAINTENANCE 
+  },
+  { 
+    title: 'إسقاط وتكهين المعدات التالفة', 
+    desc: 'إسقاط فني رسمي للوسائل المتضررة أو غير الآمنة للاستخدام لتفادي الخطر في الورشات والمخابر.', 
+    icon: Trash2, 
+    color: 'bg-stone-100 text-stone-800 dark:bg-stone-900/30 dark:text-stone-300', 
+    path: ROUTES.SCRAPPING 
   }
 ];
 

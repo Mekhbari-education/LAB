@@ -12,7 +12,13 @@ import {
   GraduationCap,
   Users,
   Calculator,
-  FileText
+  FileText,
+  FlaskConical,
+  FileSpreadsheet,
+  Bot,
+  Folder,
+  Scale,
+  Archive
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -22,63 +28,91 @@ const pedagogicalModules = [
     title: 'التقارير اليومية', 
     desc: 'تسجيل ومتابعة النشاطات اليومية للمخبر والحصص التطبيقية.', 
     icon: FileText, 
-    color: 'bg-primary/10', 
+    color: 'bg-primary/10 text-primary', 
     path: ROUTES.DAILY_REPORT 
+  },
+  { 
+    title: 'المساعد المخبري الذكي', 
+    desc: 'مساعد ذكي مدعوم بالذكاء الاصطناعي لتحضير التجارب وإرشادات المحاليل.', 
+    icon: Bot, 
+    color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300', 
+    path: ROUTES.LAB_ASSISTANT 
+  },
+  { 
+    title: 'سجل التجارب المخبرية', 
+    desc: 'بنك شامل لبروتوكولات التجارب المقررة لمادتي العلوم الفيزيائية والطبيعية.', 
+    icon: FlaskConical, 
+    color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', 
+    path: ROUTES.LAB_EXPERIMENTS 
   },
   { 
     title: 'فريق الأساتذة', 
     desc: 'قائمة أساتذة العلوم والفيزياء والجداول الزمنية للفريق التربوي.', 
     icon: Users, 
-    color: 'bg-secondary-container/50', 
+    color: 'bg-secondary-container/50 text-secondary', 
     path: ROUTES.TEACHERS 
+  },
+  { 
+    title: 'المكتبة الرقمية', 
+    desc: 'بنك رقمي للمذكرات، الوثائق البيداغوجية، والأدلة التعليمية المعتمدة.', 
+    icon: Folder, 
+    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300', 
+    path: ROUTES.DOCUMENT_LIBRARY 
+  },
+  { 
+    title: 'التشريع المدرسي', 
+    desc: 'موسوعة النصوص القانونية، القرارات والمناشير الوزارية المنظمة لتسيير المخابر.', 
+    icon: Scale, 
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', 
+    path: ROUTES.SCHOOL_LEGISLATION 
   },
   { 
     title: 'جدولة الحصص', 
     desc: 'تسيير الجدول الزمني للمؤسسة وتوزيع الفترات الدراسية.', 
     icon: Calendar, 
-    color: 'bg-primary/5', 
+    color: 'bg-primary/5 text-primary', 
     path: ROUTES.TIMETABLE 
   },
   { 
     title: 'حصص المخبر', 
     desc: 'جدولة استخدام المخابر وتفادي التضارب بين الأفواج التربوية.', 
     icon: Clock, 
-    color: 'bg-tertiary-container/30', 
+    color: 'bg-tertiary-container/30 text-tertiary', 
     path: ROUTES.LAB_SCHEDULE 
   },
   { 
     title: 'المتابعة البيداغوجية', 
     desc: 'متابعة تنفيذ البرامج الدراسية والدروس التطبيقية المنجزة.', 
     icon: GraduationCap, 
-    color: 'bg-surface-container-high', 
+    color: 'bg-surface-container-high text-primary', 
     path: ROUTES.PEDAGOGICAL_TRACKING 
   },
   { 
     title: 'سجل المتابعة', 
     desc: 'سجل رقمي متكامل يضم استعمال الوسائل، وحصيلة الأعمال.', 
     icon: BookOpen, 
-    color: 'bg-secondary/10', 
+    color: 'bg-secondary/10 text-secondary', 
     path: ROUTES.FOLLOW_UP_REGISTRY 
   },
   { 
     title: 'تسيير الأفواج', 
     desc: 'إدارة وتنظيم أفواج التلاميذ ضمن الأقسام والمخابر.', 
     icon: Users, 
-    color: 'bg-surface-container-low', 
+    color: 'bg-surface-container-low text-primary', 
     path: ROUTES.STUDENT_GROUPS 
   },
   { 
     title: 'إدارة الخريطة التربوية', 
     desc: 'توزيع التلاميذ والأقسام على القاعات والمخابر المتاحة.', 
     icon: Map, 
-    color: 'bg-tertiary-container/20', 
+    color: 'bg-tertiary-container/20 text-tertiary', 
     path: ROUTES.EDUCATIONAL_MAP 
   },
   { 
     title: 'التحضير الذكي للنماذج', 
     desc: 'توليد النماذج الرقمية باستخدام مساعد الذكاء الاصطناعي.', 
     icon: Sparkles, 
-    color: 'bg-primary/10', 
+    color: 'bg-primary/10 text-primary', 
     path: ROUTES.SMART_FORMS 
   },
   { 
@@ -89,11 +123,25 @@ const pedagogicalModules = [
     path: ROUTES.ACTIVITY_REQUEST 
   },
   { 
+    title: 'الأرشيف الرقمي', 
+    desc: 'أرشيف السجلات التاريخية للتقارير والنشاطات المنفذة عبر المواسم الدراسية.', 
+    icon: Archive, 
+    color: 'bg-stone-100 text-stone-800 dark:bg-stone-900/30 dark:text-stone-300', 
+    path: ROUTES.ARCHIVE 
+  },
+  { 
     title: 'مزامنة الحصص', 
     desc: 'ربط التحضير الذكي بجدول الحصص الفعلي لضمان الجاهزية.', 
     icon: RefreshCw, 
-    color: 'bg-surface-container-high', 
+    color: 'bg-surface-container-high text-primary', 
     path: ROUTES.SYNC 
+  },
+  { 
+    title: 'مولد أوراق العمل', 
+    desc: 'توليد أوراق عمل وتمارين تطبيقية قابلة للطباعة لترسيخ المفاهيم.', 
+    icon: FileSpreadsheet, 
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', 
+    path: ROUTES.WORKSHEET_GENERATOR 
   },
   { 
     title: 'الحاسبة المخبرية', 

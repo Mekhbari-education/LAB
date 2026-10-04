@@ -62,6 +62,7 @@ export const ROUTES = {
 
   // Management
   SETTINGS: '/settings',
+  ADMIN_TEMPLATES: '/administrative-documents',
   BACKUP_CENTER: '/backup-center',
   BUDGET_PURCHASES: '/budget-purchases',
   PROFESSIONAL_EXAMS: '/professional-exams',

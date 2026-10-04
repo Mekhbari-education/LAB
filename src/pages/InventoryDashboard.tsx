@@ -17,7 +17,8 @@ import {
   X,
   Bot,
   ShieldAlert,
-  Search
+  Search,
+  Calculator
 } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -108,6 +109,13 @@ const inventoryModules = [
     icon: Printer, 
     color: 'bg-secondary-container/50 text-secondary', 
     path: ROUTES.QR_PRINT_CENTER 
+  },
+  { 
+    title: 'الحاسبة المخبرية وتراكيز المحاليل', 
+    desc: 'حسابات تحضير المحاليل القياسية، التمديد، والكتلة الكيميائية للمخزن.', 
+    icon: Calculator, 
+    color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', 
+    path: ROUTES.CALCULATORS 
   },
 ];
 

@@ -299,7 +299,10 @@ export default function SchoolLegislation() {
       category: getCategoryLabel(docItem.category),
       date: docItem.date,
       storageType: docItem.storageType === 'local' ? 'local' : docItem.storageType === 'cloud' ? 'cloud' : 'external',
-      description: docItem.description
+      description: docItem.description,
+      reference: docItem.reference,
+      docId: docItem.id,
+      isPublic: docItem.isPublic
     });
   };
 

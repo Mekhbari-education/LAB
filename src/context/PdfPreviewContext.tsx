@@ -21,6 +21,12 @@ export interface PdfPreviewTarget {
   storageType?: 'cloud' | 'local' | 'external';
   /** Optional summary or description */
   description?: string;
+  /** Optional reference number (e.g. رقم 24-15) */
+  reference?: string;
+  /** Optional document ID in Firestore for updating/re-attaching */
+  docId?: string;
+  /** Whether the document is public */
+  isPublic?: boolean;
 }
 
 interface PdfPreviewContextType {

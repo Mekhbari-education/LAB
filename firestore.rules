@@ -97,6 +97,19 @@ service cloud.firestore {
       allow list: if isSignedIn();
     }
 
+    // Resilient file storage chunks for PDFs
+    match /stored_blobs/{allPaths=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    // User administrative documents & correspondence
+    match /user_admin_documents/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /user_admin_documents {
+      allow list: if isSignedIn();
+    }
+
     // Global Collections
     match /support_tickets/{id} {
       allow create: if isSignedIn();
