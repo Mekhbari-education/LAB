@@ -990,13 +990,13 @@ export class PrintService {
             <table class="signatures-table" dir="rtl">
               <tr>
                 <td>
-                  <div class="sig-title">المسؤول عن المخبر</div>
-                  <div class="sig-space">${sig.managerName ? sig.managerName : '(الاسم، التوقيع والختم)'}</div>
+                  <div class="sig-title">${sig.labManagerTitle || 'المسؤول عن المخبر'}</div>
+                  <div class="sig-space">(الاسم، التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">حرر بتاريخ: ....................</div>
                 </td>
                 <td>
-                  <div class="sig-title">مدير(ة) المؤسسة</div>
-                  <div class="sig-space">${sig.principalName ? sig.principalName : '(التوقيع وتأشيرة المصادقة)'}</div>
+                  <div class="sig-title">${sig.principalTitle || 'مدير(ة) المؤسسة'}</div>
+                  <div class="sig-space">(التوقيع وتأشيرة المصادقة)</div>
                   <div style="font-size: 7.5pt; color: #777;">في: .............................</div>
                 </td>
               </tr>

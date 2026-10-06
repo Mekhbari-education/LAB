@@ -18,11 +18,16 @@ import {
   Layers,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Download,
+  FileDown,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { useSqlCollection } from '../hooks/useSqlCollection';
+import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
 import { 
   GlasswareItem, 
   createGlassware, 
@@ -61,6 +66,7 @@ const INITIAL_GLASSWARE: Partial<GlasswareItem>[] = [
 
 export default function GlasswareBreakage({ isNested = false }: { isNested?: boolean }) {
   const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { openPdfPreview } = usePdfPreview();
   const { data: items, loading, invalidate } = 
     useSqlCollection<GlasswareItem>('glassware_inventory', '/api/db/glassware');
 
@@ -120,6 +126,74 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
     window.print();
   };
 
+  const getGlasswareReportData = () => {
+    const headers = ['رقم', 'التسمية بالفرنسية (Désignation)', 'التسمية بالعربية', 'النوع', 'الوحدة', 'الكمية', 'الحالة', 'الموقع', 'ملاحظات'];
+    const rows = filteredItems.map((item, index) => [
+      index + 1,
+      item.designationFr || '---',
+      item.nameAr || '---',
+      item.type || '---',
+      item.unit || 'قطعة',
+      item.quantity || 0,
+      item.status || 'جيدة',
+      item.location || 'الخزانة',
+      item.notes || '---'
+    ]);
+    return {
+      title: 'سجل جرد الزجاجيات والكسور المخبرية',
+      subtitle: 'وزارة التربية الوطنية — مخبر الوسائل التعليمية والعلوم',
+      schoolInfo: {
+        school: schoolName,
+        directorate: directorate,
+        commune: commune,
+        laboratory: 'مخبر الوسائل التعليمية والزجاجيات'
+      },
+      headers,
+      rows,
+      orientation: 'l' as const,
+      summaryCards: [
+        { label: 'إجمالي الأصناف', value: items.length },
+        { label: 'إجمالي القطع', value: totalQuantity },
+        { label: 'القطع السليمة', value: goodCount },
+        { label: 'القطع المكسورة / التالفة', value: brokenCount }
+      ],
+      showSignatures: true,
+      notes: 'يُحفظ هذا الجرد في الأرشيف الرسمي للمخبر وتُسجل التغييرات والكسور دورياً.'
+    };
+  };
+
+  const handleDownloadWord = () => {
+    const reportData = getGlasswareReportData();
+    PDFService.exportLabReportWord({
+      ...reportData,
+      fileName: `glassware_inventory_${new Date().toISOString().split('T')[0]}.doc`
+    });
+  };
+
+  const handleExportPdf = async () => {
+    const reportData = getGlasswareReportData();
+    await PDFService.exportLabReportPDF({
+      ...reportData,
+      fileName: `glassware_inventory_${new Date().toISOString().split('T')[0]}.pdf`,
+      save: true
+    });
+  };
+
+  const handlePreviewPdf = async () => {
+    const reportData = getGlasswareReportData();
+    const doc = await PDFService.exportLabReportPDF({
+      ...reportData,
+      save: false
+    });
+    const blob = doc.output('blob');
+    openPdfPreview({
+      file: blob,
+      title: reportData.title,
+      fileName: `glassware_inventory_${new Date().toISOString().split('T')[0]}.pdf`,
+      category: 'جرد الزجاجيات'
+    });
+  };
+
   const filteredItems = items
     .filter(item => {
       const matchesSearch = 
@@ -177,26 +251,50 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
             <p className="text-on-surface/60 text-lg font-bold">سجل دقيق لمتابعة <span className="text-primary italic">الأدوات الزجاجية</span> وحساب القيمة المالية للفواقد.</p>
           </div>
           
-          <div className="flex flex-wrap gap-4 relative z-10">
+          <div className="flex flex-wrap gap-3 relative z-10">
+            <button 
+              onClick={handleDownloadWord}
+              className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-2 border-blue-500/30 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95 text-sm"
+              title="تنزيل الجرد كملف Word (.doc) رسمي بنفس تفاصيل الـ PDF"
+            >
+              <FileDown size={18} />
+              تحميل Word
+            </button>
+            <button 
+              onClick={handleExportPdf}
+              className="bg-primary/10 text-primary border-2 border-primary/20 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-primary hover:text-white transition-all shadow-md active:scale-95 text-sm"
+              title="تنزيل الجرد كملف PDF رسمي"
+            >
+              <Download size={18} />
+              تحميل PDF
+            </button>
+            <button 
+              onClick={handlePreviewPdf}
+              className="bg-surface text-secondary border-2 border-outline/10 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-secondary/10 hover:text-primary transition-all shadow-md active:scale-95 text-sm"
+              title="معاينة ملف PDF بملء الشاشة"
+            >
+              <Eye size={18} />
+              معاينة
+            </button>
             <button 
               onClick={handlePrint}
-              className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-xl active:scale-95"
+              className="bg-surface text-primary border-2 border-primary/10 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-md active:scale-95 text-sm"
             >
-              <Printer size={20} />
-              طباعة البطاقات
+              <Printer size={18} />
+              طباعة
             </button>
             <button 
               onClick={handleSeedData}
-              className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-xl active:scale-95"
+              className="bg-surface text-primary border-2 border-primary/10 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-md active:scale-95 text-sm"
             >
-              <Sparkles size={20} />
-              إضافة النماذج (25 صنف)
+              <Sparkles size={18} />
+              إضافة النماذج
             </button>
             <button 
               onClick={handleAddItem}
-              className="bg-primary text-on-primary px-8 py-3.5 rounded-full font-black flex items-center gap-2 shadow-2xl shadow-primary/30 hover:bg-primary-container transition-all active:scale-95"
+              className="bg-primary text-on-primary px-6 py-3 rounded-full font-black flex items-center gap-2 shadow-2xl shadow-primary/30 hover:bg-primary-container transition-all active:scale-95 text-sm"
             >
-              <Plus size={22} />
+              <Plus size={20} />
               إضافة قطعة
             </button>
           </div>

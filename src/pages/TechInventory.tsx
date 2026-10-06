@@ -15,7 +15,9 @@ import {
   Sparkles,
   AlertTriangle,
   CheckCircle2,
-  Cpu
+  Cpu,
+  Download,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -24,6 +26,7 @@ import { getUserCollection, handleFirestoreError, OperationType } from '../fireb
 import { useSchool } from '../context/SchoolContext';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
+import { PDFService } from '../services/pdfService';
 
 interface Equipment {
   id: string;
@@ -75,7 +78,7 @@ const getSmartImage = (name: string, keyword?: string) => {
 
 export default function TechInventory({ isNested = false }: { isNested?: boolean }) {
   const navigate = useNavigate();
-  const { schoolId } = useSchool();
+  const { schoolId, schoolName, directorate } = useSchool();
   const [searchTerm, setSearchTerm] = useState('');
   const [devices, setDevices] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +147,62 @@ export default function TechInventory({ isNested = false }: { isNested?: boolean
     },
   ];
 
+  const getTechReportData = () => {
+    const headers = ['#', 'اسم وتعيين الجهاز', 'الحالة', 'الكمية الإجمالية', 'الكمية المتوفرة', 'الموقع / الجناح', 'الرقم التسلسلي', 'المواصفات التقنية'];
+    const rows = filteredDevices.map((d, index) => [
+      index + 1,
+      d.smartNameAr || d.name,
+      d.status === 'functional' ? 'سليم وجاهز' : d.status === 'maintenance' ? 'قيد الصيانة' : 'تالف / معطل',
+      d.totalQuantity,
+      d.availableQuantity,
+      d.location || 'مخبر الإعلام الآلي والتكنولوجيا',
+      d.serialNumber || '---',
+      d.specs ? Object.entries(d.specs).filter(([_, v]) => v).map(([k, v]) => `${k}: ${v}`).join(' | ') : '---'
+    ]);
+    return {
+      title: 'سجل جرد الأجهزة والوسائل التكنولوجية المخبرية',
+      headers,
+      rows,
+      extraOptions: {
+        subtitle: `سجل الأجهزة والمعدات الرقمية والتقنية — إجمالي الأجهزة: ${filteredDevices.length}`,
+        schoolInfo: {
+          school: schoolName,
+          directorate: directorate,
+          laboratory: 'مخبر التكنولوجيا والوسائل الرقمية'
+        },
+        summaryCards: [
+          { label: 'إجمالي الأجهزة', value: filteredDevices.length },
+          { label: 'أجهزة سليمة', value: filteredDevices.filter(d => d.status === 'functional').length },
+          { label: 'أجهزة قيد الصيانة', value: filteredDevices.filter(d => d.status === 'maintenance').length },
+          { label: 'أجهزة حساسة ودقيقة', value: filteredDevices.filter(d => d.isSensitive).length }
+        ],
+        showSignatures: true
+      }
+    };
+  };
+
+  const handleExportWord = () => {
+    const { title, headers, rows, extraOptions } = getTechReportData();
+    PDFService.downloadTableWord(
+      title,
+      headers,
+      rows,
+      `tech_inventory_${new Date().toISOString().split('T')[0]}.doc`,
+      extraOptions
+    );
+  };
+
+  const handleExportPdf = async () => {
+    const { title, headers, rows, extraOptions } = getTechReportData();
+    await PDFService.generateTablePDF(
+      title,
+      headers,
+      rows,
+      `tech_inventory_${new Date().toISOString().split('T')[0]}.pdf`,
+      extraOptions
+    );
+  };
+
   return (
     <div className={cn("space-y-12 max-w-7xl mx-auto pb-24 rtl font-sans", !isNested && "px-6")} dir="rtl">
       {/* Header */}
@@ -189,6 +248,24 @@ export default function TechInventory({ isNested = false }: { isNested?: boolean
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-outline" size={20} />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportWord}
+                className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/30 px-5 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-blue-500 hover:text-white transition-all shadow-md active:scale-95 text-xs"
+                title="تصدير كملف Word (.doc) رسمي بنفس تفاصيل الـ PDF"
+              >
+                <FileDown size={16} />
+                Word
+              </button>
+              <button
+                onClick={handleExportPdf}
+                className="bg-surface text-primary border border-primary/20 px-5 py-3 rounded-full font-bold flex items-center gap-2 hover:bg-primary hover:text-white transition-all shadow-md active:scale-95 text-xs"
+                title="تصدير كملف PDF رسمي"
+              >
+                <Download size={16} />
+                PDF
+              </button>
             </div>
             <button 
               onClick={() => navigate(ROUTES.EQUIPMENT)}

@@ -90,6 +90,30 @@ router.post('/chemicals/bulk', async (req: AuthRequest, res) => {
 });
 
 // --- Equipment ---
+const sanitizeEquipmentItem = (item: any, schoolId: string) => {
+  const allowed = [
+    'id', 'schoolId', 'name', 'type', 'serialNumber', 'status', 
+    'totalQuantity', 'availableQuantity', 'brokenQuantity', 
+    'lastCalibration', 'nextCalibration', 'supplier', 'location', 
+    'notes', 'source', 'price', 'registrationDate', 'exitDate',
+    'foundationalInventory', 'decennialReview', 'smartNameAr', 
+    'smartDescriptionAr', 'imageKeyword', 'lastSmartUpdate'
+  ];
+  const cleaned: Record<string, any> = { schoolId };
+  for (const key of allowed) {
+    if (item[key] !== undefined) {
+      cleaned[key] = item[key];
+    }
+  }
+  if (!cleaned.id) {
+    cleaned.id = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
+  }
+  if (!cleaned.name) cleaned.name = 'صنف بدون اسم';
+  if (!cleaned.type) cleaned.type = 'other';
+  if (!cleaned.status) cleaned.status = 'functional';
+  return cleaned;
+};
+
 router.get('/equipment', async (req: AuthRequest, res) => {
   try {
     const schoolId = req.user?.uid;
@@ -106,8 +130,11 @@ router.put('/equipment/:id', async (req: AuthRequest, res) => {
     const schoolId = req.user?.uid;
     if (!schoolId) return res.status(401).json({ error: 'Unauthorized' });
     const { id } = req.params;
+    const cleaned = sanitizeEquipmentItem(req.body, schoolId);
+    delete cleaned.id;
+    delete cleaned.schoolId;
     const [updated] = await db.update(equipment)
-      .set(req.body)
+      .set(cleaned)
       .where(and(eq(equipment.id, id), eq(equipment.schoolId, schoolId)))
       .returning();
     res.json(updated);
@@ -132,9 +159,8 @@ router.post('/equipment', async (req: AuthRequest, res) => {
   try {
     const schoolId = req.user?.uid;
     if (!schoolId) return res.status(401).json({ error: 'Unauthorized' });
-    const id = req.body.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-    const newEquipment = { ...req.body, id, schoolId };
-    const [inserted] = await db.insert(equipment).values(newEquipment).returning();
+    const newEquipment = sanitizeEquipmentItem(req.body, schoolId);
+    const [inserted] = await db.insert(equipment).values(newEquipment as any).returning();
     res.json(inserted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to insert equipment' });
@@ -147,12 +173,8 @@ router.post('/equipment/bulk', async (req: AuthRequest, res) => {
     if (!schoolId) return res.status(401).json({ error: 'Unauthorized' });
     const items = Array.isArray(req.body) ? req.body : req.body.items;
     if (!items || !items.length) return res.status(400).json({ error: 'No items provided' });
-    const formatted = items.map(item => ({
-      ...item,
-      id: item.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)),
-      schoolId,
-    }));
-    const inserted = await db.insert(equipment).values(formatted).returning();
+    const formatted = items.map(item => sanitizeEquipmentItem(item, schoolId));
+    const inserted = await db.insert(equipment).values(formatted as any).returning();
     res.json(inserted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk insert equipment' });

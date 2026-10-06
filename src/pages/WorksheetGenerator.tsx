@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileSpreadsheet, Download, Settings, RefreshCw, Printer } from 'lucide-react';
+import { ArrowLeft, FileSpreadsheet, Download, FileDown, Settings, RefreshCw, Printer } from 'lucide-react';
 import { useSchool } from '../context/SchoolContext';
 import { formatSchoolWithCommune } from '../lib/utils';
+import { PDFService } from '../services/pdfService';
 
 const EASY_EQUATIONS = [
   { eq: "H2 + O2 -> H2O", ans: "2,1,2" },
@@ -30,6 +31,77 @@ export default function WorksheetGenerator() {
     // Shuffle and pick
     const shuffled = [...source].sort(() => 0.5 - Math.random());
     setWorksheet(shuffled.slice(0, count));
+  };
+
+  const handleDownloadWord = () => {
+    if (worksheet.length === 0) return;
+    const rows = worksheet.map((item, index) => {
+      const sides = item.eq.split('->');
+      return [
+        index + 1,
+        sides[0]?.trim() || '',
+        '⟶',
+        sides[1]?.trim() || '',
+        '...................................................'
+      ];
+    });
+
+    PDFService.exportLabReportWord({
+      title: 'ورقة عمل تطبيقية: موازنة المعادلات الكيميائية',
+      subtitle: `المستوى التعليمي: ${difficulty === 'easy' ? 'مبتدئ' : 'متوسط'} — التعليمية والتجارب المخبرية`,
+      schoolInfo: {
+        school: schoolName,
+        commune: commune,
+        laboratory: 'مخبر الكيمياء والعلوم الفيزيائية'
+      },
+      headers: ['رقم', 'المتفاعلات (Réactifs)', 'اتجاه التفاعل', 'النواتج (Produits)', 'المعادلة بعد الموازنة'],
+      rows,
+      fileName: `chemical_worksheet_${difficulty}_${new Date().toISOString().split('T')[0]}.doc`,
+      summaryCards: [
+        { label: 'عدد المعادلات', value: worksheet.length },
+        { label: 'درجة الصعوبة', value: difficulty === 'easy' ? 'مبتدئ' : 'متوسط' }
+      ],
+      notes: 'التعليمة للتلميذ: وازن المعادلات الكيميائية أعلاه مع تحديد المعاملات الستوكيومترية المناسبة بدقة.',
+      showSignatures: true,
+      labManagerTitle: 'أستاذ المادة',
+      principalTitle: 'المسؤول عن المخبر'
+    });
+  };
+
+  const handleDownloadPdf = async () => {
+    if (worksheet.length === 0) return;
+    const rows = worksheet.map((item, index) => {
+      const sides = item.eq.split('->');
+      return [
+        index + 1,
+        sides[0]?.trim() || '',
+        '⟶',
+        sides[1]?.trim() || '',
+        '...................................................'
+      ];
+    });
+
+    await PDFService.exportLabReportPDF({
+      title: 'ورقة عمل تطبيقية: موازنة المعادلات الكيميائية',
+      subtitle: `المستوى التعليمي: ${difficulty === 'easy' ? 'مبتدئ' : 'متوسط'} — التعليمية والتجارب المخبرية`,
+      schoolInfo: {
+        school: schoolName,
+        commune: commune,
+        laboratory: 'مخبر الكيمياء والعلوم الفيزيائية'
+      },
+      headers: ['رقم', 'المتفاعلات (Réactifs)', 'اتجاه التفاعل', 'النواتج (Produits)', 'المعادلة بعد الموازنة'],
+      rows,
+      fileName: `chemical_worksheet_${difficulty}_${new Date().toISOString().split('T')[0]}.pdf`,
+      summaryCards: [
+        { label: 'عدد المعادلات', value: worksheet.length },
+        { label: 'درجة الصعوبة', value: difficulty === 'easy' ? 'مبتدئ' : 'متوسط' }
+      ],
+      notes: 'التعليمة للتلميذ: وازن المعادلات الكيميائية أعلاه مع تحديد المعاملات الستوكيومترية المناسبة بدقة.',
+      showSignatures: true,
+      labManagerTitle: 'أستاذ المادة',
+      principalTitle: 'المسؤول عن المخبر',
+      save: true
+    });
   };
 
   return (
@@ -99,9 +171,29 @@ export default function WorksheetGenerator() {
               </button>
 
               <button 
+                onClick={handleDownloadWord}
+                disabled={worksheet.length === 0}
+                className="w-full py-3.5 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-700 dark:text-blue-300 border border-blue-500/30 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                title="تنزيل ورقة العمل كملف Word (.doc) رسمي بنفس تفاصيل وهيئة الـ PDF"
+              >
+                <FileDown size={20} />
+                تحميل ملف Word (.doc)
+              </button>
+
+              <button 
+                onClick={handleDownloadPdf}
+                disabled={worksheet.length === 0}
+                className="w-full py-3.5 bg-primary/10 hover:bg-primary hover:text-white text-primary border border-primary/20 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                title="تنزيل ورقة العمل كملف PDF رسمي"
+              >
+                <Download size={20} />
+                تحميل ملف PDF (.pdf)
+              </button>
+
+              <button 
                 onClick={() => window.print()}
                 disabled={worksheet.length === 0}
-                className="w-full py-4 bg-surface-container text-on-surface rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-surface-container-high transition-all disabled:opacity-50"
+                className="w-full py-3.5 bg-surface-container text-on-surface rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-surface-container-high transition-all disabled:opacity-50"
               >
                 <Printer size={20} />
                 طباعة الورقة

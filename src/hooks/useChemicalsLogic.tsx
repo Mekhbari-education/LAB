@@ -601,6 +601,41 @@ export function useChemicalsLogic(isNested = false) {
     );
   };
 
+  const handleExportWord = () => {
+    const headers = ['#', 'الاسم العلمي', 'الاسم العربي', 'الصيغة', 'الكمية', 'الرف', 'تاريخ الصلاحية'];
+    const tableData = filteredChemicals.map((c, index) => [
+      index + 1,
+      c.nameEn || '',
+      c.nameAr || '',
+      c.formula || '',
+      `${c.quantity} ${c.unit}`,
+      c.shelf || '',
+      formatDisplayDate(c.expiryDate)
+    ]);
+
+    PDFService.downloadTableWord(
+      'تقرير جرد المواد الكيميائية المخبرية',
+      headers,
+      tableData,
+      `chemicals_inventory_${new Date().toISOString().split('T')[0]}.doc`,
+      {
+        subtitle: `سجل المواد والمحاليل المتوفرة في المخبر - إجمالي المواد: ${filteredChemicals.length}`,
+        schoolInfo: {
+          school: schoolName,
+          commune: commune,
+          directorate: stateName,
+          laboratory: 'مخبر الكيمياء والعلوم الفيزيائية'
+        },
+        summaryCards: [
+          { label: 'إجمالي المواد الكيميائية', value: filteredChemicals.length },
+          { label: 'المواد السائلة', value: filteredChemicals.filter(c => c.state === 'liquid').length },
+          { label: 'المواد الصلبة', value: filteredChemicals.filter(c => c.state === 'solid').length },
+          { label: 'تاريخ إعداد التقرير', value: new Date().toLocaleDateString('ar-DZ') }
+        ]
+      }
+    );
+  };
+
   const handleExportXLS = () => {
     const worksheet = XLSX.utils.json_to_sheet(filteredChemicals.map(c => ({
       'الاسم (EN)': c.nameEn,
@@ -1163,6 +1198,7 @@ export function useChemicalsLogic(isNested = false) {
     handleDeleteChemical,
     handlePrintList,
     handleExportPDF,
+    handleExportWord,
     handleExportXLS,
     handleImportXLS,
     handlePrintInventoryCards,

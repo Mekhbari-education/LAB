@@ -28,6 +28,7 @@ import {
   Check,
   RotateCcw,
   FileText,
+  FileDown,
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
@@ -94,6 +95,7 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
     handleDeleteChemical,
     handlePrintList,
     handleExportPDF,
+    handleExportWord,
     handleExportXLS,
     handleImportXLS,
     handlePrintInventoryCards,
@@ -153,6 +155,14 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
             >
               <Printer size={20} className="text-primary" />
               {t('chemicals.btn_print_stock_cards', 'طباعة بطاقات المخزون')}
+            </button>
+            <button 
+              onClick={handleExportWord}
+              className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/30 px-6 py-3.5 rounded-full flex items-center gap-2 font-bold hover:bg-blue-500 hover:text-white transition-all active:scale-95 shadow-sm"
+              title="تصدير كملف Word (.doc) رسمي بنفس تفاصيل الـ PDF"
+            >
+              <FileDown size={20} />
+              {t('common.export_word', 'تصدير Word')}
             </button>
             <button 
               onClick={handleExportPDF}

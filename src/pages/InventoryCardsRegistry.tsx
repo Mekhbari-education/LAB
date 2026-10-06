@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../context/SchoolContext';
-import { onSnapshot, query, updateDoc, doc, collection } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType, getUserCollection } from '../firebase';
 import { 
   Printer, 
   Search, 
@@ -22,6 +20,9 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import logo from '/ministry-logo.png';
 import { useTranslation } from 'react-i18next';
+import { useSqlCollection } from '../hooks/useSqlCollection';
+import { updateEquipment } from '../lib/api/equipment';
+import type { Equipment } from '../types/equipment';
 
 interface InventoryItem {
   id: string;
@@ -31,6 +32,9 @@ interface InventoryItem {
   decennialReview: string;
   totalQuantity: number;
   supplier: string;
+  price?: string;
+  location?: string;
+  exitDate?: string;
   status: string;
   notes: string;
 }
@@ -49,6 +53,9 @@ export default function InventoryCardsRegistry() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const navigate = useNavigate();
 
+  // Load equipment directly from the centralized equipment SQL database
+  const { data: sqlEquipment, loading: sqlLoading } = useSqlCollection<Equipment>('equipment', '/api/db/equipment');
+
   useEffect(() => {
     const handleAfterPrint = () => setPrintingItem(null);
     window.addEventListener('afterprint', handleAfterPrint);
@@ -56,33 +63,27 @@ export default function InventoryCardsRegistry() {
   }, []);
 
   useEffect(() => {
-    // Listen to equipment collection
-    const q = query(getUserCollection(schoolId, 'equipment'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const equipmentItems = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          serialNumber: data.serialNumber || '',
-          name: data.name || '',
-          foundationalInventory: data.foundationalInventory || '',
-          decennialReview: data.decennialReview || '',
-          totalQuantity: data.totalQuantity || 0,
-          supplier: data.supplier || '',
-          status: data.status === 'functional' ? 'جيدة' : 
-                  data.status === 'maintenance' ? 'تحتاج صيانة' : 
-                  data.status === 'broken' ? 'عاطلة' : data.status || 'جيدة',
-          notes: data.notes || ''
-        } as InventoryItem;
-      });
+    if (sqlEquipment) {
+      const equipmentItems = sqlEquipment.map(data => ({
+        id: data.id,
+        serialNumber: data.serialNumber || '',
+        name: data.smartNameAr || data.name || '',
+        foundationalInventory: data.registrationDate || data.foundationalInventory || '',
+        decennialReview: data.decennialReview || '',
+        totalQuantity: data.totalQuantity || 1,
+        supplier: data.source || data.supplier || '',
+        price: data.price || '',
+        location: data.location || '',
+        exitDate: data.exitDate || '',
+        status: data.status === 'functional' ? 'جيدة' : 
+                data.status === 'maintenance' ? 'تحتاج صيانة' : 
+                data.status === 'broken' ? 'عاطلة' : data.status || 'جيدة',
+        notes: data.notes || ''
+      }));
       setItems(equipmentItems);
-      setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'equipment');
-    });
-
-    return () => unsubscribe();
-  }, []);
+      setLoading(sqlLoading);
+    }
+  }, [sqlEquipment, sqlLoading]);
 
   const handleUpdateItem = async (id: string, field: string, value: any) => {
     try {
@@ -91,16 +92,15 @@ export default function InventoryCardsRegistry() {
 
       // Map back status labels if needed
       if (field === 'status') {
-          if (value === 'جيدة') finalValue = 'functional';
-          else if (value === 'تحتاج صيانة' || value === 'في الإصلاح') finalValue = 'maintenance';
-          else if (value === 'عاطلة' || value === 'مفقودة') finalValue = 'broken';
+        if (value === 'جيدة') finalValue = 'functional';
+        else if (value === 'تحتاج صيانة' || value === 'في الإصلاح') finalValue = 'maintenance';
+        else if (value === 'عاطلة' || value === 'مفقودة') finalValue = 'broken';
       }
 
-      await updateDoc(doc(getUserCollection(schoolId, 'equipment'), id), {
-        [finalField]: finalValue
-      });
+      await updateEquipment(id, { [finalField]: finalValue });
+      setItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `equipment/${id}`);
+      console.error('Failed to update equipment card:', error);
     }
   };
 
@@ -609,16 +609,18 @@ export default function InventoryCardsRegistry() {
                 </td>
                 <td className="p-4 text-center text-xs font-bold border-l border-primary/5 whitespace-nowrap">
                    <input 
-                    type="date" 
+                    type="text" 
                     className="w-full bg-transparent border-none focus:outline-none text-center font-bold text-xs"
+                    placeholder="الجرد التأسيسي"
                     value={item.foundationalInventory}
                     onChange={(e) => handleUpdateItem(item.id, 'foundationalInventory', e.target.value)}
                   />
                 </td>
                 <td className="p-4 text-center text-xs font-bold border-l border-primary/5 whitespace-nowrap">
                    <input 
-                    type="date" 
+                    type="text" 
                     className="w-full bg-transparent border-none focus:outline-none text-center font-bold text-xs"
+                    placeholder="المراجعة العشرية"
                     value={item.decennialReview}
                     onChange={(e) => handleUpdateItem(item.id, 'decennialReview', e.target.value)}
                   />

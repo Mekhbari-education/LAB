@@ -91,6 +91,10 @@ export function useEquipmentLogic(isNested = false) {
     supplier: '',
     location: '',
     notes: '',
+    source: '',
+    price: '',
+    registrationDate: '',
+    exitDate: '',
     foundationalInventory: '',
     decennialReview: ''
   });
@@ -126,7 +130,16 @@ export function useEquipmentLogic(isNested = false) {
         status: 'functional',
         totalQuantity: 0,
         availableQuantity: 0,
-        brokenQuantity: 0
+        brokenQuantity: 0,
+        supplier: '',
+        location: '',
+        notes: '',
+        source: '',
+        price: '',
+        registrationDate: '',
+        exitDate: '',
+        foundationalInventory: '',
+        decennialReview: ''
       });
     } catch (error) {
       handleFirestoreError(error, editingEquipment ? OperationType.UPDATE : OperationType.CREATE, 'equipment');
@@ -143,6 +156,77 @@ export function useEquipmentLogic(isNested = false) {
     }
   };
 
+  // Helper to normalize column header strings (supports Arabic and Farsi variations)
+  const normalizeHeaderKey = (key: string): string => {
+    return String(key || '')
+      .trim()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\s+/g, ' ')
+      .replace(/[\u06CC\u0649]/g, '\u064A') // Persian Yeh / Alef Maksura -> Arabic Yeh 'ي'
+      .replace(/\u06A9/g, '\u0643') // Persian Kaf -> Arabic Kaf 'ك'
+      .replace(/[\u0622\u0623\u0625]/g, '\u0627') // Alef variations -> bare alef 'ا'
+      .replace(/\u0629/g, '\u0647') // Teh Marbuta -> Heh
+      .replace(/[\u064B-\u065F]/g, '') // Strip tashkeel
+      .toLowerCase();
+  };
+
+  const formatExcelCellValue = (val: any): string => {
+    if (val === undefined || val === null) return '';
+    if (val instanceof Date) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      return `${d}/${m}/${y}`;
+    }
+    if (typeof val === 'number' && val > 20000 && val < 60000) {
+      const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+      if (!isNaN(date.getTime())) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${d}/${m}/${y}`;
+      }
+    }
+    return String(val).trim();
+  };
+
+  const getRowValue = (row: Record<string, any>, candidates: string[], excludeSubstring?: string): string => {
+    for (const cand of candidates) {
+      if (row[cand] !== undefined && row[cand] !== null) {
+        const formatted = formatExcelCellValue(row[cand]);
+        if (formatted !== '') return formatted;
+      }
+    }
+
+    const normMap = new Map<string, any>();
+    for (const k of Object.keys(row)) {
+      normMap.set(normalizeHeaderKey(k), row[k]);
+    }
+
+    for (const cand of candidates) {
+      const normCand = normalizeHeaderKey(cand);
+      if (normMap.has(normCand)) {
+        const val = normMap.get(normCand);
+        const formatted = formatExcelCellValue(val);
+        if (formatted !== '') return formatted;
+      }
+    }
+
+    const normExclude = excludeSubstring ? normalizeHeaderKey(excludeSubstring) : null;
+    for (const cand of candidates) {
+      const normCand = normalizeHeaderKey(cand);
+      for (const [normKey, val] of normMap.entries()) {
+        if (normExclude && normKey.includes(normExclude)) continue;
+        if (normKey.includes(normCand) || normCand.includes(normKey)) {
+          const formatted = formatExcelCellValue(val);
+          if (formatted !== '') return formatted;
+        }
+      }
+    }
+
+    return '';
+  };
+
   const handleImportXLS = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -152,35 +236,244 @@ export function useEquipmentLogic(isNested = false) {
     reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wb = XLSX.read(bstr, { type: 'binary', cellDates: true });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws) as any[];
+        const data = XLSX.utils.sheet_to_json(ws) as Record<string, any>[];
 
-        const itemsToCreate: Partial<Equipment>[] = data.map(row => ({
-          name: String(row['تعيين الجهاز'] || row['الاسم'] || row['name'] || 'جهاز بدون اسم').trim(),
-          type: ((row['النوع'] === 'زجاجيات' || row['type'] === 'glassware') ? 'glassware' : (row['النوع'] === 'أجهزة تقنية' || row['type'] === 'tech') ? 'tech' : 'other') as Equipment['type'],
-          totalQuantity: Number(row['الكمية'] || row['totalQuantity'] || 1),
-          availableQuantity: Number(row['المتوفر'] || row['availableQuantity'] || row['الكمية'] || 1),
-          brokenQuantity: Number(row['غير صالح'] || row['brokenQuantity'] || 0),
-          status: ((row['الحالة'] || row['status'] || 'functional') as Equipment['status']),
-          serialNumber: String(row['رقم الجرد'] || row['serialNumber'] || '').trim(),
-          location: String(row['المكان'] || row['location'] || '').trim(),
-          notes: String(row['ملاحظات'] || row['notes'] || '').trim(),
-        }));
+        if (!data || data.length === 0) {
+          alert('الملف فارغ أو لا يحتوي على صفوف بيانات صالحة.');
+          return;
+        }
+
+        const itemsToCreate: Partial<Equipment>[] = data.map((row, idx) => {
+          // 1. رقم التسجيل
+          const regNum = getRowValue(row, [
+            'رقم التسجيل', 'رقم_التسجيل', 'رقم الجرد', 'رقم_الجرد', 
+            'رقم التسجيل في سجل الجرد', 'رقم القيد', 'الرقم التسلسلي', 
+            'رقم الصنف', 'الرقم', 'رقم', 'N° d\'enregistrement', 
+            'N° inventaire', 'N° d\'inventaire', 'serialNumber', 'code'
+          ]);
+
+          // 2. تاريخ التكفل بالتسجيل
+          const regDate = getRowValue(row, [
+            'تاريخ التكفل بالتسجيل', 'تاريخ التكفل', 'التكفل بالتسجيل', 
+            'تاريخ التسجيل', 'تاريخ الدخول', 'تاريخ الاقتناء', 'تاريخ الحيازة', 
+            'الجرد التأسيسي', 'Date de prise en charge', 'Date d\'enregistrement', 
+            'Date d\'entrée', 'registrationDate', 'date'
+          ]);
+
+          // 3. تعيين الشيء
+          const itemName = getRowValue(row, [
+            'تعيين الشيء', 'تعيين الشيئ', 'تعيين العتاد', 'تعيين الجهاز', 
+            'اسم الشيء', 'اسم الجهاز', 'اسم الصنف', 'الاسم', 'Désignation', 
+            'Designation', 'name', 'libellé'
+          ]);
+
+          // 4. مصدره
+          const itemSource = getRowValue(row, [
+            'مصدره', 'المصدر', 'مصدر العتاد', 'المورد', 'الممون', 
+            'طريقة الاقتناء', 'جهة التوريد', 'Provenance', 'Source', 
+            'Fournisseur', 'supplier'
+          ]);
+
+          // 5. قیمته (supports Persian 'ی' and Arabic 'ي')
+          const itemPrice = getRowValue(row, [
+            'قیمته', 'قيمته', 'القيمة', 'قيمة الشيء', 'السعر', 'الثمن', 
+            'المبلغ', 'التكلفة', 'Valeur', 'Prix', 'Montant', 'price', 
+            'cost', 'value'
+          ]);
+
+          // 6. التعيين (جهة التعيين والمكان - excluding 'الشيء' so it doesn't match 'تعيين الشيء')
+          const itemAssignment = getRowValue(row, [
+            'التعيين', 'جهة التعيين', 'مكان التعيين', 'الموقع', 
+            'مكان التواجد', 'المكان', 'المخبر', 'المصلحة', 'القاعة', 
+            'Affectation', 'Destination', 'Emplacement', 'location', 'assignment'
+          ], 'الشيء');
+
+          // 7. خروجه
+          const itemExit = getRowValue(row, [
+            'خروجه', 'تاريخ خروجه', 'الخروج', 'تاريخ الخروج', 'الإسقاط', 
+            'تاريخ الإسقاط', 'الشطب', 'سند الخروج', 'سبب الخروج', 
+            'Sortie', 'Date de sortie', 'Réforme', 'exitDate', 'exit'
+          ]);
+
+          // 8. ملاحظات
+          const itemNotes = getRowValue(row, [
+            'ملاحظات', 'الملاحظات', 'ملاحظة', 'Observations', 
+            'Remarques', 'Notes', 'notes', 'comments'
+          ]);
+
+          // Quantity detection
+          const totalQtyRaw = getRowValue(row, [
+            'الكمية', 'إجمالي الكمية', 'العدد', 'Quantité', 'totalQuantity', 'qty'
+          ]);
+          const totalQty = totalQtyRaw ? (Math.max(1, parseInt(totalQtyRaw, 10) || 1)) : 1;
+
+          // Exit status check
+          const hasExited = itemExit !== '' && 
+                            itemExit !== '---' && 
+                            itemExit !== '-' && 
+                            itemExit !== 'لا شيء' && 
+                            itemExit !== 'لا يوجد' &&
+                            itemExit !== 'سليم';
+
+          const statusRaw = getRowValue(row, [
+            'الحالة', 'الحالة التشغيلية', 'État', 'Status', 'status'
+          ]).toLowerCase();
+
+          let status: Equipment['status'] = 'functional';
+          if (hasExited) {
+            status = 'broken';
+          } else if (statusRaw.includes('صيانة') || statusRaw.includes('maintenance')) {
+            status = 'maintenance';
+          } else if (statusRaw.includes('تالف') || statusRaw.includes('معطل') || statusRaw.includes('broken')) {
+            status = 'broken';
+          }
+
+          const availableQty = hasExited ? 0 : totalQty;
+          const brokenQty = hasExited ? totalQty : 0;
+
+          // Type auto-classification
+          const typeRaw = getRowValue(row, ['النوع', 'نوع الصنف', 'Type', 'type', 'catégorie']).toLowerCase();
+          let equipType: Equipment['type'] = 'other';
+          if (typeRaw.includes('زجاج') || typeRaw.includes('glass')) {
+            equipType = 'glassware';
+          } else if (typeRaw.includes('تقن') || typeRaw.includes('tech') || typeRaw.includes('إلكترون') || typeRaw.includes('علمي')) {
+            equipType = 'tech';
+          } else {
+            const glasswareKeywords = ['زجاج', 'بيشر', 'حوجلة', 'أنبوب', 'مخبار', 'ماصة', 'دورق', 'سحاحة', 'عدسة', 'موشور', 'قمع', 'بوتقة', 'غطاء', 'شريحة'];
+            const techKeywords = ['مجهر', 'حاسوب', 'شاشة', 'طابعة', 'مسلاط', 'راسم', 'مولد', 'مقياس', 'عداد', 'ميزان', 'مطياف', 'مضخة', 'محرك', 'كهربا', 'إلكترو', 'رقمي', 'تلسكوب'];
+            const lowerName = itemName.toLowerCase();
+            if (glasswareKeywords.some(k => lowerName.includes(k))) {
+              equipType = 'glassware';
+            } else if (techKeywords.some(k => lowerName.includes(k))) {
+              equipType = 'tech';
+            }
+          }
+
+          const fallbackName = `صنف غير مسمى #${idx + 1}`;
+
+          return {
+            name: itemName || fallbackName,
+            serialNumber: regNum || '',
+            registrationDate: regDate || '',
+            foundationalInventory: regDate || '',
+            source: itemSource || '',
+            supplier: itemSource || '',
+            price: itemPrice || '',
+            location: itemAssignment || '',
+            exitDate: itemExit || '',
+            notes: itemNotes || '',
+            type: equipType,
+            status,
+            totalQuantity: totalQty,
+            availableQuantity: availableQty,
+            brokenQuantity: brokenQty
+          };
+        });
 
         const { createEquipmentBulk } = await import('../lib/api/equipment');
         await createEquipmentBulk(itemsToCreate);
-        alert(`تم استيراد ${itemsToCreate.length} صنف بنجاح!`);
+
+        alert(
+          `✅ تم استيراد ${itemsToCreate.length} صنف بنجاح وفق سجل الجرد العام للمؤسسة!\n\n` +
+          `• الحقول المعالجة: رقم التسجيل، تاريخ التكفل بالتسجيل، تعيين الشيء، مصدره، قیمته، التعيين، خروجه، ملاحظات.`
+        );
       } catch (error) {
         console.error('Error importing XLS:', error);
-        alert('حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف.');
+        alert('حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف وأعمدة سجل الجرد العام.');
       } finally {
         setIsImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleDownloadGeneralInventoryTemplate = () => {
+    const sampleData = [
+      {
+        'رقم التسجيل': '01',
+        'تاريخ التكفل بالتسجيل': '15/09/2022',
+        'تعيين الشيء': 'مجهر ضوئي ثنائي العينية تعليمي عالي الدقة',
+        'مصدره': 'ميزانية المؤسسة (الباب 22)',
+        'قیمته': '45000.00 دج',
+        'التعيين': 'مخبر العلوم الطبيعية والحياة',
+        'خروجه': '---',
+        'ملاحظات': 'بحالة جيدة جداً، مع الملحقات وعدسات التكبير'
+      },
+      {
+        'رقم التسجيل': '02',
+        'تاريخ التكفل بالتسجيل': '02/10/2023',
+        'تعيين الشيء': 'حوجلة عيارية زجاجية 500 مل بايركس',
+        'مصدره': 'وزارة التربية الوطنية (تجهيز أولي)',
+        'قیمته': '1200.00 دج',
+        'التعيين': 'مخبر الكيمياء والفيزياء',
+        'خروجه': '---',
+        'ملاحظات': 'سليمة مع السدادة البلاستيكية الأصلية'
+      },
+      {
+        'رقم التسجيل': '03',
+        'تاريخ التكفل بالتسجيل': '11/01/2021',
+        'تعيين الشيء': 'راسم اهتزاز مهبطي رقمي ثنائي المسار',
+        'مصدره': 'إعانة ولائية للتجهيز المخبري',
+        'قیمته': '82000.00 دج',
+        'التعيين': 'مخبر الفيزياء والتكنولوجيا',
+        'خروجه': '12/04/2024',
+        'ملاحظات': 'تم إسقاطه بمحضر شطب رسمي رقم 02/2024 لتعطل اللوحة الإلكترونية'
+      }
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 42 },
+      { wch: 32 },
+      { wch: 18 },
+      { wch: 32 },
+      { wch: 16 },
+      { wch: 45 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'سجل الجرد العام');
+    XLSX.writeFile(workbook, 'نموذج_سجل_الجرد_العام_الخاص_بالمؤسسة.xlsx');
+  };
+
+  const handleExportGeneralInventoryXLS = () => {
+    if (equipment.length === 0) {
+      alert('لا توجد بيانات لتصديرها.');
+      return;
+    }
+
+    const exportData = equipment.map((e, index) => ({
+      'رقم التسجيل': e.serialNumber || (index + 1).toString().padStart(2, '0'),
+      'تاريخ التكفل بالتسجيل': e.registrationDate || e.foundationalInventory || '---',
+      'تعيين الشيء': e.smartNameAr || e.name,
+      'مصدره': e.source || e.supplier || '---',
+      'قیمته': e.price || '---',
+      'التعيين': e.location || '---',
+      'خروجه': e.exitDate || (e.status === 'broken' ? 'تالف / مقترح للإسقاط' : '---'),
+      'ملاحظات': e.notes || '---'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 42 },
+      { wch: 32 },
+      { wch: 18 },
+      { wch: 32 },
+      { wch: 16 },
+      { wch: 45 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'سجل الجرد العام');
+    XLSX.writeFile(workbook, `سجل_الجرد_العام_الخاص_بالمؤسسة_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleUpdateStatus = async (id: string, currentStatus: string, newStatus: string) => {
@@ -244,13 +537,15 @@ export function useEquipmentLogic(isNested = false) {
     const tableRows = filteredEquipment.map((e, index) => `
       <tr>
         <td style="text-align: center;">${(index + 1).toString().padStart(2, '0')}</td>
-        <td style="font-weight: 600;">${e.name}</td>
-        <td style="text-align: center;">${e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة تقنية' : 'أخرى'}</td>
+        <td style="text-align: center; font-weight: bold;">${e.serialNumber || '-'}</td>
+        <td style="text-align: center;">${e.registrationDate || e.foundationalInventory || '-'}</td>
+        <td style="font-weight: 600;">${e.smartNameAr || e.name}</td>
         <td style="text-align: center; font-weight: 600;">${e.totalQuantity}</td>
-        <td style="text-align: center;">${e.availableQuantity}</td>
-        <td style="text-align: center;">${e.brokenQuantity}</td>
-        <td style="text-align: center;">${e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف'}</td>
-        <td>${e.location || '-'}</td>
+        <td style="text-align: center;">${e.source || e.supplier || '-'}</td>
+        <td style="text-align: center; font-weight: bold;">${e.price || '-'}</td>
+        <td style="text-align: center;">${e.location || '-'}</td>
+        <td style="text-align: center;">${e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب'}</td>
+        <td style="text-align: center; color: ${e.exitDate ? '#b91c1c' : 'inherit'}; font-weight: ${e.exitDate ? 'bold' : 'normal'};">${e.exitDate || '-'}</td>
         <td style="font-size: 0.85em;">${e.notes || '-'}</td>
       </tr>
     `).join('');
@@ -258,7 +553,7 @@ export function useEquipmentLogic(isNested = false) {
     const html = `
       <html dir="rtl" lang="ar">
         <head>
-          <title>سجل جرد العتاد والزجاجيات - ${formattedDate}</title>
+          <title>سجل جرد العتاد العام - ${formattedDate}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
             @page { size: A4 landscape; margin: 10mm; }
@@ -330,19 +625,21 @@ export function useEquipmentLogic(isNested = false) {
             </div>
           </div>
 
-          <h2 class="doc-title">سجل جرد العتاد والزجاجيات المخبرية</h2>
+          <h2 class="doc-title">سجل الجرد العام للمؤسسة التعليمية</h2>
           
           <table>
             <thead>
               <tr>
-                <th style="width: 30px;">رقم</th>
-                <th>تعيين الجهاز / الأداة</th>
-                <th style="width: 80px;">النوع</th>
-                <th style="width: 50px;">الإجمالي</th>
-                <th style="width: 50px;">السليم</th>
-                <th style="width: 50px;">التالف</th>
-                <th style="width: 60px;">الحالة</th>
-                <th style="width: 100px;">الموقع</th>
+                <th style="width: 30px;">#</th>
+                <th style="width: 75px;">رقم التسجيل</th>
+                <th style="width: 90px;">تاريخ التكفل بالتسجيل</th>
+                <th>تعيين الشيء</th>
+                <th style="width: 45px;">الكمية</th>
+                <th style="width: 95px;">مصدره</th>
+                <th style="width: 75px;">قیمته</th>
+                <th style="width: 90px;">التعيين</th>
+                <th style="width: 55px;">الحالة</th>
+                <th style="width: 75px;">خروجه</th>
                 <th>ملاحظات</th>
               </tr>
             </thead>
@@ -359,7 +656,7 @@ export function useEquipmentLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: 'سجل جرد العتاد' });
+    PrintService.printHtml(html, { title: 'سجل الجرد العام للمؤسسة' });
   };
 
   const handlePrintInventoryCards = () => {
@@ -461,33 +758,75 @@ export function useEquipmentLogic(isNested = false) {
   };
 
   const handleExportPDF = async () => {
-    const headers = ['#', 'تعيين الجهاز', 'النوع', 'الكمية', 'رقم الجرد', 'الموقع', 'الحالة'];
+    const headers = ['#', 'رقم التسجيل', 'تاريخ التكفل بالتسجيل', 'تعيين الشيء', 'الكمية', 'مصدره', 'قیمته', 'التعيين', 'الحالة', 'خروجه', 'ملاحظات'];
     const tableData = filteredEquipment.map((e, index) => [
       index + 1,
-      e.smartNameAr || e.name,
-      e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة تقنية' : 'أخرى',
-      e.totalQuantity,
       e.serialNumber || '---',
+      e.registrationDate || e.foundationalInventory || '---',
+      e.smartNameAr || e.name,
+      e.totalQuantity,
+      e.source || e.supplier || '---',
+      e.price || '---',
       e.location || '---',
-      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف'
+      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      e.exitDate || '---',
+      e.notes || '---'
     ]);
 
     await PDFService.generateTablePDF(
-      'تقرير جرد العتاد والزجاجيات المخبرية',
+      'تقرير سجل الجرد العام للعتاد والتجهيزات',
       headers,
       tableData,
-      `equipment_inventory_${new Date().toISOString().split('T')[0]}`,
+      `general_inventory_${new Date().toISOString().split('T')[0]}`,
       {
-        subtitle: `سجل جرد ومتابعة الأجهزة والوسائل التعليمية - العدد الإجمالي: ${filteredEquipment.length}`,
+        subtitle: `سجل الجرد العام للمؤسسة - العدد الإجمالي: ${filteredEquipment.length}`,
         schoolInfo: {
           school: schoolName,
           directorate: directorate,
           laboratory: 'مخبر العلوم والتكنولوجيا'
         },
         summaryCards: [
-          { label: 'إجمالي الأجهزة والعتاد', value: filteredEquipment.length },
-          { label: 'أجهزة سليمة وظيفياً', value: filteredEquipment.filter(e => e.status === 'functional').length },
-          { label: 'أجهزة تحت الصيانة', value: filteredEquipment.filter(e => e.status === 'maintenance').length },
+          { label: 'إجمالي أصناف الجرد', value: filteredEquipment.length },
+          { label: 'أصناف سليمة ونشطة', value: filteredEquipment.filter(e => e.status === 'functional').length },
+          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || (e.exitDate && e.exitDate !== '---')).length },
+          { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
+        ]
+      }
+    );
+  };
+
+  const handleExportWord = () => {
+    const headers = ['#', 'رقم التسجيل', 'تاريخ التكفل بالتسجيل', 'تعيين الشيء', 'الكمية', 'مصدره', 'قیمته', 'التعيين', 'الحالة', 'خروجه', 'ملاحظات'];
+    const tableData = filteredEquipment.map((e, index) => [
+      index + 1,
+      e.serialNumber || '---',
+      e.registrationDate || e.foundationalInventory || '---',
+      e.smartNameAr || e.name,
+      e.totalQuantity,
+      e.source || e.supplier || '---',
+      e.price || '---',
+      e.location || '---',
+      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      e.exitDate || '---',
+      e.notes || '---'
+    ]);
+
+    PDFService.downloadTableWord(
+      'تقرير سجل الجرد العام للعتاد والتجهيزات',
+      headers,
+      tableData,
+      `general_inventory_${new Date().toISOString().split('T')[0]}.doc`,
+      {
+        subtitle: `سجل الجرد العام للمؤسسة - العدد الإجمالي: ${filteredEquipment.length}`,
+        schoolInfo: {
+          school: schoolName,
+          directorate: directorate,
+          laboratory: 'مخبر العلوم والتكنولوجيا'
+        },
+        summaryCards: [
+          { label: 'إجمالي أصناف الجرد', value: filteredEquipment.length },
+          { label: 'أصناف سليمة ونشطة', value: filteredEquipment.filter(e => e.status === 'functional').length },
+          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || (e.exitDate && e.exitDate !== '---')).length },
           { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
         ]
       }
@@ -807,12 +1146,15 @@ export function useEquipmentLogic(isNested = false) {
     handleAddEquipment,
     handleDeleteEquipment,
     handleImportXLS,
+    handleDownloadGeneralInventoryTemplate,
+    handleExportGeneralInventoryXLS,
     handleUpdateStatus,
     fetchHistory,
     handleExportXLS,
     handlePrintList,
     handlePrintInventoryCards,
     handleExportPDF,
+    handleExportWord,
     handleSmartUpdate,
     handlePrint,
     handleSort,

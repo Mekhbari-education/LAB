@@ -17,13 +17,15 @@ import {
   Clock,
   Trash2,
   Edit,
-  Check
+  Check,
+  Download,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { analyzeIncident } from '../services/geminiService';
 import { PDFService } from '../services/pdfService';
-import { FileText, Sparkles, Download, ShieldCheck as ShieldCheckIcon } from 'lucide-react';
+import { FileText, Sparkles, ShieldCheck as ShieldCheckIcon } from 'lucide-react';
 
 import { SafetyItem, Incident } from '../types/safety';
 
@@ -168,6 +170,14 @@ export default function Safety() {
 
   const exportIncidentPDF = async (incident: Incident) => {
     await PDFService.generateIncidentPDF(incident, {
+      school: schoolName,
+      directorate: directorate,
+      laboratory: 'مخبر العلوم والتكنولوجيا'
+    });
+  };
+
+  const exportIncidentWord = (incident: Incident) => {
+    PDFService.generateIncidentWord(incident, {
       school: schoolName,
       directorate: directorate,
       laboratory: 'مخبر العلوم والتكنولوجيا'
@@ -406,18 +416,34 @@ export default function Safety() {
                     </td>
                     <td className="p-6 text-secondary/80 text-sm font-medium">{incident.reporter}</td>
                     <td className="p-6 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
                         <button 
                           onClick={() => setSelectedIncident(incident)}
-                          className="text-primary hover:bg-primary/10 p-2.5 rounded-full transition-all active:scale-90"
+                          className="text-primary hover:bg-primary/10 p-2 rounded-full transition-all active:scale-90"
+                          title="عرض التفاصيل الكاملة"
                         >
-                          <Eye size={20} />
+                          <Eye size={18} />
+                        </button>
+                        <button 
+                          onClick={() => exportIncidentWord(incident)}
+                          className="text-blue-700 dark:text-blue-300 hover:bg-blue-500/10 p-2 rounded-full transition-all active:scale-90"
+                          title="تصدير كملف Word (.doc) رسمي"
+                        >
+                          <FileDown size={18} />
+                        </button>
+                        <button 
+                          onClick={() => exportIncidentPDF(incident)}
+                          className="text-primary hover:bg-primary/10 p-2 rounded-full transition-all active:scale-90"
+                          title="تصدير كملف PDF رسمي"
+                        >
+                          <Download size={18} />
                         </button>
                         <button 
                           onClick={() => handleDeleteIncident(incident.id)}
-                          className="text-error hover:bg-error/10 p-2.5 rounded-full transition-all active:scale-90"
+                          className="text-error hover:bg-error/10 p-2 rounded-full transition-all active:scale-90"
+                          title="حذف السجل"
                         >
-                          <Trash2 size={20} />
+                          <Trash2 size={18} />
                         </button>
                       </div>
                     </td>
@@ -550,7 +576,20 @@ export default function Safety() {
                   <p className="text-secondary/60 font-bold mt-1">{(selectedIncident as any).displayDate} • {selectedIncident.location}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => exportIncidentPDF(selectedIncident)} className="p-2.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full transition-all" title="تصدير PDF"><Download size={20} /></button>
+                  <button 
+                    onClick={() => exportIncidentWord(selectedIncident)} 
+                    className="p-2.5 bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500 hover:text-white rounded-full transition-all" 
+                    title="تصدير كملف Word (.doc) بنفس تفاصيل وهيئة الـ PDF"
+                  >
+                    <FileDown size={20} />
+                  </button>
+                  <button 
+                    onClick={() => exportIncidentPDF(selectedIncident)} 
+                    className="p-2.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-full transition-all" 
+                    title="تصدير PDF"
+                  >
+                    <Download size={20} />
+                  </button>
                   <button onClick={() => setSelectedIncident(null)} className="p-2.5 hover:bg-surface-container-low rounded-full transition-all"><X size={24} /></button>
                 </div>
               </div>

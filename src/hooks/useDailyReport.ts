@@ -374,65 +374,16 @@ export function useDailyReport() {
 
   const handleExportWord = async () => {
     await handleSave();
-    const header = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head><meta charset='utf-8'><title>التقرير اليومي للمخبر</title>
-      <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid black; padding: 8px; text-align: right; }
-        .header { text-align: center; margin-bottom: 20px; }
-      </style>
-      </head><body>
-    `;
-    const footer = "</body></html>";
-    
-    let tableHtml = `
-      <div class="header">
-        <h1>التقرير اليومي للمخبر</h1>
-        <p>التاريخ: ${date}</p>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>رقم</th>
-            <th>الأستاذ</th>
-            <th>التوقيت</th>
-            <th>القسم</th>
-            <th>النشاط</th>
-            <th>الوسائل والمواد</th>
-            <th>ملاحظات</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
-
-    rows.forEach((row, index) => {
-      tableHtml += `
-        <tr>
-          <td>${index + 1}</td>
-          <td>${row.teacher}<br/>${row.teacherSubject || ''}</td>
-          <td>${row.time}</td>
-          <td>${row.class}</td>
-          <td>${row.activityTitle}</td>
-          <td>${row.equipment}</td>
-          <td>${row.notes}</td>
-        </tr>
-      `;
+    PDFService.generateDailyReportWord({
+      date,
+      schoolInfo: {
+        school: institution?.school,
+        commune: institution?.commune,
+        directorate: institution?.directorate,
+        laboratory: 'مخبر العلوم الطبيعية والفيزيائية'
+      },
+      rows
     });
-
-    tableHtml += "</tbody></table>";
-    
-    const source = header + tableHtml + footer;
-    const blob = new Blob(['\ufeff', source], {
-      type: 'application/msword'
-    });
-    
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `daily-report-${date}.doc`;
-    link.click();
-    URL.revokeObjectURL(url);
   };
 
   const loadReport = (report: SavedReport) => {

@@ -5,11 +5,12 @@ import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, serverTime
 import { 
   Scale, FileText, Search, Plus, Trash2, ExternalLink, 
   Filter, FileArchive, X, BookOpen, UploadCloud, Calendar, 
-  FileSignature, Download, Link2, CheckCircle2, AlertCircle, Eye,
+  FileSignature, Download, FileDown, Link2, CheckCircle2, AlertCircle, Eye,
   Globe, Building2, ShieldCheck, Lock, Share2, Crown, Files, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
 import { saveFileWithResilientFallback, openOrDownloadFile, deleteStoredFile } from '../lib/fileStorage';
 import BatchLegislationUploadModal from '../components/BatchLegislationUploadModal';
 
@@ -306,6 +307,18 @@ export default function SchoolLegislation() {
     });
   };
 
+  const handleDownloadWord = (docItem: LegislationDoc) => {
+    PDFService.generateLegislationSheetWord({
+      title: docItem.title,
+      reference: docItem.reference,
+      category: getCategoryLabel(docItem.category),
+      date: docItem.date,
+      description: docItem.description,
+      fileName: docItem.fileName || `${docItem.title}.doc`,
+      isPublic: docItem.isPublic
+    });
+  };
+
   const handlePreviewSelectedFile = () => {
     if (!selectedFile) return;
     openPdfPreview({
@@ -528,6 +541,14 @@ export default function SchoolLegislation() {
                 className="bg-surface rounded-3xl p-6 border border-outline-variant shadow-sm hover:shadow-md transition-all flex flex-col h-full group relative"
               >
                 <div className="absolute top-4 left-4 flex items-center gap-1.5">
+                  <button 
+                    onClick={() => handleDownloadWord(docItem)}
+                    className="px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-700 dark:text-blue-300 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-xs" 
+                    title="تحميل بطاقة توثيق رسمية بصيغة Word (.doc)"
+                  >
+                    <FileDown size={15} />
+                    <span>Word</span>
+                  </button>
                   {docItem.fileUrl && (
                     <>
                       <button 

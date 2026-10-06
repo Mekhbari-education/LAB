@@ -86,12 +86,15 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     handleAddEquipment,
     handleDeleteEquipment,
     handleImportXLS,
+    handleDownloadGeneralInventoryTemplate,
+    handleExportGeneralInventoryXLS,
     handleUpdateStatus,
     fetchHistory,
     handleExportXLS,
     handlePrintList,
     handlePrintInventoryCards,
     handleExportPDF,
+    handleExportWord,
     handleSmartUpdate,
     handlePrint,
     handleSort,
@@ -173,10 +176,18 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               {t('equipment.btn_print_list', 'طباعة القائمة')}
             </button>
             <button 
+              onClick={handleExportWord}
+              className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-2 border-blue-500/30 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-blue-500 hover:text-white transition-all shadow-xl active:scale-95"
+              title="تصدير كملف Word (.doc) رسمي بنفس تفاصيل الـ PDF"
+            >
+              <FileDown size={20} />
+              {t('common.export_word', 'تصدير Word')}
+            </button>
+            <button 
               onClick={handleExportPDF}
               className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 hover:border-primary transition-all shadow-xl active:scale-95"
             >
-              <FileDown size={20} />
+              <FileText size={20} />
               {t('common.export_pdf', 'تصدير PDF')}
             </button>
             <button 
@@ -199,16 +210,33 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               {t('common.scan_qr', 'مسح QR')}
             </button>
             <button 
+              onClick={handleDownloadGeneralInventoryTemplate}
+              className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-2 border-emerald-500/30 px-5 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-emerald-500 hover:text-white transition-all shadow-xl active:scale-95"
+              title="تحميل نموذج Excel فارغ يطابق تماماً أعمدة سجل الجرد العام الخاص بالمؤسسة (8 أعمدة رسمية)"
+            >
+              <Download size={20} />
+              نموذج سجل الجرد (Excel)
+            </button>
+            <button 
+              onClick={handleExportGeneralInventoryXLS}
+              className="bg-teal-500/10 text-teal-700 dark:text-teal-300 border-2 border-teal-500/30 px-5 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-teal-500 hover:text-white transition-all shadow-xl active:scale-95"
+              title="تصدير بيانات الجرد الحالية إلى ملف Excel بنفس أعمدة سجل الجرد العام الرسمي للمؤسسة"
+            >
+              <FileDown size={20} />
+              تصدير سجل الجرد العام
+            </button>
+            <button 
               onClick={() => fileInputRef.current?.click()}
               disabled={isImporting}
-              className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50"
+              className="bg-surface text-primary border-2 border-primary/20 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50"
+              title="استيراد ملف Excel مطابق لسجل الجرد العام: رقم التسجيل | تاريخ التكفل بالتسجيل | تعيين الشيء | مصدره | قیمته | التعيين | خروجه | ملاحظات"
             >
               {isImporting ? (
                 <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
               ) : (
                 <FileUp size={20} />
               )}
-              {t('common.import_xls', 'استيراد XLS')}
+              {t('common.import_xls', 'استيراد سجل الجرد (Excel)')}
             </button>
             <button 
               onClick={() => setIsAddModalOpen(true)}
@@ -342,62 +370,86 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     {selectedIds.length === filteredEquipment.length && filteredEquipment.length > 0 && <CheckCircle size={12} />}
                   </div>
                 </th>
-                <th className="px-10 py-6 cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('serialNumber')}>
-                  <div className="flex items-center gap-2">
-                    {t('equipment.col_serial', 'رقم الجرد')}
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('serialNumber')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <span>رقم التسجيل</span>
                     {sortField === 'serialNumber' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('name')}>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('registrationDate')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <span>تاريخ التكفل بالتسجيل</span>
+                    {sortField === 'registrationDate' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                  </div>
+                </th>
+                <th className="px-8 py-6 cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('name')}>
                   <div className="flex items-center gap-2">
-                    {t('equipment.col_name', 'تعيين الجهاز')}
+                    <span>تعيين الشيء</span>
                     {sortField === 'name' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('totalQuantity')}>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('totalQuantity')}>
                   <div className="flex items-center justify-center gap-2">
-                    {t('equipment.col_quantity', 'الكمية')}
+                    <span>{t('equipment.col_quantity', 'الكمية')}</span>
                     {sortField === 'totalQuantity' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('supplier')}>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('source')}>
                   <div className="flex items-center justify-center gap-2">
-                    {t('inventory_cards.col_supplier', 'الممون')}
-                    {sortField === 'supplier' ? (
+                    <span>مصدره</span>
+                    {sortField === 'source' || sortField === 'supplier' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('location')}>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('price')}>
                   <div className="flex items-center justify-center gap-2">
-                    {t('equipment.col_location', 'الموقع')}
+                    <span>قیمته</span>
+                    {sortField === 'price' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                  </div>
+                </th>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('location')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <span>التعيين</span>
                     {sortField === 'location' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('status')}>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('status')}>
                   <div className="flex items-center justify-center gap-2">
-                    {t('equipment.col_status', 'الحالة')}
+                    <span>{t('equipment.col_status', 'الحالة')}</span>
                     {sortField === 'status' ? (
                       sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                     ) : <ArrowUpDown size={14} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-10 py-6 text-center whitespace-nowrap">{t('common.notes', 'ملاحظات')}</th>
-                <th className="px-10 py-6"></th>
+                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('exitDate')}>
+                  <div className="flex items-center justify-center gap-2">
+                    <span>خروجه</span>
+                    {sortField === 'exitDate' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                  </div>
+                </th>
+                <th className="px-6 py-6 text-center whitespace-nowrap">ملاحظات</th>
+                <th className="px-6 py-6"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline/5 relative w-full">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-10 py-24 text-center">
+                  <td colSpan={12} className="px-10 py-24 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="w-12 h-12 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
                       <p className="text-on-surface/40 font-black uppercase tracking-widest text-xs">{t('common.loading', 'جاري تحميل البيانات...')}</p>
@@ -406,7 +458,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 </tr>
               ) : filteredEquipment.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-10 py-24 text-center">
+                  <td colSpan={12} className="px-10 py-24 text-center">
                     <div className="flex flex-col items-center gap-4 opacity-20">
                       <Package size={64} />
                       <p className="text-xl font-black">{t('common.empty', 'لا توجد أصناف مطابقة للبحث')}</p>
@@ -416,7 +468,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               ) : (
                 <>
                   {rowVirtualizer.getVirtualItems().length > 0 && rowVirtualizer.getVirtualItems()[0].start > 0 && (
-                    <tr><td style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }} colSpan={9} /></tr>
+                    <tr><td style={{ height: `${rowVirtualizer.getVirtualItems()[0].start}px` }} colSpan={12} /></tr>
                   )}
                   {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const e = filteredEquipment[virtualRow.index];
@@ -430,7 +482,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                           selectedIds.includes(e.id) && "bg-primary/[0.04]"
                         )}
                       >
-                        <td className="px-6 py-8">
+                        <td className="px-6 py-6">
                           <div 
                             onClick={(evt) => {
                               evt.stopPropagation();
@@ -446,23 +498,32 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                             {selectedIds.includes(e.id) && <CheckCircle size={12} />}
                           </div>
                         </td>
-                        <td className="px-10 py-8">
-                          <span className="text-sm font-black text-primary/60 bg-surface-container-low px-3 py-1 rounded-full whitespace-nowrap">
+                        <td className="px-6 py-6 text-center whitespace-nowrap">
+                          <span className="text-sm font-black text-primary/70 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline/5 inline-block">
                             {e.serialNumber || '---'}
                           </span>
                         </td>
-                        <td className="px-10 py-8">
-                          <div className="flex items-center gap-4 min-w-[300px]">
-                            <div className="w-12 h-12 rounded-2xl bg-surface-container-low flex items-center justify-center text-primary shadow-inner relative flex-shrink-0">
-                              {e.type === 'tech' ? <Monitor size={24} /> : <Beaker size={24} />}
+                        <td className="px-6 py-6 text-center whitespace-nowrap">
+                          {e.registrationDate || e.foundationalInventory ? (
+                            <span className="text-xs font-bold text-primary/80 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 inline-block">
+                              {e.registrationDate || e.foundationalInventory}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-on-surface/30">---</span>
+                          )}
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-3.5 min-w-[280px]">
+                            <div className="w-11 h-11 rounded-2xl bg-surface-container-low flex items-center justify-center text-primary shadow-inner relative flex-shrink-0">
+                              {e.type === 'tech' ? <Monitor size={22} /> : <Beaker size={22} />}
                               {e.smartNameAr && (
                                 <div className="absolute -top-1 -right-1 bg-primary text-on-primary p-1 rounded-full shadow-lg">
                                   <Sparkles size={10} />
                                 </div>
                               )}
                             </div>
-                            <div className="space-y-1">
-                              <p className="text-lg font-black text-primary font-serif">{e.smartNameAr || e.name}</p>
+                            <div className="space-y-0.5">
+                              <p className="text-base font-black text-primary font-serif">{e.smartNameAr || e.name}</p>
                               {e.smartNameAr && e.name !== e.smartNameAr && (
                                 <p className="text-[10px] font-bold text-on-surface/30 italic">الأصل: {e.name}</p>
                               )}
@@ -472,19 +533,28 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                             </div>
                           </div>
                         </td>
-                        <td className="px-10 py-8 text-center font-black text-primary text-xl">
+                        <td className="px-6 py-6 text-center font-black text-primary text-lg whitespace-nowrap">
                           {e.totalQuantity}
                         </td>
-                        <td className="px-10 py-8 text-center text-sm font-bold text-on-surface/60 whitespace-nowrap">
-                          {e.supplier || '---'}
+                        <td className="px-6 py-6 text-center text-sm font-bold text-on-surface/70 whitespace-nowrap">
+                          {e.source || e.supplier || '---'}
                         </td>
-                        <td className="px-10 py-8 text-center text-sm font-bold text-on-surface/60 whitespace-nowrap">
+                        <td className="px-6 py-6 text-center whitespace-nowrap">
+                          {e.price ? (
+                            <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 inline-block">
+                              {e.price}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-on-surface/30">---</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-6 text-center text-sm font-bold text-on-surface/70 whitespace-nowrap">
                           {e.location || '---'}
                         </td>
-                        <td className="px-10 py-8 text-center">
+                        <td className="px-6 py-6 text-center whitespace-nowrap">
                           <select 
                             className={cn(
-                              "px-6 py-2.5 rounded-full text-xs font-black border-2 transition-all cursor-pointer focus:ring-4 focus:ring-primary/10 appearance-none",
+                              "px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all cursor-pointer focus:ring-4 focus:ring-primary/10 appearance-none text-center",
                               e.status === 'maintenance' ? "bg-tertiary/10 border-tertiary/20 text-tertiary" : 
                               e.status === 'broken' ? "bg-error/10 border-error/20 text-error" : "bg-primary/5 border-primary/10 text-primary"
                             )}
@@ -493,11 +563,20 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                           >
                             <option value="functional">{t('equipment.status_functional', 'سليم')}</option>
                             <option value="maintenance">{t('equipment.status_maintenance', 'صيانة')}</option>
-                            <option value="broken">{t('equipment.status_broken', 'تالف')}</option>
+                            <option value="broken">{t('equipment.status_broken', 'تالف / مشطوب')}</option>
                           </select>
                         </td>
-                        <td className="px-10 py-8 text-center min-w-[150px]">
-                          <p className="text-xs text-on-surface/40 max-w-[150px] truncate" title={e.notes}>{e.notes || '---'}</p>
+                        <td className="px-6 py-6 text-center whitespace-nowrap">
+                          {e.exitDate && e.exitDate !== '---' && e.exitDate !== '-' ? (
+                            <span className="text-xs font-bold text-error bg-error/10 px-2.5 py-1 rounded-lg border border-error/20 inline-block" title={`تاريخ أو سند الخروج: ${e.exitDate}`}>
+                              {e.exitDate}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-on-surface/30">---</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-6 text-center min-w-[140px]">
+                          <p className="text-xs text-on-surface/50 max-w-[160px] truncate mx-auto" title={e.notes}>{e.notes || '---'}</p>
                         </td>
                         <td className="px-10 py-8 text-left">
                           <div className="flex gap-3 justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
@@ -523,7 +602,11 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                                 setNewEquipment({
                                   name: e.name, type: e.type, serialNumber: e.serialNumber, status: e.status,
                                   totalQuantity: e.totalQuantity, availableQuantity: e.availableQuantity, brokenQuantity: e.brokenQuantity,
-                                  supplier: e.supplier || '', location: e.location || '', notes: e.notes || '',
+                                  supplier: e.source || e.supplier || '', location: e.location || '', notes: e.notes || '',
+                                  source: e.source || e.supplier || '',
+                                  price: e.price || '',
+                                  registrationDate: e.registrationDate || e.foundationalInventory || '',
+                                  exitDate: e.exitDate || '',
                                   foundationalInventory: e.foundationalInventory || '', decennialReview: e.decennialReview || ''
                                 });
                                 setIsAddModalOpen(true);
@@ -556,7 +639,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     );
                   })}
                   {rowVirtualizer.getVirtualItems().length > 0 && rowVirtualizer.getTotalSize() - (rowVirtualizer.getVirtualItems()?.at(-1)?.end || 0) > 0 && (
-                    <tr><td style={{ height: `${rowVirtualizer.getTotalSize() - (rowVirtualizer.getVirtualItems()?.at(-1)?.end || 0)}px` }} colSpan={9} /></tr>
+                    <tr><td style={{ height: `${rowVirtualizer.getTotalSize() - (rowVirtualizer.getVirtualItems()?.at(-1)?.end || 0)}px` }} colSpan={12} /></tr>
                   )}
                 </>
               )}
@@ -774,6 +857,10 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                       supplier: '',
                       location: '',
                       notes: '',
+                      source: '',
+                      price: '',
+                      registrationDate: '',
+                      exitDate: '',
                       foundationalInventory: '',
                       decennialReview: ''
                     });
@@ -787,7 +874,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               <div className="max-h-[65vh] overflow-y-auto custom-scrollbar">
                 <form onSubmit={handleAddEquipment} className="p-12 grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-3">
-                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('equipment.field_name', 'اسم الصنف')}</label>
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">تعيين الشيء / اسم الصنف</label>
                     <input 
                       required
                       className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
@@ -809,12 +896,56 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     </select>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('equipment.field_serial', 'الرقم التسلسلي')}</label>
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">رقم التسجيل / رقم الجرد</label>
                     <input 
                       className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
-                      placeholder="SN-000000"
+                      placeholder="رقم القيد في سجل الجرد العام"
                       value={newEquipment.serialNumber}
                       onChange={e => setNewEquipment({...newEquipment, serialNumber: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">تاريخ التكفل بالتسجيل</label>
+                    <input 
+                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+                      placeholder="DD/MM/YYYY مثلاً 15/09/2023"
+                      value={newEquipment.registrationDate || newEquipment.foundationalInventory || ''}
+                      onChange={e => setNewEquipment({
+                        ...newEquipment, 
+                        registrationDate: e.target.value,
+                        foundationalInventory: e.target.value 
+                      })}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">مصدره / الممون</label>
+                    <input 
+                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+                      placeholder="ميزانية المؤسسة، وزارة التربية، هبة..."
+                      value={newEquipment.source || newEquipment.supplier || ''}
+                      onChange={e => setNewEquipment({
+                        ...newEquipment, 
+                        source: e.target.value,
+                        supplier: e.target.value 
+                      })}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">قیمته (دج)</label>
+                    <input 
+                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+                      placeholder="مثال: 45000.00 دج"
+                      value={newEquipment.price || ''}
+                      onChange={e => setNewEquipment({...newEquipment, price: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">التعيين / مكان التواجد</label>
+                    <input 
+                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+                      placeholder="مخبر العلوم الطبيعية، مخبر الفيزياء، الورشة..."
+                      value={newEquipment.location}
+                      onChange={e => setNewEquipment({...newEquipment, location: e.target.value})}
                     />
                   </div>
                   <div className="space-y-3">
@@ -828,6 +959,15 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                       <option value="maintenance">{t('equipment.status_maintenance', 'قيد الصيانة')}</option>
                       <option value="broken">{t('equipment.status_broken', 'تالف / خارج الخدمة')}</option>
                     </select>
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">خروجه (تاريخ أو سند الإسقاط والشطب)</label>
+                    <input 
+                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
+                      placeholder="اتركه فارغاً إذا كان الصنف نشطاً، أو اكتب تاريخ/سند الشطب"
+                      value={newEquipment.exitDate || ''}
+                      onChange={e => setNewEquipment({...newEquipment, exitDate: e.target.value})}
+                    />
                   </div>
                   <div className="space-y-3">
                     <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('equipment.field_quantity', 'إجمالي الكمية')}</label>
@@ -852,33 +992,6 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                         const val = Number(e.target.value);
                         setNewEquipment({...newEquipment, brokenQuantity: val, availableQuantity: (newEquipment.totalQuantity || 0) - val});
                       }}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('inventory_cards.col_supplier', 'الممون')}</label>
-                    <input 
-                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
-                      placeholder="اسم الممون"
-                      value={newEquipment.supplier}
-                      onChange={e => setNewEquipment({...newEquipment, supplier: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('equipment.field_location', 'الموقع')}</label>
-                    <input 
-                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
-                      placeholder="مكان التخزين"
-                      value={newEquipment.location}
-                      onChange={e => setNewEquipment({...newEquipment, location: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('inventory_cards.col_initial', 'الجرد التأسيسي')}</label>
-                    <input 
-                      className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner"
-                      placeholder="بيانات الجرد التأسيسي"
-                      value={newEquipment.foundationalInventory}
-                      onChange={e => setNewEquipment({...newEquipment, foundationalInventory: e.target.value})}
                     />
                   </div>
                   <div className="space-y-3">

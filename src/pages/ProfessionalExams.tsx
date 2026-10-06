@@ -14,25 +14,44 @@ export default function ProfessionalExams() {
   const [showReferences, setShowReferences] = useState(false);
   const [loadingPdfId, setLoadingPdfId] = useState<number | null>(null);
 
+  const getReferenceData = (refItem: typeof referencesList[0]) => ({
+    title: refItem.title,
+    subtitle: 'الأرضية الرقمية للمخابر — مراجع ودلائل الامتحانات المهنية',
+    headers: ['المحور / الموضوع', 'التفاصيل التوجيهية', 'الأهمية'],
+    rows: [
+      ['علوم التربية والبيداغوجيا', 'الأسس النظرية للتعليمية والتقويم المخبري والتعلم النشط والتجارب البيداغوجية.', 'إلزامي'],
+      ['التشريع والتنظيم التربوي', 'القوانين الأساسية المنظمة لموظفي قطاع التربية الوطنية ومخابر التعليم.', 'أساسي'],
+      ['الأمن والسلامة المخبرية', 'إجراءات الوقاية، التخزين الكيميائي الآمن، وبروتوكولات الطوارئ والنفايات الخطرة.', 'هام جداً'],
+      ['الثقافة العامة ومنهجية التحرير', 'خطوات إعداد مقال تحليلي ومناقشة الإشكاليات المعاصرة وفق المنهجية الرسمية.', 'شامل']
+    ],
+    summaryCards: [
+      { label: 'نوع الوثيقة', value: refItem.type },
+      { label: 'حجم الملف التقديري', value: refItem.size },
+      { label: 'سنة الدورة', value: '2026' }
+    ],
+    notes: refItem.desc,
+    fileName: `${refItem.title}.pdf`
+  });
+
+  const handleDownloadWordReference = (refItem: typeof referencesList[0]) => {
+    PDFService.exportLabReportWord({
+      ...getReferenceData(refItem),
+      fileName: `${refItem.title}.doc`
+    });
+  };
+
+  const handleDownloadPdfReference = async (refItem: typeof referencesList[0]) => {
+    await PDFService.exportLabReportPDF({
+      ...getReferenceData(refItem),
+      save: true
+    });
+  };
+
   const handlePreviewReference = async (refItem: typeof referencesList[0]) => {
     try {
       setLoadingPdfId(refItem.id);
       const doc = await PDFService.exportLabReportPDF({
-        title: refItem.title,
-        subtitle: 'الأرضية الرقمية للمخابر — مراجع ودلائل الامتحانات المهنية',
-        headers: ['المحور / الموضوع', 'التفاصيل التوجيهية', 'الأهمية'],
-        rows: [
-          ['علوم التربية والبيداغوجيا', 'الأسس النظرية للتعليمية والتقويم المخبري والتعلم النشط والتجارب البيداغوجية.', 'إلزامي'],
-          ['التشريع والتنظيم التربوي', 'القوانين الأساسية المنظمة لموظفي قطاع التربية الوطنية ومخابر التعليم.', 'أساسي'],
-          ['الأمن والسلامة المخبرية', 'إجراءات الوقاية، التخزين الكيميائي الآمن، وبروتوكولات الطوارئ والنفايات الخطرة.', 'هام جداً'],
-          ['الثقافة العامة ومنهجية التحرير', 'خطوات إعداد مقال تحليلي ومناقشة الإشكاليات المعاصرة وفق المنهجية الرسمية.', 'شامل']
-        ],
-        summaryCards: [
-          { label: 'نوع الوثيقة', value: refItem.type },
-          { label: 'حجم الملف التقديري', value: refItem.size },
-          { label: 'سنة الدورة', value: '2026' }
-        ],
-        notes: refItem.desc,
+        ...getReferenceData(refItem),
         save: false
       });
       const blob = doc.output('blob');
@@ -274,23 +293,44 @@ export default function ProfessionalExams() {
                     </p>
                   </div>
                   
-                  <div className="flex items-center justify-between pt-4 border-t border-outline/5 relative">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-outline/5 relative">
                     <span className="text-xs font-bold px-2.5 py-1 bg-surface-container-highest rounded-lg text-on-surface-variant">
                       {ref.type} • {ref.size}
                     </span>
-                    <button
-                      type="button"
-                      disabled={loadingPdfId === ref.id}
-                      onClick={() => handlePreviewReference(ref)}
-                      className="px-4 py-2 bg-primary/10 hover:bg-primary hover:text-white text-primary rounded-xl text-sm font-black flex items-center gap-1.5 transition-all shadow-xs disabled:opacity-50"
-                    >
-                      {loadingPdfId === ref.id ? (
-                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Eye size={16} />
-                      )}
-                      معاينة ومراجعة
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadWordReference(ref)}
+                        className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500 hover:text-white text-blue-700 dark:text-blue-300 rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                        title="تحميل ملف Word مطابق تماماً للوثيقة الرسمية (.doc)"
+                      >
+                        <FileDown size={14} />
+                        Word
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPdfReference(ref)}
+                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary hover:text-white text-primary rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                        title="تحميل ملف PDF رسمي (.pdf)"
+                      >
+                        <Download size={14} />
+                        PDF
+                      </button>
+                      <button
+                        type="button"
+                        disabled={loadingPdfId === ref.id}
+                        onClick={() => handlePreviewReference(ref)}
+                        className="px-3 py-1.5 bg-surface-container-highest hover:bg-primary/20 text-on-surface rounded-xl text-xs font-bold flex items-center gap-1 transition-all shadow-xs disabled:opacity-50"
+                        title="معاينة الوثيقة بملء الشاشة"
+                      >
+                        {loadingPdfId === ref.id ? (
+                          <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Eye size={14} />
+                        )}
+                        معاينة
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               ))}

@@ -12,6 +12,10 @@ export interface Equipment {
   supplier?: string;
   location?: string;
   notes?: string;
+  source?: string;
+  price?: string;
+  registrationDate?: string;
+  exitDate?: string;
   foundationalInventory?: string;
   decennialReview?: string;
   smartNameAr?: string;

@@ -27,7 +27,8 @@ import {
   ScrollText,
   BadgeCheck,
   Scale,
-  FileDown
+  FileDown,
+  Wand2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSchool } from '../context/SchoolContext';
@@ -37,6 +38,7 @@ import { usePdfPreview } from '../context/PdfPreviewContext';
 import { PDFService } from '../services/pdfService';
 import { db, getUserCollection } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import SmartDocumentGeneratorModal from '../components/SmartDocumentGeneratorModal';
 
 export type DocCategory = 'all' | 'requests' | 'reports' | 'minutes' | 'forms' | 'saved';
 
@@ -411,6 +413,7 @@ export default function AdministrativeDocuments() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<AdminTemplateItem | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isSmartGeneratorOpen, setIsSmartGeneratorOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -1233,8 +1236,20 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
           </div>
         </div>
 
-        {/* Action Button: Create Custom */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Action Buttons: Smart Generator & Custom */}
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+          <button
+            onClick={() => setIsSmartGeneratorOpen(true)}
+            className="px-5 py-3.5 bg-gradient-to-r from-amber-500 via-emerald-600 to-teal-700 hover:from-amber-600 hover:to-teal-800 text-white rounded-2xl font-black shadow-lg shadow-emerald-700/20 hover:shadow-xl transition-all flex items-center gap-2 text-sm active:scale-95 border border-white/20"
+            title="توليد مراسلة وسند طلب مصلحي ذكي بالذكاء الاصطناعي مع إمكانية التعديل"
+          >
+            <Sparkles size={18} className="animate-pulse" />
+            <span>المولّد الذكي للوثائق (AI)</span>
+            <span className="px-1.5 py-0.5 rounded-md bg-white/25 text-[10px] font-black uppercase tracking-wider">
+              جديد
+            </span>
+          </button>
+
           <button
             onClick={() => {
               handleOpenTemplate({
@@ -1253,10 +1268,10 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                 signers: ['المحرر / مسؤول المخبر', 'المقتصد', 'مدير المؤسسة']
               });
             }}
-            className="px-6 py-3.5 bg-primary text-on-primary rounded-2xl font-bold hover:shadow-lg hover:shadow-primary/25 transition-all flex items-center gap-2 text-sm shadow-xs"
+            className="px-5 py-3.5 bg-surface text-primary border border-outline-variant/40 hover:bg-surface-container rounded-2xl font-bold transition-all flex items-center gap-2 text-sm shadow-xs"
           >
             <Plus size={18} />
-            <span>إنشاء وثيقة فارغة</span>
+            <span>وثيقة فارغة</span>
           </button>
         </div>
       </header>
@@ -1360,6 +1375,37 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
             className="w-full bg-surface-container-high px-10 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none text-xs font-bold"
           />
         </div>
+      </div>
+
+      {/* Smart Document Generator Interactive Hero Banner */}
+      <div className="bg-gradient-to-l from-emerald-900/10 via-primary/5 to-amber-500/10 border-2 border-emerald-600/30 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-5">
+        <div className="flex items-start sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 via-teal-600 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+            <Sparkles size={24} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg font-black text-primary">المولّد الذكي للوثائق والمراسلات الإدارية</h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 text-xs font-black border border-emerald-600/30">
+                AI Smart Generator
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 text-[11px] font-black border border-amber-500/30">
+                مع إمكانية التعديل الشامل
+              </span>
+            </div>
+            <p className="text-secondary text-xs sm:text-sm mt-1 max-w-3xl leading-relaxed">
+              حوّل أي طلب عادي إلى مراسلة داخلية أو سند طلب مصلحي رسمي متكامل وفق معايير وزارة التربية الوطنية: ترويسة الدولة، جدول بنود منسق (الرقم، التعيين، المرجع، الوحدة، الكمية، الغرض)، تأشيرات المصادقة، والربط المباشر بـ Google Docs و Word و PDF.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsSmartGeneratorOpen(true)}
+          className="px-6 py-3.5 bg-gradient-to-r from-emerald-700 to-teal-800 hover:from-emerald-800 hover:to-teal-900 text-white rounded-2xl font-black text-sm flex items-center gap-2 shadow-md hover:shadow-lg transition-all shrink-0 active:scale-95 border border-white/20 whitespace-nowrap"
+        >
+          <Wand2 size={18} />
+          <span>فتح المولّد الذكي والتعديل</span>
+        </button>
       </div>
 
       {/* Main Content Area */}
@@ -1955,6 +2001,24 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
           </div>
         )}
       </AnimatePresence>
+
+      {/* Smart AI Document Generator Modal */}
+      <SmartDocumentGeneratorModal
+        isOpen={isSmartGeneratorOpen}
+        onClose={() => setIsSmartGeneratorOpen(false)}
+        onSaveDocument={(newDoc) => {
+          const updated = [newDoc, ...savedDocs];
+          setSavedDocs(updated);
+          localStorage.setItem('local_admin_documents', JSON.stringify(updated));
+          try {
+            addDoc(collection(db, 'user_admin_documents'), {
+              ...newDoc,
+              createdAt: serverTimestamp()
+            });
+          } catch {}
+          showNotification('تمت إضافة الوثيقة الذكية إلى أرشيفك الشخصي بنجاح!', 'success');
+        }}
+      />
     </div>
   );
 }
