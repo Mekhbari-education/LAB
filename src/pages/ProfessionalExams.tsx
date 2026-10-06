@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, Award, Calendar, FileText, Bell, ChevronDown, Eye } from 'lucide-react';
+import { ArrowLeft, Award, Calendar, FileText, Bell, ChevronDown, Eye, Download, FileDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { usePdfPreview } from '../context/PdfPreviewContext';

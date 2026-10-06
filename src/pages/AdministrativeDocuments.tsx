@@ -26,7 +26,8 @@ import {
   FileCheck2,
   ScrollText,
   BadgeCheck,
-  Scale
+  Scale,
+  FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSchool } from '../context/SchoolContext';
@@ -767,28 +768,376 @@ export default function AdministrativeDocuments() {
   };
 
   // Preview as PDF in PdfReviewModal
-  const handlePreviewPdf = async () => {
-    if (!selectedTemplate) return;
+  const handlePreviewPdf = async (templateItem?: AdminTemplateItem, customData?: Partial<SavedAdminDoc>) => {
+    const tpl = templateItem || selectedTemplate;
+    if (!tpl) return;
+
+    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
+    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
+    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
+    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const date = customData?.date || (templateItem ? new Date().toISOString().split('T')[0] : docDate);
+    const ref = customData?.reference || (templateItem ? '' : docRef);
+    const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
+    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+
     try {
-      const fallbackBlob = await PDFService.generateLegislationSheetPDF({
-        title: selectedTemplate.title,
-        reference: docRef,
-        category: selectedTemplate.tag,
-        date: docDate,
-        description: `${docSubject}\n\nمن: ${docSender}\nإلى: ${docRecipient}\n\n${docContent.slice(0, 160)}...`,
-        fileName: `${selectedTemplate.title}.pdf`,
-        isPublic: true
+      const pdfBlob = await PDFService.generateAdministrativeDocumentPDF({
+        title: tpl.title,
+        reference: ref,
+        category: tpl.tag,
+        date: date,
+        sender: sender,
+        recipient: recipient,
+        subject: subject,
+        content: content,
+        notes: notes,
+        hasTable: Boolean(tpl.hasTable && rows.length > 0),
+        tableHeaders: tableHeaders,
+        tableRows: rows.map(r => [r.col1, r.col2, r.col3, r.col4]),
+        signers: signers,
+        schoolInfo: {
+          country,
+          ministry,
+          directorate,
+          school: schoolName,
+          commune
+        },
+        fileName: `${tpl.title}.pdf`
       });
 
       openPdfPreview({
-        file: new File([fallbackBlob], `${selectedTemplate.title}.pdf`, { type: 'application/pdf' }),
-        title: selectedTemplate.title,
-        fileName: `${selectedTemplate.title}.pdf`,
-        category: selectedTemplate.tag
+        file: new File([pdfBlob], `${tpl.title}.pdf`, { type: 'application/pdf' }),
+        title: tpl.title,
+        fileName: `${tpl.title}.pdf`,
+        category: tpl.tag
       });
     } catch (err) {
       console.error('PDF Preview error:', err);
+      showNotification('حدث خطأ أثناء إعداد معاينة PDF', 'error');
     }
+  };
+
+  // Direct download as PDF matching the exact same form and details
+  const handleDownloadPdf = async (templateItem?: AdminTemplateItem, customData?: Partial<SavedAdminDoc>) => {
+    const tpl = templateItem || selectedTemplate;
+    if (!tpl) return;
+
+    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
+    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
+    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
+    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const date = customData?.date || (templateItem ? new Date().toISOString().split('T')[0] : docDate);
+    const ref = customData?.reference || (templateItem ? '' : docRef);
+    const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
+    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+
+    try {
+      await PDFService.generateAdministrativeDocumentPDF({
+        title: tpl.title,
+        reference: ref,
+        category: tpl.tag,
+        date: date,
+        sender: sender,
+        recipient: recipient,
+        subject: subject,
+        content: content,
+        notes: notes,
+        hasTable: Boolean(tpl.hasTable && rows.length > 0),
+        tableHeaders: tableHeaders,
+        tableRows: rows.map(r => [r.col1, r.col2, r.col3, r.col4]),
+        signers: signers,
+        schoolInfo: {
+          country,
+          ministry,
+          directorate,
+          school: schoolName,
+          commune
+        },
+        fileName: `${tpl.title}.pdf`,
+        save: true
+      });
+      showNotification(`تم تنزيل وثيقة "${tpl.title}" بصيغة PDF بنجاح!`, 'success');
+    } catch (err) {
+      console.error('PDF Download error:', err);
+      showNotification('حدث خطأ أثناء تنزيل ملف PDF', 'error');
+    }
+  };
+
+  // Download as Word Document (.doc) with the exact same form and details as PDF
+  const handleDownloadWord = (templateItem?: AdminTemplateItem, customData?: Partial<SavedAdminDoc>) => {
+    const tpl = templateItem || selectedTemplate;
+    if (!tpl) return;
+
+    const sender = customData?.sender || docSender || tpl.senderDefault;
+    const recipient = customData?.recipient || docRecipient || tpl.recipientDefault;
+    const subject = customData?.subject || docSubject || tpl.subjectDefault;
+    const content = customData?.content || docContent || tpl.contentDefault;
+    const notes = customData?.notes !== undefined ? customData.notes : (docNotes !== undefined ? docNotes : tpl.notesDefault);
+    const date = customData?.date || docDate;
+    const ref = customData?.reference || docRef;
+    const rows = customData?.rows || docRows;
+    const signers = customData?.signers || docSigners || tpl.signers;
+
+    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+
+    let tableHtml = '';
+    if (tpl.hasTable && rows && rows.length > 0) {
+      tableHtml = `
+        <table class="items-table" style="width: 100%; border-collapse: collapse; margin-top: 16pt; margin-bottom: 16pt; border: 1.5pt solid #0f766e;" dir="rtl">
+          <thead>
+            <tr style="background-color: #0f766e; color: #ffffff;">
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 45pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[0]}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[1]}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 90pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[2]}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[3]}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((r, i) => `
+              <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-weight: bold; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col1 || (i + 1)}</td>
+                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col2 || '-'}</td>
+                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col3 || '-'}</td>
+                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col4 || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    const signersHtml = `
+      <table class="signatures-table" style="width: 100%; border-collapse: collapse; margin-top: 36pt; border: none;" dir="rtl">
+        <tr>
+          ${signers.map(sig => `
+            <td style="width: ${Math.floor(100 / Math.max(signers.length, 1))}%; text-align: center; vertical-align: top; padding: 0 10pt; border: none;">
+              <div style="border-top: 1.5pt dashed #64748b; padding-top: 8pt; font-weight: bold; font-size: 11.5pt; color: #1e293b; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
+                ${sig}
+              </div>
+              <div style="height: 55pt; padding-top: 18pt; color: #94a3b8; font-size: 9.5pt; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
+                (الاسم، التوقيع والختم الرسمي)
+              </div>
+            </td>
+          `).join('')}
+        </tr>
+      </table>
+    `;
+
+    const wordDocumentHtml = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office'
+            xmlns:w='urn:schemas-microsoft-com:office:word'
+            xmlns:v='urn:schemas-microsoft-com:vml'
+            xmlns='http://www.w3.org/TR/REC-html40'
+            dir='rtl' lang='ar'>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <title>${tpl.title} - ${formattedSchool}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+            <w:Compatibility>
+              <w:UseWord2002TableStyleRules/>
+            </w:Compatibility>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          @page Section1 {
+            size: 595.35pt 841.95pt;
+            margin: 45.0pt 45.0pt 45.0pt 45.0pt;
+            mso-header-margin: 35.4pt;
+            mso-footer-margin: 35.4pt;
+            mso-paper-source: 0;
+          }
+          div.Section1 {
+            page: Section1;
+          }
+          body {
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+            font-size: 13.5pt;
+            color: #0f172a;
+            line-height: 1.6;
+            direction: rtl;
+            text-align: right;
+            background-color: #ffffff;
+          }
+          p {
+            margin: 0 0 7pt 0;
+          }
+          .header-main {
+            text-align: center;
+            font-size: 13.5pt;
+            font-weight: bold;
+            color: #1e293b;
+            margin: 0 0 2pt 0;
+          }
+          .header-sub {
+            text-align: center;
+            font-size: 11.5pt;
+            font-weight: bold;
+            color: #475569;
+            margin: 0 0 10pt 0;
+          }
+          .meta-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: none;
+            border-bottom: 2pt solid #0f766e;
+            padding-bottom: 6pt;
+            margin-bottom: 14pt;
+          }
+          .meta-table td {
+            border: none;
+            padding: 2pt 0;
+          }
+          .title-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14pt 0;
+            background-color: #f0fdfa;
+            border: 2pt solid #0f766e;
+          }
+          .title-table td {
+            padding: 10pt 16pt;
+            text-align: center;
+            border: none;
+          }
+          .title-table h1 {
+            margin: 0;
+            font-size: 17pt;
+            font-weight: bold;
+            color: #0f766e;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+          .correspondence-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14pt 0;
+            background-color: #f8fafc;
+            border: 1pt solid #cbd5e1;
+            border-right: 4.5pt solid #0f766e;
+          }
+          .correspondence-table td {
+            padding: 10pt 14pt;
+            border: none;
+            text-align: right;
+            font-size: 12.5pt;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+          .body-content {
+            font-size: 13.5pt;
+            text-align: justify;
+            text-justify: inter-word;
+            margin: 16pt 0;
+            line-height: 1.85;
+            white-space: pre-line;
+            color: #0f172a;
+          }
+          .notes-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14pt 0;
+            background-color: #fffbeb;
+            border: 1pt solid #fef3c7;
+            border-right: 4pt solid #d97706;
+          }
+          .notes-table td {
+            padding: 8pt 12pt;
+            border: none;
+            text-align: right;
+            font-size: 11.5pt;
+            color: #92400e;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+        </style>
+      </head>
+      <body lang="AR-DZ" dir="rtl">
+        <div class="Section1">
+          <p class="header-main">${country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</p>
+          <p class="header-sub">${ministry || 'وزارة التربية الوطنية'}</p>
+
+          <table class="meta-table" dir="rtl">
+            <tr>
+              <td style="text-align: right; vertical-align: top; font-weight: bold; font-size: 11.5pt; color: #1e293b;">
+                <div>${directorate || 'مديرية التربية الوطنية'}</div>
+                <div>${formattedSchool}</div>
+              </td>
+              <td style="text-align: left; vertical-align: top; font-weight: bold; font-size: 11pt; color: #334155;" dir="ltr">
+                <div>التاريخ: ${date}</div>
+                ${ref ? `<div>المرجع: ${ref}</div>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <table class="title-table" dir="rtl">
+            <tr>
+              <td>
+                <h1>${tpl.title}</h1>
+              </td>
+            </tr>
+          </table>
+
+          <table class="correspondence-table" dir="rtl">
+            <tr>
+              <td>
+                <p style="margin: 0 0 5pt 0; color: #1e293b;"><strong>من:</strong> ${sender}</p>
+                <p style="margin: 0 0 5pt 0; color: #1e293b;"><strong>إلى:</strong> ${recipient}</p>
+                <p style="margin: 0; color: #0f766e; font-weight: bold;"><strong>الموضوع:</strong> ${subject}</p>
+              </td>
+            </tr>
+          </table>
+
+          <div class="body-content">${content}</div>
+
+          ${tableHtml}
+
+          ${notes ? `
+            <table class="notes-table" dir="rtl">
+              <tr>
+                <td><strong>ملاحظة هامة:</strong> ${notes}</td>
+              </tr>
+            </table>
+          ` : ''}
+
+          ${signersHtml}
+
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 28pt; border: none; border-top: 1pt solid #e2e8f0;">
+            <tr>
+              <td style="text-align: right; font-size: 9pt; color: #94a3b8; padding-top: 6pt; border: none; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
+                الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية والتعليمية
+              </td>
+              <td style="text-align: left; font-size: 9pt; color: #94a3b8; padding-top: 6pt; border: none; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;" dir="ltr">
+                ${date}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', wordDocumentHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeFilename = (tpl.title || 'وثيقة_إدارية').replace(/[/\\?%*:|"<>]/g, '_');
+    link.download = `${safeFilename}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+    showNotification(`تم تنزيل وثيقة "${tpl.title}" بصيغة Word (.doc) بنجاح بنفس تفاصيل وهيئة الـ PDF!`, 'success');
   };
 
   // Copy structured text to clipboard
@@ -1068,16 +1417,68 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   </div>
 
                   <div className="flex items-center justify-between pt-4 mt-3 border-t border-outline-variant/30">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenSavedDoc(doc);
-                      }}
-                      className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
-                    >
-                      <Eye size={13} />
-                      معاينة وطباعة
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenSavedDoc(doc);
+                        }}
+                        className="text-xs font-bold text-primary flex items-center gap-1 hover:underline"
+                      >
+                        <Eye size={13} />
+                        معاينة وتحرير
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const matchedTpl = TEMPLATES.find(t => t.id === doc.templateId) || {
+                            id: doc.templateId,
+                            category: doc.category as any,
+                            title: doc.title,
+                            subTitle: '',
+                            tag: doc.category,
+                            recipientDefault: doc.recipient,
+                            senderDefault: doc.sender,
+                            subjectDefault: doc.subject,
+                            contentDefault: doc.content,
+                            signers: doc.signers || ['مسير المخبر', 'المدير'],
+                            hasTable: !!(doc.rows && doc.rows.length > 0)
+                          };
+                          handleDownloadWord(matchedTpl, doc);
+                        }}
+                        className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 hover:underline"
+                        title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF"
+                      >
+                        <FileDown size={13} />
+                        <span>Word</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const matchedTpl = TEMPLATES.find(t => t.id === doc.templateId) || {
+                            id: doc.templateId,
+                            category: doc.category as any,
+                            title: doc.title,
+                            subTitle: '',
+                            tag: doc.category,
+                            recipientDefault: doc.recipient,
+                            senderDefault: doc.sender,
+                            subjectDefault: doc.subject,
+                            contentDefault: doc.content,
+                            signers: doc.signers || ['مسير المخبر', 'المدير'],
+                            hasTable: !!(doc.rows && doc.rows.length > 0)
+                          };
+                          handleDownloadPdf(matchedTpl, doc);
+                        }}
+                        className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 hover:underline"
+                        title="تحميل كملف PDF"
+                      >
+                        <Download size={13} />
+                        <span>PDF</span>
+                      </button>
+                    </div>
 
                     <button
                       onClick={(e) => handleDeleteSavedDoc(doc.id, e)}
@@ -1148,13 +1549,48 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-outline-variant/40 flex items-center gap-2">
+                <div className="pt-3 border-t border-outline-variant/40 flex items-center gap-1.5 flex-wrap">
                   <button
                     onClick={() => handleOpenTemplate(template)}
-                    className="flex-1 py-2.5 bg-primary text-on-primary hover:opacity-95 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-all"
+                    className="flex-1 min-w-[110px] py-2 bg-primary text-on-primary hover:opacity-95 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all"
                   >
                     <FileText size={14} />
                     <span>تعديل وطباعة</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadWord(template);
+                    }}
+                    className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl transition-colors flex items-center gap-1 text-xs font-bold"
+                    title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                  >
+                    <FileDown size={14} />
+                    <span>Word</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadPdf(template);
+                    }}
+                    className="p-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-xl transition-colors flex items-center gap-1 text-xs font-bold"
+                    title="تحميل كملف PDF رسمي (.pdf)"
+                  >
+                    <Download size={14} />
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePreviewPdf(template);
+                    }}
+                    className="p-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-xl transition-colors"
+                    title="معاينة PDF في المتصفح"
+                  >
+                    <Eye size={15} />
                   </button>
 
                   <button
@@ -1162,10 +1598,10 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                       handleOpenTemplate(template);
                       setTimeout(handlePrint, 300);
                     }}
-                    className="p-2.5 bg-surface-container hover:bg-surface-container-highest text-primary rounded-xl transition-colors"
+                    className="p-2 bg-surface-container hover:bg-surface-container-highest text-primary rounded-xl transition-colors"
                     title="طباعة سريعة"
                   >
-                    <Printer size={16} />
+                    <Printer size={15} />
                   </button>
                 </div>
               </motion.div>
@@ -1200,7 +1636,7 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={handleSaveDocument}
                     disabled={isSaving}
@@ -1208,12 +1644,12 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                     title="حفظ في أرشيفي"
                   >
                     <Save size={14} />
-                    <span className="hidden sm:inline">حفظ في أرشيفي</span>
+                    <span className="hidden sm:inline">حفظ بالأرشيف</span>
                   </button>
 
                   <button
-                    onClick={handlePreviewPdf}
-                    className="px-3.5 py-2 bg-tertiary text-on-tertiary hover:opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    onClick={() => handlePreviewPdf()}
+                    className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
                     title="معاينة PDF داخلية"
                   >
                     <Eye size={14} />
@@ -1221,11 +1657,29 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   </button>
 
                   <button
+                    onClick={() => handleDownloadPdf()}
+                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    title="تحميل كملف PDF"
+                  >
+                    <Download size={14} />
+                    <span className="hidden sm:inline">تحميل PDF</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadWord()}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    title="تحميل مستند Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                  >
+                    <FileDown size={14} />
+                    <span className="hidden sm:inline">تحميل Word</span>
+                  </button>
+
+                  <button
                     onClick={handlePrint}
                     className="px-4 py-2 bg-primary text-on-primary hover:opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
                   >
                     <Printer size={15} />
-                    <span>طباعة رسمية</span>
+                    <span>طباعة</span>
                   </button>
 
                   <button
@@ -1462,17 +1916,35 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   جاهزة للطباعة بحجم A4 قياسي وفق مواصفات مراسلات وزارة التربية الوطنية.
                 </span>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setIsEditorOpen(false)}
-                    className="px-5 py-2.5 bg-surface hover:bg-surface-container text-secondary rounded-xl text-xs font-bold border border-outline-variant/60 transition-colors"
+                    className="px-4 py-2.5 bg-surface hover:bg-surface-container text-secondary rounded-xl text-xs font-bold border border-outline-variant/60 transition-colors"
                   >
                     إغلاق
                   </button>
 
                   <button
+                    onClick={() => handleDownloadPdf()}
+                    className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    title="تحميل كملف PDF"
+                  >
+                    <Download size={15} />
+                    <span>تحميل PDF</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadWord()}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF"
+                  >
+                    <FileDown size={15} />
+                    <span>تحميل ملف Word (.doc)</span>
+                  </button>
+
+                  <button
                     onClick={handlePrint}
-                    className="px-6 py-2.5 bg-primary text-on-primary hover:opacity-95 rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-all"
+                    className="px-5 py-2.5 bg-primary text-on-primary hover:opacity-95 rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-all"
                   >
                     <Printer size={15} />
                     <span>طباعة الوثيقة الآن</span>

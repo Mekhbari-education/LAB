@@ -15,11 +15,17 @@ import {
   Package,
   MapPin,
   RefreshCw,
-  Search
+  Search,
+  FileDown,
+  Download,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
+import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
+import { PrintService } from '../services/printService';
 
 interface LoanItem {
   id: string;
@@ -45,6 +51,7 @@ interface Equipment {
 
 export default function LoanRequest() {
   const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { openPdfPreview } = usePdfPreview();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -155,116 +162,73 @@ export default function LoanRequest() {
     }
   };
 
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  const getDocumentData = () => {
+    const schoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: directorate || 'مديرية التربية لولاية الجزائر',
+      school: schoolName || 'المؤسسة التعليمية',
+      commune,
+      laboratory: 'مخبر الوسائل والتجهيزات العلمية',
+      academicYear: '2025 / 2026',
+      date: requestDate
+    };
 
-    const tableRows = items.map(item => `
-      <tr>
-        <td style="text-align:center;font-weight:bold">${item.id}</td>
-        <td>${item.name}</td>
-        <td style="text-align:center">${item.quantity}</td>
-        <td style="text-align:center">${item.serial || '---'}</td>
-        <td style="text-align:center">${item.stateBefore || '---'}</td>
-        <td style="text-align:center">${item.stateAfter || '---'}</td>
-        <td>${item.notes || ''}</td>
-      </tr>
-    `).join('');
+    const headers = ['#', 'اسم الوسيلة / التجهيز', 'الكمية', 'الرقم التسلسلي', 'الحالة قبل الإعارة', 'الحالة بعد الإرجاع', 'ملاحظات'];
+    const rows = items.map(item => [
+      item.id,
+      item.name || '---',
+      item.quantity,
+      item.serial || '---',
+      item.stateBefore || 'جيدة',
+      item.stateAfter || '---',
+      item.notes || ''
+    ]);
 
-    printWindow.document.write(`
-      <html dir="rtl" lang="ar">
-        <head>
-          <title>طلب إعارة وسائل وتجهيزات - ${loanNum}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
-            @page { size: A4 portrait; margin: 15mm; }
-            body { font-family: 'Cairo', sans-serif; margin: 0; padding: 20px; color: #1a1a1a; }
-            .official-header { display: flex; justify-content: space-between; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .header-right { text-align: right; width: 33%; font-size: 13px; font-weight: bold; }
-            .header-center { text-align: center; width: 34%; }
-            .header-center p { margin: 2px 0; font-weight: bold; }
-            .header-center .rep { font-size: 15px; font-weight: 900; }
-            .header-left { text-align: left; width: 33%; font-size: 13px; font-weight: bold; }
-            
-            .doc-title { text-align: center; font-size: 24px; font-weight: 900; text-decoration: underline; margin: 30px 0; }
-            
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
-            .info-item { display: flex; gap: 10px; font-size: 14px; }
-            .label { font-weight: 900; min-width: 100px; }
-            .value { border-bottom: 1px dotted #666; flex: 1; padding-bottom: 2px; }
-            
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
-            th, td { border: 1px solid #000; padding: 8px; text-align: right; }
-            th { background-color: #f5f5f5; font-weight: 900; text-align: center; }
-            
-            .footer { margin-top: 50px; display: flex; justify-content: space-between; padding: 0 50px; }
-            .sig-box { text-align: center; width: 200px; }
-            .sig-title { font-weight: 900; margin-bottom: 60px; text-decoration: underline; }
-            
-            @media print {
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="official-header">
-            <div class="header-right">
-              <p>مديرية التربية لولاية: ${directorate}</p>
-              <p>${formatSchoolWithCommune(schoolName, commune)}</p>
-            </div>
-            <div class="header-center">
-              <p class="rep">الجمهورية الجزائرية الديمقراطية الشعبية</p>
-              <p>وزارة التربية الوطنية</p>
-            </div>
-            <div class="header-left">
-              <p>السنة الدراسية: 2025 - 2026</p>
-            </div>
-          </div>
+    return {
+      title: 'استمارة وسند إعارة وسائل وتجهيزات علمية',
+      subtitle: `رقم السند: ${loanNum} — المستفيد(ة): ${teacherName || 'أستاذ(ة)'} (${teacherRole}) — الغرض: ${activityTitle || 'نشاط بيداغوجي'}`,
+      headers,
+      rows,
+      summaryCards: [
+        { label: 'رقم الإعارة', value: loanNum },
+        { label: 'تاريخ الإعارة', value: requestDate },
+        { label: 'تاريخ الإرجاع', value: returnDate || 'غير محدد' },
+        { label: 'مكان الاستعمال', value: location }
+      ],
+      notes: 'يتعهد المستعير بالحفاظ على سلامة العتاد وإرجاعه فور الانتهاء من النشاط في حالته الأصلية.',
+      schoolInfo,
+      labManagerTitle: 'مسؤول المخبر (الملحق بالمخبر)',
+      principalTitle: 'المستعير (المستفيد من الإعارة)'
+    };
+  };
 
-          <h1 class="doc-title">طلب إعارة وسائل وتجهيزات علمية</h1>
+  const handleDownloadWord = () => {
+    const data = getDocumentData();
+    PDFService.exportLabReportWord(data);
+  };
 
-          <div class="info-grid">
-            <div class="info-item"><span class="label">الرقم:</span> <span class="value">${loanNum}</span></div>
-            <div class="info-item"><span class="label">بتاريخ:</span> <span class="value">${requestDate}</span></div>
-            <div class="info-item"><span class="label">الاسم واللقب:</span> <span class="value">${teacherName}</span></div>
-            <div class="info-item"><span class="label">الصفة:</span> <span class="value">${teacherRole}</span></div>
-            <div class="info-item" style="grid-column: span 2;"><span class="label">عنوان النشاط:</span> <span class="value">${activityTitle || '---'}</span></div>
-            <div class="info-item"><span class="label">موقع النشاط:</span> <span class="value">${location}</span></div>
-            <div class="info-item"><span class="label">تاريخ الإرجاع:</span> <span class="value">${returnDate || '---'}</span></div>
-          </div>
+  const handleDownloadPDF = async () => {
+    const data = getDocumentData();
+    await PDFService.exportLabReportPDF({ ...data, save: true });
+  };
 
-          <table>
-            <thead>
-              <tr>
-                <th width="5%">رقم</th>
-                <th width="40%">الوسائل والتجهيزات</th>
-                <th width="10%">الكمية</th>
-                <th width="15%">رقم الجرد</th>
-                <th width="10%">ق.ن *</th>
-                <th width="10%">ب.ن *</th>
-                <th width="10%">ملاحظات</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
-          <p style="font-size: 10px;">(*) ق.ن: قبل النشاط / (*) ب.ن: بعد النشاط</p>
+  const handlePreviewPDF = async () => {
+    const data = getDocumentData();
+    const doc = await PDFService.exportLabReportPDF({ ...data, save: false });
+    const blob = doc.output('blob');
+    openPdfPreview({
+      file: blob,
+      title: data.title,
+      fileName: `loan_request_${loanNum.replace(/[/\\?%*:|"<>]/g, '_')}.pdf`,
+      category: 'إعارة التجهيزات'
+    });
+  };
 
-          <div class="footer">
-            <div class="sig-box">
-              <p>عين كرشة في: ${signDate}</p>
-              <p class="sig-title">المعني بالأمر</p>
-            </div>
-            <div class="sig-box">
-              <p style="margin-top: 25px;"></p>
-              <p class="sig-title">مدير الـثـانويـة</p>
-            </div>
-          </div>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `);
+  const handlePrint = async () => {
+    const data = getDocumentData();
+    const html = PDFService.generateLabReportWordHtml(data);
+    await PrintService.printHtml(html, { title: data.title });
   };
 
   return (

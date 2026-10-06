@@ -7,9 +7,11 @@ import {
   Clock, XCircle, FileText, ShoppingCart, AlertCircle, 
   TrendingDown, TrendingUp, Save, X, Phone, Mail, MapPin,
   Printer, BookOpen, FlaskConical, Beaker, Cpu, Dna, ShieldAlert,
-  PackageCheck, Search, Filter, Sparkles, Check, ArrowRight, Eye, ChevronDown, Layers
+  PackageCheck, Search, Filter, Sparkles, Check, ArrowRight, Eye, ChevronDown, Layers,
+  Download, FileDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { usePdfPreview } from '../context/PdfPreviewContext';
 import { 
   PURCHASE_ORDER_TEMPLATES, 
   PurchaseOrderTemplate, 
@@ -62,6 +64,7 @@ interface BudgetConfig {
 
 export default function BudgetPurchases() {
   const { schoolId, schoolName, directorate, commune, schoolLogo } = useSchool();
+  const { openPdfPreview } = usePdfPreview();
   const [activeTab, setActiveTab] = useState<'orders' | 'templates' | 'suppliers' | 'budget'>('orders');
   const [loading, setLoading] = useState(true);
   
@@ -324,37 +327,146 @@ export default function BudgetPurchases() {
     setShowTemplateSelectorModal(false);
   };
 
+  const getSchoolPrintInfo = () => ({
+    directorate,
+    schoolName,
+    commune,
+    customLogoUrl: schoolLogo,
+    academicYear: budgetConfig.fiscalYear ? `${budgetConfig.fiscalYear} / ${Number(budgetConfig.fiscalYear) + 1}` : '2025 / 2026',
+    laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية'
+  });
+
+  const buildPrintableOrder = (order: Partial<PurchaseOrder>): PrintablePurchaseOrder => ({
+    orderNumber: order.orderNumber || 'PO-' + new Date().getFullYear() + '-001',
+    date: order.date?.toDate ? order.date.toDate() : (order.date || new Date()),
+    supplierName: order.supplierName,
+    status: order.status || 'draft',
+    items: (order.items || []).map(i => ({
+      name: i.name,
+      referenceCode: i.referenceCode,
+      unit: i.unit || 'وحدة',
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      description: i.description
+    })),
+    subtotal: order.subtotal || 0,
+    total: order.total || 0,
+    notes: order.notes,
+    templateCode: order.templateCode
+  });
+
+  const buildPrintableFromTemplate = (template: PurchaseOrderTemplate): PrintablePurchaseOrder => {
+    const items: OrderItem[] = template.items.map((item, idx) => ({
+      id: `${Date.now()}_${idx}`,
+      name: item.name,
+      referenceCode: item.referenceCode,
+      unit: item.unit,
+      quantity: item.defaultQuantity,
+      unitPrice: item.estimatedPrice,
+      description: item.description
+    }));
+    const totals = calculateOrderTotals(items);
+
+    return {
+      orderNumber: `MOD-${template.code}`,
+      date: new Date(),
+      supplierName: template.suggestedSupplierType,
+      status: 'draft',
+      items: items.map(i => ({
+        name: i.name,
+        referenceCode: i.referenceCode,
+        unit: i.unit || 'وحدة',
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        description: i.description
+      })),
+      subtotal: totals.subtotal,
+      total: totals.total,
+      notes: `نموذج رسمي مقترح: ${template.title}. ${template.description}`,
+      templateCode: template.code
+    };
+  };
+
+  // Download Purchase Order as Word document (.doc) with exact same form and details as PDF
+  const handleDownloadOrderWord = (order: Partial<PurchaseOrder>) => {
+    try {
+      const printable = buildPrintableOrder(order);
+      PurchaseOrderPrintService.downloadOrderWord(printable, getSchoolPrintInfo());
+    } catch (err) {
+      console.error('Word download error:', err);
+    }
+  };
+
+  // Download Purchase Order as PDF
+  const handleDownloadOrderPDF = async (order: Partial<PurchaseOrder>) => {
+    try {
+      const printable = buildPrintableOrder(order);
+      await PurchaseOrderPrintService.downloadOrderPDF(printable, getSchoolPrintInfo());
+    } catch (err) {
+      console.error('PDF download error:', err);
+    }
+  };
+
+  // Preview Purchase Order as PDF
+  const handlePreviewOrderPDF = async (order: Partial<PurchaseOrder>) => {
+    try {
+      const printable = buildPrintableOrder(order);
+      const pdfBlob = await PurchaseOrderPrintService.generateOrderPDF(printable, getSchoolPrintInfo());
+      openPdfPreview({
+        file: new File([pdfBlob], `سند_طلب_${printable.orderNumber}.pdf`, { type: 'application/pdf' }),
+        title: `سند طلب تموين المخبر (${printable.orderNumber})`,
+        fileName: `سند_طلب_${printable.orderNumber}.pdf`,
+        category: 'طلبيات الشراء والميزانية',
+        reference: printable.orderNumber
+      });
+    } catch (err) {
+      console.error('PDF preview error:', err);
+    }
+  };
+
+  // Download Template as Word document (.doc) with exact same form and details as PDF
+  const handleDownloadTemplateWord = (template: PurchaseOrderTemplate) => {
+    try {
+      const printable = buildPrintableFromTemplate(template);
+      PurchaseOrderPrintService.downloadOrderWord(printable, getSchoolPrintInfo());
+    } catch (err) {
+      console.error('Template Word download error:', err);
+    }
+  };
+
+  // Download Template as PDF
+  const handleDownloadTemplatePDF = async (template: PurchaseOrderTemplate) => {
+    try {
+      const printable = buildPrintableFromTemplate(template);
+      await PurchaseOrderPrintService.downloadOrderPDF(printable, getSchoolPrintInfo());
+    } catch (err) {
+      console.error('Template PDF download error:', err);
+    }
+  };
+
+  // Preview Template as PDF
+  const handlePreviewTemplatePDF = async (template: PurchaseOrderTemplate) => {
+    try {
+      const printable = buildPrintableFromTemplate(template);
+      const pdfBlob = await PurchaseOrderPrintService.generateOrderPDF(printable, getSchoolPrintInfo());
+      openPdfPreview({
+        file: new File([pdfBlob], `نموذج_طلب_${template.code}.pdf`, { type: 'application/pdf' }),
+        title: `نموذج طلبية: ${template.title}`,
+        fileName: `نموذج_طلب_${template.code}.pdf`,
+        category: template.categoryLabel || 'نماذج الطلبيات',
+        reference: template.code
+      });
+    } catch (err) {
+      console.error('Template PDF preview error:', err);
+    }
+  };
+
   // Print official Purchase Order
   const handlePrintOrder = async (order: Partial<PurchaseOrder>) => {
     try {
       setIsPrinting(true);
-      const printable: PrintablePurchaseOrder = {
-        orderNumber: order.orderNumber || 'PO-' + new Date().getFullYear() + '-001',
-        date: order.date?.toDate ? order.date.toDate() : (order.date || new Date()),
-        supplierName: order.supplierName,
-        status: order.status || 'draft',
-        items: (order.items || []).map(i => ({
-          name: i.name,
-          referenceCode: i.referenceCode,
-          unit: i.unit || 'وحدة',
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          description: i.description
-        })),
-        subtotal: order.subtotal || 0,
-        total: order.total || 0,
-        notes: order.notes,
-        templateCode: order.templateCode
-      };
-
-      await PurchaseOrderPrintService.printOrder(printable, {
-        directorate,
-        schoolName,
-        commune,
-        customLogoUrl: schoolLogo,
-        academicYear: budgetConfig.fiscalYear ? `${budgetConfig.fiscalYear} / ${Number(budgetConfig.fiscalYear) + 1}` : '2025 / 2026',
-        laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية'
-      });
+      const printable = buildPrintableOrder(order);
+      await PurchaseOrderPrintService.printOrder(printable, getSchoolPrintInfo());
     } catch (err) {
       console.error("Print error:", err);
       alert('حدث خطأ أثناء إعداد وثيقة الطباعة');
@@ -367,44 +479,8 @@ export default function BudgetPurchases() {
   const handlePrintTemplateDirectly = async (template: PurchaseOrderTemplate) => {
     try {
       setIsPrinting(true);
-      const items: OrderItem[] = template.items.map((item, idx) => ({
-        id: `${Date.now()}_${idx}`,
-        name: item.name,
-        referenceCode: item.referenceCode,
-        unit: item.unit,
-        quantity: item.defaultQuantity,
-        unitPrice: item.estimatedPrice,
-        description: item.description
-      }));
-      const totals = calculateOrderTotals(items);
-
-      const printable: PrintablePurchaseOrder = {
-        orderNumber: `MOD-${template.code}`,
-        date: new Date(),
-        supplierName: template.suggestedSupplierType,
-        status: 'draft',
-        items: items.map(i => ({
-          name: i.name,
-          referenceCode: i.referenceCode,
-          unit: i.unit || 'وحدة',
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          description: i.description
-        })),
-        subtotal: totals.subtotal,
-        total: totals.total,
-        notes: `نموذج رسمي مقترح: ${template.title}. ${template.description}`,
-        templateCode: template.code
-      };
-
-      await PurchaseOrderPrintService.printOrder(printable, {
-        directorate,
-        schoolName,
-        commune,
-        customLogoUrl: schoolLogo,
-        academicYear: '2025 / 2026',
-        laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية'
-      });
+      const printable = buildPrintableFromTemplate(template);
+      await PurchaseOrderPrintService.printOrder(printable, getSchoolPrintInfo());
     } catch (err) {
       console.error("Print error:", err);
     } finally {
@@ -731,23 +807,49 @@ export default function BudgetPurchases() {
                       <span>إنشاء طلبية بهذا النموذج</span>
                     </button>
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <button
-                        onClick={() => setViewingTemplate(tpl)}
-                        className="flex-1 py-2 bg-surface-container hover:bg-surface-container-high text-primary rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors border border-outline-variant/30"
+                        onClick={() => handleDownloadTemplateWord(tpl)}
+                        className="flex-1 min-w-[75px] py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                        title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
                       >
-                        <Eye size={14} />
-                        <span>تفاصيل البنود</span>
+                        <FileDown size={14} />
+                        <span>Word</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDownloadTemplatePDF(tpl)}
+                        className="flex-1 min-w-[75px] py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors"
+                        title="تحميل كملف PDF رسمي"
+                      >
+                        <Download size={14} />
+                        <span>PDF</span>
+                      </button>
+
+                      <button
+                        onClick={() => handlePreviewTemplatePDF(tpl)}
+                        className="p-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-xl font-bold text-xs flex items-center justify-center transition-colors"
+                        title="معاينة PDF في المتصفح"
+                      >
+                        <Eye size={15} />
                       </button>
 
                       <button
                         onClick={() => handlePrintTemplateDirectly(tpl)}
                         disabled={isPrinting}
-                        className="px-3 py-2 bg-surface hover:bg-tertiary/10 text-secondary hover:text-tertiary rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors border border-outline-variant/30"
+                        className="p-2 bg-surface hover:bg-surface-container text-secondary hover:text-primary rounded-xl font-bold text-xs flex items-center justify-center transition-colors border border-outline-variant/30"
                         title="طباعة سند الطلبية المعتمد لهذا النموذج"
                       >
                         <Printer size={15} />
-                        <span>طباعة</span>
+                      </button>
+
+                      <button
+                        onClick={() => setViewingTemplate(tpl)}
+                        className="py-2 px-2.5 bg-surface-container hover:bg-surface-container-high text-primary rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-colors border border-outline-variant/30"
+                        title="تفاصيل البنود"
+                      >
+                        <Layers size={14} />
+                        <span>البنود</span>
                       </button>
                     </div>
                   </div>
@@ -889,28 +991,51 @@ export default function BudgetPurchases() {
                         )}
                       </td>
                       <td className="p-4">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          <button 
+                            onClick={() => handleDownloadOrderWord(order)}
+                            title="تحميل سند الطلبية كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                            className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 rounded-xl transition-colors flex items-center gap-1 font-bold text-xs"
+                          >
+                            <FileDown size={16} />
+                            <span className="hidden xl:inline">Word</span>
+                          </button>
+                          <button 
+                            onClick={() => handleDownloadOrderPDF(order)}
+                            title="تحميل سند الطلبية كملف PDF رسمي"
+                            className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-1 font-bold text-xs"
+                          >
+                            <Download size={16} />
+                            <span className="hidden xl:inline">PDF</span>
+                          </button>
+                          <button 
+                            onClick={() => handlePreviewOrderPDF(order)}
+                            title="معاينة سند الطلبية كـ PDF في المتصفح"
+                            className="p-2 text-teal-600 dark:text-teal-400 hover:bg-teal-500/10 rounded-xl transition-colors"
+                          >
+                            <Eye size={16} />
+                          </button>
                           <button 
                             onClick={() => handlePrintOrder(order)}
                             disabled={isPrinting}
                             title="طباعة سند الطلبية المعتمد (Bon de Commande)"
                             className="p-2 text-secondary hover:text-primary hover:bg-primary/10 rounded-xl transition-colors"
                           >
-                            <Printer size={17} />
+                            <Printer size={16} />
                           </button>
                           <button 
                             onClick={() => { setCurrentOrder(order); setShowOrderModal(true); }}
                             title="معاينة وتعديل"
                             className="p-2 text-secondary hover:text-primary hover:bg-primary/10 rounded-xl transition-colors"
                           >
-                            <Edit size={17} />
+                            <Edit size={16} />
                           </button>
                           <button 
                             onClick={() => handleDeleteOrder(order.id)}
                             title="حذف الطلبية"
                             className="p-2 text-secondary hover:text-error hover:bg-error/10 rounded-xl transition-colors"
                           >
-                            <Trash2 size={17} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </td>
@@ -1075,24 +1200,49 @@ export default function BudgetPurchases() {
                 </div>
               </div>
 
-              <div className="p-4 bg-surface-container-low border-t border-outline-variant/50 flex gap-3 shrink-0">
+              <div className="p-4 bg-surface-container-low border-t border-outline-variant/50 flex flex-wrap gap-2.5 shrink-0">
                 <button
                   onClick={() => handleApplyTemplate(viewingTemplate)}
-                  className="flex-1 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
+                  className="flex-1 min-w-[170px] py-2.5 bg-primary text-on-primary rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
                 >
                   <ShoppingCart size={16} />
                   <span>استخدام هذا النموذج لإنشاء طلبية</span>
                 </button>
                 <button
-                  onClick={() => handlePrintTemplateDirectly(viewingTemplate)}
-                  className="px-5 py-2.5 bg-surface text-secondary hover:text-primary rounded-xl font-bold text-xs border border-outline-variant/50 flex items-center gap-2"
+                  onClick={() => handleDownloadTemplateWord(viewingTemplate)}
+                  className="px-3.5 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
                 >
-                  <Printer size={16} />
-                  <span>طباعة السند</span>
+                  <FileDown size={15} />
+                  <span>تحميل Word</span>
+                </button>
+                <button
+                  onClick={() => handleDownloadTemplatePDF(viewingTemplate)}
+                  className="px-3.5 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  title="تحميل كملف PDF رسمي"
+                >
+                  <Download size={15} />
+                  <span>تحميل PDF</span>
+                </button>
+                <button
+                  onClick={() => handlePreviewTemplatePDF(viewingTemplate)}
+                  className="px-3.5 py-2.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  title="معاينة PDF في المتصفح"
+                >
+                  <Eye size={15} />
+                  <span>معاينة PDF</span>
+                </button>
+                <button
+                  onClick={() => handlePrintTemplateDirectly(viewingTemplate)}
+                  disabled={isPrinting}
+                  className="px-4 py-2.5 bg-surface text-secondary hover:text-primary rounded-xl font-bold text-xs border border-outline-variant/50 flex items-center gap-1.5"
+                >
+                  <Printer size={15} />
+                  <span>طباعة</span>
                 </button>
                 <button
                   onClick={() => setViewingTemplate(null)}
-                  className="px-5 py-2.5 bg-surface-container text-secondary rounded-xl font-bold text-xs"
+                  className="px-4 py-2.5 bg-surface-container text-secondary rounded-xl font-bold text-xs"
                 >
                   إغلاق
                 </button>
@@ -1125,7 +1275,7 @@ export default function BudgetPurchases() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   {currentOrder.id && (
                     <select 
                       value={currentOrder.status} 
@@ -1142,6 +1292,35 @@ export default function BudgetPurchases() {
                       <option value="cancelled">ملغاة</option>
                     </select>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadOrderWord(currentOrder)}
+                    className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                  >
+                    <FileDown size={14} />
+                    <span>Word</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadOrderPDF(currentOrder)}
+                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    title="تحميل كملف PDF رسمي"
+                  >
+                    <Download size={14} />
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handlePreviewOrderPDF(currentOrder)}
+                    className="p-1.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-xl font-bold text-xs flex items-center justify-center transition-colors"
+                    title="معاينة PDF في المتصفح"
+                  >
+                    <Eye size={16} />
+                  </button>
 
                   <button 
                     onClick={() => setShowOrderModal(false)} 
@@ -1360,11 +1539,11 @@ export default function BudgetPurchases() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-4 bg-surface-container-low border-t border-outline-variant/50 flex flex-wrap gap-3 shrink-0">
+              <div className="p-4 bg-surface-container-low border-t border-outline-variant/50 flex flex-wrap gap-2.5 shrink-0">
                 <button 
                   type="button"
                   onClick={handleSaveOrder} 
-                  className="flex-1 py-3 bg-primary text-on-primary rounded-xl font-bold text-xs hover:bg-primary/90 flex items-center justify-center gap-2 shadow-md shadow-primary/20 transition-all"
+                  className="flex-1 min-w-[170px] py-3 bg-primary text-on-primary rounded-xl font-bold text-xs hover:bg-primary/90 flex items-center justify-center gap-2 shadow-md shadow-primary/20 transition-all"
                 >
                   <Save size={16} /> 
                   <span>حفظ الطلبية {currentOrder.status === 'draft' ? '(كمسودة)' : ''}</span>
@@ -1372,12 +1551,43 @@ export default function BudgetPurchases() {
 
                 <button 
                   type="button"
+                  onClick={() => handleDownloadOrderWord(currentOrder)}
+                  className="px-4 py-3 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded-xl font-bold text-xs flex items-center gap-2 border border-blue-500/20 transition-colors"
+                  title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                >
+                  <FileDown size={16} />
+                  <span>تحميل Word</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => handleDownloadOrderPDF(currentOrder)}
+                  className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-xl font-bold text-xs flex items-center gap-2 border border-rose-500/20 transition-colors"
+                  title="تحميل كملف PDF رسمي"
+                >
+                  <Download size={16} />
+                  <span>تحميل PDF</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => handlePreviewOrderPDF(currentOrder)}
+                  className="px-4 py-3 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-xl font-bold text-xs flex items-center gap-2 border border-teal-500/20 transition-colors"
+                  title="معاينة كملف PDF في المتصفح"
+                >
+                  <Eye size={16} />
+                  <span>معاينة PDF</span>
+                </button>
+
+                <button 
+                  type="button"
                   onClick={() => handlePrintOrder(currentOrder)}
                   disabled={isPrinting}
-                  className="px-5 py-3 bg-tertiary/15 text-tertiary hover:bg-tertiary/25 rounded-xl font-bold text-xs flex items-center gap-2 border border-tertiary/30 transition-colors"
+                  className="px-4 py-3 bg-surface hover:bg-surface-container text-secondary hover:text-primary rounded-xl font-bold text-xs flex items-center gap-2 border border-outline-variant/40 transition-colors"
+                  title="طباعة السند الرسمي"
                 >
                   <Printer size={16} />
-                  <span>طباعة السند الرسمي</span>
+                  <span>طباعة</span>
                 </button>
 
                 <button 

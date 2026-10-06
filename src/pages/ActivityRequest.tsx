@@ -20,12 +20,18 @@ import {
   FlaskConical,
   Beaker,
   Activity,
-  AlertCircle
+  AlertCircle,
+  FileDown,
+  Download,
+  Eye
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
+import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
+import { PrintService } from '../services/printService';
 
 interface EquipItem {
   id: string;
@@ -58,6 +64,7 @@ interface Chemical {
 
 export default function ActivityRequest() {
   const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { openPdfPreview } = usePdfPreview();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [chemicalsList, setChemicalsList] = useState<Chemical[]>([]);
@@ -172,118 +179,77 @@ export default function ActivityRequest() {
     }
   };
 
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  const getDocumentData = () => {
+    const schoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: directorate || 'مديرية التربية لولاية الجزائر',
+      school: schoolName || 'المؤسسة التعليمية',
+      commune,
+      laboratory: lab || 'مخبر العلوم والتكنولوجيا',
+      academicYear: '2025 / 2026',
+      date: requestDate
+    };
 
-    const equipRows = equipItems.map(item => `
-      <tr>
-        <td style="text-align:center;font-weight:bold">${item.id}</td>
-        <td>${item.name}</td>
-        <td style="text-align:center">${item.quantity}</td>
-        <td style="text-align:center;color:#ccc">---</td>
-        <td style="text-align:center;color:#ccc">---</td>
-      </tr>
-    `).join('');
+    const headers = ['#', 'النوع / التصنيف', 'البيان (الوسيلة / المادة الكيميائية)', 'الكمية المطلوبة', 'الصيغة / الملاحظات'];
+    const rows: (string | number)[][] = [];
 
-    const chemRows = chemItems.map(item => `
-      <tr>
-        <td style="text-align:center;font-weight:bold">${item.id}</td>
-        <td>${item.name}</td>
-        <td style="text-align:center">${item.quantity}</td>
-        <td style="text-align:center;font-family:monospace;direction:ltr">${item.formula || '---'}</td>
-      </tr>
-    `).join('');
+    equipItems.forEach((item, idx) => {
+      if (item.name) {
+        rows.push([idx + 1, 'وسائل وتجهيزات', item.name, item.quantity, 'صالحة وجاهزة للتجربة']);
+      }
+    });
 
-    printWindow.document.write(`
-      <html dir="rtl" lang="ar">
-        <head>
-          <title>طلب تحضير نشاط تطبيقي - ${teacherName}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
-            @page { size: A4 portrait; margin: 15mm; }
-            body { font-family: 'Cairo', sans-serif; padding: 20px; color: #1a1a1a; line-height: 1.6; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px; }
-            .rep-title { font-weight: 900; font-size: 16px; text-align: center; }
-            .side-info { font-size: 13px; font-weight: bold; }
-            .doc-title { text-align: center; font-size: 26px; font-weight: 900; text-decoration: underline; margin: 30px 0; }
-            .notice { text-align: center; font-size: 11px; color: #555; margin-bottom: 10px; }
-            .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 25px; border: 1px solid #eee; padding: 15px; border-radius: 10px; }
-            .info-item { display: flex; gap: 8px; font-size: 14px; }
-            .label { font-weight: 900; }
-            .value { border-bottom: 1px dotted #888; flex: 1; padding-bottom: 2px; }
-            .tables-container { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-            th, td { border: 1px solid #000; padding: 6px; text-align: right; }
-            th { background: #f5f5f5; font-weight: 900; text-align: center; }
-            .footer-sigs { margin-top: 50px; display: flex; justify-content: space-between; padding: 0 40px; }
-            .sig-box { text-align: center; width: 180px; }
-            .sig-title { font-weight: 900; margin-bottom: 60px; text-decoration: underline; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="side-info">
-              <p>مديرية التربية لولاية: ${directorate}</p>
-              <p>${formatSchoolWithCommune(schoolName, commune)}</p>
-            </div>
-            <div class="rep-title">
-              <p>الجمهورية الجزائرية الديمقراطية الشعبية</p>
-              <p>وزارة التربية الوطنية</p>
-            </div>
-            <div class="side-info" style="text-align:left">
-              <p>السنة الدراسية: 2025 - 2026</p>
-            </div>
-          </div>
-          
-          <h1 class="doc-title">طلب تحضير نشاط تطبيقي</h1>
-          <p class="notice">تقدم هذه الوثيقة لتحضير الحصص التطبيقية قبل إنجازها بـ 48 ساعة</p>
-          
-          <div class="info-grid">
-            <div class="info-item"><span class="label">الرقم:</span><span class="value">${orderNum}</span></div>
-            <div class="info-item"><span class="label">الأستاذ(ة):</span><span class="value">${teacherName}</span></div>
-            <div class="info-item"><span class="label">تاريخ الطلب:</span><span class="value">${requestDate} (${requestTime})</span></div>
-            <div class="info-item"><span class="label">تاريخ الإجراء:</span><span class="value">${executionDate}</span></div>
-            <div class="info-item"><span class="label">التوقيت:</span><span class="value">${timing}</span></div>
-            <div class="info-item"><span class="label">القسم:</span><span class="value">${className}</span></div>
-            <div class="info-item"><span class="label">نوع النشاط:</span><span class="value">${activityType}</span></div>
-            <div class="info-item"><span class="label">المخبر:</span><span class="value">${lab}</span></div>
-            <div class="info-item" style="grid-column: span 2"><span class="label">عنوان النشاط:</span><span class="value">${activityTitle}</span></div>
-          </div>
+    chemItems.forEach((item, idx) => {
+      if (item.name) {
+        rows.push([equipItems.length + idx + 1, 'مواد كيميائية', item.name, item.quantity || 'حسب التجربة', item.formula || '---']);
+      }
+    });
 
-          <div class="tables-container">
-            <div>
-              <h3 style="font-size:14px;margin-bottom:5px">I. الوسائل والتجهيزات</h3>
-              <table>
-                <thead><tr><th width="40">رقم</th><th>الوسيلة / التجهيز</th><th width="50">الكمية</th><th width="40">ق.ن</th><th width="40">ب.ن</th></tr></thead>
-                <tbody>${equipRows}</tbody>
-              </table>
-            </div>
-            <div>
-              <h3 style="font-size:14px;margin-bottom:5px">II. المواد الكيميائية</h3>
-              <table>
-                <thead><tr><th width="40">رقم</th><th>المادة</th><th width="60">الكمية</th><th width="80">الصيغة</th></tr></thead>
-                <tbody>${chemRows}</tbody>
-              </table>
-            </div>
-          </div>
+    return {
+      title: 'استمارة وطلب تحضير نشاط تجريبي / تطبيقي',
+      subtitle: `عنوان النشاط: ${activityTitle || 'نشاط مخبري'} — الأستاذ(ة): ${teacherName || '---'} — القسم: ${className || '---'}`,
+      headers,
+      rows: rows.length > 0 ? rows : [['1', 'نشاط عام', 'وسائل التجربة المقررة', 1, 'جاهزة']],
+      summaryCards: [
+        { label: 'رقم الطلب', value: orderNum },
+        { label: 'تاريخ الإجراء', value: executionDate || requestDate },
+        { label: 'توقيت الحصة', value: timing },
+        { label: 'المخبر', value: lab }
+      ],
+      notes: 'تُودع هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل.',
+      schoolInfo,
+      labManagerTitle: 'مسؤول المخبر (الملحق)',
+      principalTitle: 'أستاذ(ة) المادة المشرف(ة)'
+    };
+  };
 
-          <p style="font-size: 10px; margin-top:20px;">(*) ق.ن: قبل النشاط / (*) ب.ن: بعد النشاط</p>
+  const handleDownloadWord = () => {
+    const data = getDocumentData();
+    PDFService.exportLabReportWord(data);
+  };
 
-          <div class="footer-sigs">
-            <div class="sig-box">
-              <p>عين كرشة في: ${signDate}</p>
-              <p class="sig-title">أستاذ(ة) المادة</p>
-            </div>
-            <div class="sig-box">
-              <p style="margin-top:23px"></p>
-              <p class="sig-title">مسؤول المخبر</p>
-            </div>
-          </div>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `);
+  const handleDownloadPDF = async () => {
+    const data = getDocumentData();
+    await PDFService.exportLabReportPDF({ ...data, save: true });
+  };
+
+  const handlePreviewPDF = async () => {
+    const data = getDocumentData();
+    const doc = await PDFService.exportLabReportPDF({ ...data, save: false });
+    const blob = doc.output('blob');
+    openPdfPreview({
+      file: blob,
+      title: data.title,
+      fileName: `activity_request_${orderNum.replace(/\//g, '_')}.pdf`,
+      category: 'تحضير الأنشطة'
+    });
+  };
+
+  const handlePrint = async () => {
+    const data = getDocumentData();
+    const html = PDFService.generateLabReportWordHtml(data);
+    await PrintService.printHtml(html, { title: data.title });
   };
 
   return (
@@ -305,27 +271,54 @@ export default function ActivityRequest() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button 
               onClick={handleReset} 
-              className="p-4 bg-surface text-on-surface/40 rounded-2xl hover:text-primary transition-all shadow-sm border border-outline/10 active:scale-95"
+              className="p-3.5 bg-surface text-on-surface/40 rounded-2xl hover:text-primary transition-all shadow-sm border border-outline/10 active:scale-95"
               title="نموذج جديد"
             >
-              <RotateCcw size={24} />
+              <RotateCcw size={20} />
             </button>
             <button 
               onClick={handleSave} 
               disabled={isSaving} 
-              className="px-8 py-4 bg-surface text-primary border-2 border-primary/10 rounded-2xl font-black flex items-center gap-2 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50"
+              className="px-6 py-3.5 bg-surface text-primary border-2 border-primary/10 rounded-2xl font-black flex items-center gap-2 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50 text-xs"
             >
-              {isSaving ? <RefreshCw className="animate-spin" size={20} /> : <Save size={20} />}
+              {isSaving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
               حفظ الطلب
             </button>
+
+            <button 
+              onClick={handleDownloadWord} 
+              className="px-5 py-3.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/20 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 text-xs shadow-sm"
+              title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+            >
+              <FileDown size={18} />
+              تحميل Word
+            </button>
+
+            <button 
+              onClick={handleDownloadPDF} 
+              className="px-5 py-3.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/20 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 text-xs shadow-sm"
+              title="تحميل كملف PDF رسمي"
+            >
+              <Download size={18} />
+              تحميل PDF
+            </button>
+
+            <button 
+              onClick={handlePreviewPDF} 
+              className="p-3.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="معاينة PDF في المتصفح"
+            >
+              <Eye size={18} />
+            </button>
+
             <button 
               onClick={handlePrint} 
-              className="px-10 py-4 bg-primary text-on-primary rounded-2xl font-black flex items-center gap-2 hover:bg-primary-container shadow-2xl transition-all active:scale-95"
+              className="px-6 py-3.5 bg-primary text-on-primary rounded-2xl font-black flex items-center gap-2 hover:bg-primary-container shadow-2xl transition-all active:scale-95 text-xs"
             >
-              <Printer size={20} />
+              <Printer size={18} />
               طباعة الطلب
             </button>
           </div>

@@ -28,7 +28,9 @@ import {
   Upload,
   Eye,
   X,
-  FileCheck
+  FileCheck,
+  FileDown,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -37,6 +39,8 @@ import { useSqlCollection } from '../hooks/useSqlCollection';
 import { Equipment } from '../types/equipment';
 import { createEquipmentScrapping, EquipmentScrappingRecord } from '../lib/api/equipmentScrapping';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { PDFService } from '../services/pdfService';
+import { PrintService } from '../services/printService';
 
 interface ScrapItem {
   id: string;
@@ -281,66 +285,117 @@ export default function EquipmentScrapping() {
     });
   };
 
-  const printDocument = (mode: Tab) => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  const getDocumentData = (mode: Tab) => {
+    const schoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: directorate || 'مديرية التربية لولاية الجزائر',
+      school: schoolName || 'المؤسسة التعليمية',
+      commune,
+      laboratory: 'مخبر الوسائل والتجهيزات التعليمية',
+      academicYear: '2025 / 2026',
+      date: new Date().toLocaleDateString('ar-DZ')
+    };
 
-    let content = '';
     if (mode === 'list') {
-      const rows = scrapItems.map(item => `
-        <tr>
-          <td>${item.id}</td>
-          <td>${item.inventoryNum}</td>
-          <td>${item.name}</td>
-          <td>${item.acquisitionDate}</td>
-          <td>${item.quantity}</td>
-          <td>${item.reason}</td>
-          <td>${item.state}</td>
-          <td>${item.acquisitionValue}</td>
-        </tr>
-      `).join('');
-      content = `
-        <h1 style="text-align:center">قائمة جرد الوسائل المقترح إسقاطها</h1>
-        <table>
-          <thead><tr><th>#</th><th>رقم الجرد</th><th>التجهيز</th><th>الاقتناء</th><th>الكمية</th><th>السبب</th><th>الحالة</th><th>القيمة</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      `;
+      const headers = ['#', 'رقم الجرد', 'اسم التجهيز / الوسيلة', 'تاريخ الاقتناء', 'الكمية', 'سبب الإسقاط', 'الحالة الفنية', 'القيمة التقديرية (دج)'];
+      const rows = scrapItems.map(item => [
+        item.id,
+        item.inventoryNum || '---',
+        item.name,
+        item.acquisitionDate || '---',
+        item.quantity,
+        item.reason,
+        item.state,
+        item.estimatedValue || item.acquisitionValue || '---'
+      ]);
+      return {
+        title: 'قائمة جرد التجهيزات والوسائل المقترح إسقاطها (تكهين)',
+        subtitle: `محضر حصر تقني للمعدات غير الصالحة للاستعمال — المؤسسة: ${schoolName}`,
+        headers,
+        rows,
+        fileName: `scrap_list_${new Date().toISOString().split('T')[0]}`,
+        summaryCards: [
+          { label: 'عدد المواد المقترحة', value: scrapItems.length },
+          { label: 'إجمالي الكميات', value: scrapItems.reduce((acc, i) => acc + (Number(i.quantity) || 1), 0) }
+        ],
+        notes: 'تمت معاينة هذه التجهيزات والتأكد من عدم جدوى إصلاحها تقنياً واقتصادياً.',
+        schoolInfo,
+        labManagerTitle: 'مسؤول المخبر (الملحق)',
+        principalTitle: 'مدير(ة) المؤسسة'
+      };
     } else if (mode === 'pv') {
-      const members = pvData.members.map(m => `<li>${m.name} (${m.role})</li>`).join('');
-      content = `
-        <h1 style="text-align:center">محضر معاينة تقنية للتجهيزات</h1>
-        <p>بتاريخ ${pvData.date}، اجتمعت اللجنة المذكورة أدناه في ${pvData.location}:</p>
-        <ul>${members}</ul>
-        <p><strong>الخلاصة:</strong> ${pvData.conclusion}</p>
-      `;
+      const headers = ['البيان / العنصر', 'التفاصيل والمعلومات'];
+      const memberList = pvData.members.map(m => `${m.name} (${m.role})`).join('، ');
+      const rows = [
+        ['رقم المحضر', pvData.num],
+        ['تاريخ المعاينة', pvData.date],
+        ['مكان الاجتماع', pvData.location],
+        ['أعضاء لجنة المعاينة', memberList || 'أعضاء اللجنة الفنية'],
+        ['عدد العتاد المعاين', `${scrapItems.length} مواد وتجهيزات`],
+        ['خلاصة وتوصيات اللجنة', pvData.conclusion || 'توصي اللجنة بإسقاط التجهيزات غير القابلة للإصلاح وسحبها من سجلات الجرد العام.']
+      ];
+      return {
+        title: 'محضر المعاينة التقنية لإسقاط التجهيزات المدرسية',
+        subtitle: `رقم المحضر: ${pvData.num} — تاريخ: ${pvData.date}`,
+        headers,
+        rows,
+        fileName: `pv_scrapping_${new Date().toISOString().split('T')[0]}`,
+        notes: 'يُحال هذا المحضر إلى مجلس التوجيه والتسيير لاعتماد الإسقاط ورخصة السحب النهائية.',
+        schoolInfo,
+        labManagerTitle: 'رئيس لجنة المعاينة',
+        principalTitle: 'مدير(ة) المؤسسة التعليمية'
+      };
+    } else {
+      const headers = ['العنصر', 'البيان الرسمي'];
+      const rows = [
+        ['رمز الاقتراح', proposalData.num],
+        ['تاريخ التحرير', proposalData.date],
+        ['الموجه إليه', proposalData.to],
+        ['الموضوع', proposalData.subject],
+        ['المُقدّم / المقترح', proposalData.presenter || 'مسؤول المخبر'],
+        ['مبررات وأسباب الإسقاط', proposalData.justification || 'تلف المعدات وعدم صلاحيتها للعمليات البيداغوجية والتعليمية.']
+      ];
+      return {
+        title: 'نموذج اقتراح إسقاط تجهيزات المخبر',
+        subtitle: `طلب موجه إلى السيد(ة) مدير(ة) المؤسسة`,
+        headers,
+        rows,
+        fileName: `proposal_scrapping_${new Date().toISOString().split('T')[0]}`,
+        notes: 'بناءً على التقرير التقني المعد من طرف اللجنة المشتركة، نقترح الموافقة على إجراءات الإسقاط.',
+        schoolInfo,
+        labManagerTitle: 'مقدم الاقتراح (مسؤول المخبر)',
+        principalTitle: 'موافقة وتأشيرة رئيس المؤسسة'
+      };
     }
+  };
 
-    printWindow.document.write(`
-      <html dir="rtl" lang="ar">
-        <head>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
-            body { font-family: 'Cairo', sans-serif; padding: 40px; }
-            table { width:100%; border-collapse:collapse; margin-top:20px; font-size:12px; }
-            th, td { border:1px solid #000; padding:10px; text-align:right; }
-            th { background:#eee; }
-          </style>
-        </head>
-        <body>
-          <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:10px;">
-            <div>مديرية التربية لولاية: ${directorate}<br/>${formatSchoolWithCommune(schoolName, commune)}</div>
-            <div style="text-align:center">الجمهورية الجزائرية الديمقراطية الشعبية<br/>وزارة التربية الوطنية</div>
-            <div style="text-align:left">السنة الدراسية: 2025-2026</div>
-          </div>
-          ${content}
-          <div style="margin-top:50px; display:flex; justify-content:space-between;">
-             <div>مدير الثانوية</div><div>رئيس اللجنة</div><div>مسؤول المخبر</div>
-          </div>
-          <script>window.print(); window.close();</script>
-        </body>
-      </html>
-    `);
+  const handleDownloadWord = (mode: Tab) => {
+    const data = getDocumentData(mode);
+    PDFService.exportLabReportWord(data);
+  };
+
+  const handleDownloadPDF = async (mode: Tab) => {
+    const data = getDocumentData(mode);
+    await PDFService.exportLabReportPDF({ ...data, save: true });
+  };
+
+  const handlePreviewPDF = async (mode: Tab) => {
+    const data = getDocumentData(mode);
+    const doc = await PDFService.exportLabReportPDF({ ...data, save: false });
+    const blob = doc.output('blob');
+    openPdfPreview({
+      file: blob,
+      title: data.title,
+      fileName: `${data.fileName}.pdf`,
+      category: 'إسقاط التجهيزات'
+    });
+  };
+
+  const handlePrintDocument = async (mode: Tab) => {
+    const data = getDocumentData(mode);
+    const html = PDFService.generateLabReportWordHtml(data);
+    await PrintService.printHtml(html, { title: data.title });
   };
 
   return (
@@ -362,14 +417,41 @@ export default function EquipmentScrapping() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <button title="إعادة تهيئة النموذج" aria-label="إعادة تهيئة النموذج" onClick={handleReset} className="p-4 bg-surface border border-outline/10 text-on-surface/40 rounded-2xl hover:text-primary transition-all active:scale-95 shadow-sm"><RotateCcw size={24} /></button>
-            <button onClick={handleSave} disabled={isSaving} className="px-8 py-4 bg-surface text-primary border-2 border-primary/10 rounded-2xl font-black flex items-center gap-2 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50">
-              {isSaving ? <RefreshCw className="animate-spin" size={20} /> : <Save size={20} />}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button title="إعادة تهيئة النموذج" aria-label="إعادة تهيئة النموذج" onClick={handleReset} className="p-3.5 bg-surface border border-outline/10 text-on-surface/40 rounded-2xl hover:text-primary transition-all active:scale-95 shadow-sm"><RotateCcw size={20} /></button>
+            <button onClick={handleSave} disabled={isSaving} className="px-6 py-3.5 bg-surface text-primary border-2 border-primary/10 rounded-2xl font-black flex items-center gap-2 hover:border-primary transition-all shadow-xl active:scale-95 disabled:opacity-50 text-xs">
+              {isSaving ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
               حفظ السجل
             </button>
-            <button onClick={() => printDocument(activeTab)} className="px-10 py-4 bg-primary text-on-primary rounded-2xl font-black flex items-center gap-2 hover:bg-primary-container shadow-2xl transition-all active:scale-95">
-              <Printer size={20} />
+            
+            <button 
+              onClick={() => handleDownloadWord(activeTab)} 
+              className="px-5 py-3.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/20 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 text-xs shadow-sm"
+              title="تحميل كملف Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+            >
+              <FileDown size={18} />
+              تحميل Word
+            </button>
+
+            <button 
+              onClick={() => handleDownloadPDF(activeTab)} 
+              className="px-5 py-3.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/20 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 text-xs shadow-sm"
+              title="تحميل كملف PDF رسمي"
+            >
+              <Download size={18} />
+              تحميل PDF
+            </button>
+
+            <button 
+              onClick={() => handlePreviewPDF(activeTab)} 
+              className="p-3.5 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 rounded-2xl font-black flex items-center gap-2 transition-all active:scale-95 shadow-sm"
+              title="معاينة PDF في المتصفح"
+            >
+              <Eye size={18} />
+            </button>
+
+            <button onClick={() => handlePrintDocument(activeTab)} className="px-6 py-3.5 bg-primary text-on-primary rounded-2xl font-black flex items-center gap-2 hover:bg-primary-container shadow-2xl transition-all active:scale-95 text-xs">
+              <Printer size={18} />
               طباعة {activeTab === 'list' ? 'القائمة' : activeTab === 'pv' ? 'المحضر' : 'النموذج'}
             </button>
           </div>

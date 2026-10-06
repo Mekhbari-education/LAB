@@ -708,4 +708,330 @@ export class PrintService {
     const html = this.generateReportHtml(testData, settings);
     return this.printHtml(html, { title: 'صفحة فحص الطابعة — مخبر العلوم' });
   }
+
+  /**
+   * Generates official Word Document (.doc) HTML for reports, inventories, or tables
+   * matching the Algerian Ministry standard with 100% fidelity to the PDF.
+   */
+  static generateReportWordHtml(data: PrintPreviewData, settings: PrintSettings = DEFAULT_PRINT_SETTINGS): string {
+    const {
+      title,
+      subtitle,
+      headers = [],
+      rows = [],
+      summaryCards = [],
+      notes,
+      suggestedOrientation
+    } = data;
+
+    const orientation = suggestedOrientation || (settings.layout.orientation === 'auto' ? 'portrait' : settings.layout.orientation);
+    const isLandscape = orientation === 'landscape';
+    const inst = settings.institution;
+    const sig = settings.signatures;
+    const formattedSchool = formatSchoolWithCommune(inst.school, inst.commune) || 'المؤسسة التعليمية';
+    const directorate = inst.directorate || 'مديرية التربية لولاية';
+    const labName = inst.laboratory || 'مخبر العلوم والتكنولوجيا';
+    const academicYear = inst.academicYear || `${new Date().getFullYear() - 1} / ${new Date().getFullYear()}`;
+    const dateStr = new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    return `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office'
+            xmlns:w='urn:schemas-microsoft-com:office:word'
+            xmlns:v='urn:schemas-microsoft-com:vml'
+            xmlns='http://www.w3.org/TR/REC-html40'
+            dir='rtl' lang='ar'>
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <title>${title} — ${formattedSchool}</title>
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+            <w:Compatibility>
+              <w:UseWord2002TableStyleRules/>
+            </w:Compatibility>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          @page Section1 {
+            size: ${isLandscape ? '841.95pt 595.35pt' : '595.35pt 841.95pt'};
+            mso-page-orientation: ${isLandscape ? 'landscape' : 'portrait'};
+            margin: 36.0pt 36.0pt 36.0pt 36.0pt;
+            mso-header-margin: 25.0pt;
+            mso-footer-margin: 25.0pt;
+          }
+          div.Section1 { page: Section1; }
+          body {
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+            font-size: 11pt;
+            color: #1a1a1a;
+            line-height: 1.45;
+            direction: rtl;
+            text-align: right;
+            background-color: #ffffff;
+          }
+          p { margin: 0 0 4pt 0; }
+          .republic-title {
+            text-align: center;
+            font-size: 13pt;
+            font-weight: bold;
+            color: #1a2e16;
+            margin: 0 0 2pt 0;
+          }
+          .ministry-title {
+            text-align: center;
+            font-size: 11pt;
+            font-weight: bold;
+            color: #2b3d22;
+            margin: 0 0 6pt 0;
+          }
+          .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: none;
+            border-bottom: 2pt solid #2b3d22;
+            margin-bottom: 10pt;
+            padding-bottom: 5pt;
+          }
+          .header-table td {
+            border: none;
+            vertical-align: top;
+            font-size: 9.5pt;
+          }
+          .banner-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8pt 0 10pt 0;
+            background-color: #2b3d22;
+            border: 1.5pt solid #2b3d22;
+          }
+          .banner-table td {
+            padding: 8pt 12pt;
+            text-align: center;
+            border: none;
+          }
+          .banner-title {
+            margin: 0;
+            font-size: 14pt;
+            font-weight: bold;
+            color: #ffffff;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+          .banner-sub {
+            margin: 3pt 0 0 0;
+            font-size: 9.5pt;
+            color: #dce5d6;
+          }
+          .cards-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10pt;
+            border: none;
+          }
+          .cards-table td {
+            border: 1pt solid #d2d8ce;
+            background-color: #fafbf9;
+            padding: 6pt;
+            text-align: center;
+          }
+          .card-label { font-size: 8.5pt; color: #555555; }
+          .card-value { font-size: 11pt; font-weight: bold; color: #2b3d22; margin-top: 2pt; }
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10pt;
+            border: 1.5pt solid #2b3d22;
+            direction: rtl;
+          }
+          .data-table th {
+            background-color: #2b3d22;
+            color: #ffffff;
+            border: 1pt solid #2b3d22;
+            padding: 6pt 5pt;
+            font-size: 9.5pt;
+            font-weight: bold;
+            text-align: center;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+          .data-table td {
+            border: 1pt solid #c2c9bc;
+            padding: 5pt 6pt;
+            font-size: 9pt;
+            color: #1a1a1a;
+            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
+          }
+          .notes-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12pt;
+            background-color: #ffffff;
+            border: 1pt solid #d2d8ce;
+          }
+          .notes-table td {
+            padding: 7pt 10pt;
+            border: none;
+            font-size: 9pt;
+            color: #333333;
+          }
+          .signatures-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14pt;
+            border: none;
+            direction: rtl;
+          }
+          .signatures-table td {
+            width: 50%;
+            border: 1pt dashed #889980;
+            padding: 8pt;
+            text-align: center;
+            vertical-align: top;
+            background-color: #fcfdfb;
+          }
+          .sig-title {
+            font-weight: bold;
+            font-size: 9.5pt;
+            color: #2b3d22;
+            border-bottom: 1pt solid #e0e5dc;
+            padding-bottom: 3pt;
+            margin-bottom: 8pt;
+          }
+          .sig-space {
+            font-size: 8pt;
+            color: #888888;
+            height: 42pt;
+            padding-top: 14pt;
+          }
+          .footer-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 14pt;
+            border: none;
+            border-top: 1pt solid #d2d8ce;
+          }
+          .footer-table td {
+            border: none;
+            font-size: 8pt;
+            color: #777777;
+            padding-top: 5pt;
+          }
+        </style>
+      </head>
+      <body lang="AR-DZ" dir="rtl">
+        <div class="Section1">
+          <p class="republic-title">${inst.country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</p>
+          <p class="ministry-title">${inst.ministry || 'وزارة التربية الوطنية'}</p>
+
+          <table class="header-table" dir="rtl">
+            <tr>
+              <td style="text-align: right; width: 50%;">
+                <div><strong>مديرية التربية لولاية:</strong> ${directorate}</div>
+                <div><strong>المؤسسة التعليمية:</strong> ${formattedSchool}</div>
+                <div><strong>المصلحة / المخبر:</strong> ${labName}</div>
+              </td>
+              <td style="text-align: left; width: 50%;" dir="rtl">
+                <div><strong>السنة الدراسية:</strong> ${academicYear}</div>
+                <div><strong>تاريخ الإصدار:</strong> ${dateStr}</div>
+              </td>
+            </tr>
+          </table>
+
+          <table class="banner-table" dir="rtl">
+            <tr>
+              <td>
+                <h1 class="banner-title">${title}</h1>
+                ${subtitle ? `<p class="banner-sub">${subtitle}</p>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          ${summaryCards && summaryCards.length > 0 ? `
+            <table class="cards-table" dir="rtl">
+              <tr>
+                ${summaryCards.map(c => `
+                  <td>
+                    <div class="card-label">${c.label}</div>
+                    <div class="card-value">${c.value}</div>
+                  </td>
+                `).join('')}
+              </tr>
+            </table>
+          ` : ''}
+
+          <table class="data-table" dir="rtl">
+            <thead>
+              <tr>
+                ${headers.map(h => `<th>${h}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map((row, rIdx) => `
+                <tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f9faf7'};">
+                  ${row.map(cell => `
+                    <td>${cell !== null && cell !== undefined ? String(cell) : '-'}</td>
+                  `).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          ${notes ? `
+            <table class="notes-table" dir="rtl">
+              <tr>
+                <td><strong>ملاحظات وتوجيهات:</strong> ${notes}</td>
+              </tr>
+            </table>
+          ` : ''}
+
+          ${sig.showSignatures ? `
+            <table class="signatures-table" dir="rtl">
+              <tr>
+                <td>
+                  <div class="sig-title">المسؤول عن المخبر</div>
+                  <div class="sig-space">${sig.managerName ? sig.managerName : '(الاسم، التوقيع والختم)'}</div>
+                  <div style="font-size: 7.5pt; color: #777;">حرر بتاريخ: ....................</div>
+                </td>
+                <td>
+                  <div class="sig-title">مدير(ة) المؤسسة</div>
+                  <div class="sig-space">${sig.principalName ? sig.principalName : '(التوقيع وتأشيرة المصادقة)'}</div>
+                  <div style="font-size: 7.5pt; color: #777;">في: .............................</div>
+                </td>
+              </tr>
+            </table>
+          ` : ''}
+
+          <table class="footer-table" dir="rtl">
+            <tr>
+              <td style="text-align: right;">الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية</td>
+              <td style="text-align: center;">${formattedSchool}</td>
+              <td style="text-align: left;">صفحة 1 من 1</td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Directly downloads any report or inventory preview data as Word (.doc)
+   */
+  static downloadReportWord(data: PrintPreviewData, settings: PrintSettings = DEFAULT_PRINT_SETTINGS): void {
+    const html = this.generateReportWordHtml(data, settings);
+    const blob = new Blob(['\ufeff', html], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeTitle = data.title.replace(/[/\\?%*:|"<>]/g, '_');
+    link.download = `${safeTitle}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
 }
