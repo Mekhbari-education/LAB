@@ -132316,6 +132316,10 @@ var init_schema = __esm({
       supplier: (0, import_pg_core.text)("supplier"),
       location: (0, import_pg_core.text)("location"),
       notes: (0, import_pg_core.text)("notes"),
+      source: (0, import_pg_core.text)("source"),
+      price: (0, import_pg_core.text)("price"),
+      registrationDate: (0, import_pg_core.text)("registration_date"),
+      exitDate: (0, import_pg_core.text)("exit_date"),
       foundationalInventory: (0, import_pg_core.text)("foundational_inventory"),
       decennialReview: (0, import_pg_core.text)("decennial_review"),
       smartNameAr: (0, import_pg_core.text)("smart_name_ar"),
@@ -132552,7 +132556,7 @@ var dbRoutes_exports = {};
 __export(dbRoutes_exports, {
   default: () => dbRoutes_default
 });
-var import_express, import_drizzle_orm, router, dbRoutes_default;
+var import_express, import_drizzle_orm, router, sanitizeEquipmentItem, dbRoutes_default;
 var init_dbRoutes = __esm({
   "src/routes/dbRoutes.ts"() {
     import_express = __toESM(require("express"), 1);
@@ -132623,6 +132627,47 @@ var init_dbRoutes = __esm({
         res.status(500).json({ error: "Failed to bulk insert chemicals" });
       }
     });
+    sanitizeEquipmentItem = (item, schoolId) => {
+      const allowed = [
+        "id",
+        "schoolId",
+        "name",
+        "type",
+        "serialNumber",
+        "status",
+        "totalQuantity",
+        "availableQuantity",
+        "brokenQuantity",
+        "lastCalibration",
+        "nextCalibration",
+        "supplier",
+        "location",
+        "notes",
+        "source",
+        "price",
+        "registrationDate",
+        "exitDate",
+        "foundationalInventory",
+        "decennialReview",
+        "smartNameAr",
+        "smartDescriptionAr",
+        "imageKeyword",
+        "lastSmartUpdate"
+      ];
+      const cleaned = { schoolId };
+      for (const key of allowed) {
+        if (item[key] !== void 0) {
+          cleaned[key] = item[key];
+        }
+      }
+      if (!cleaned.id) {
+        cleaned.id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
+      }
+      if (!cleaned.name) cleaned.name = "\u0635\u0646\u0641 \u0628\u062F\u0648\u0646 \u0627\u0633\u0645";
+      if (!cleaned.type) cleaned.type = "other";
+      if (!cleaned.status) cleaned.status = "functional";
+      return cleaned;
+    };
     router.get("/equipment", async (req, res) => {
       try {
         const schoolId = req.user?.uid;
@@ -132638,7 +132683,10 @@ var init_dbRoutes = __esm({
         const schoolId = req.user?.uid;
         if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
         const { id } = req.params;
-        const [updated] = await db.update(equipment).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipment.id, id), (0, import_drizzle_orm.eq)(equipment.schoolId, schoolId))).returning();
+        const cleaned = sanitizeEquipmentItem(req.body, schoolId);
+        delete cleaned.id;
+        delete cleaned.schoolId;
+        const [updated] = await db.update(equipment).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipment.id, id), (0, import_drizzle_orm.eq)(equipment.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update equipment" });
@@ -132659,8 +132707,7 @@ var init_dbRoutes = __esm({
       try {
         const schoolId = req.user?.uid;
         if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const newEquipment = { ...req.body, id, schoolId };
+        const newEquipment = sanitizeEquipmentItem(req.body, schoolId);
         const [inserted] = await db.insert(equipment).values(newEquipment).returning();
         res.json(inserted);
       } catch (error) {
@@ -132673,11 +132720,7 @@ var init_dbRoutes = __esm({
         if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
         const items = Array.isArray(req.body) ? req.body : req.body.items;
         if (!items || !items.length) return res.status(400).json({ error: "No items provided" });
-        const formatted = items.map((item) => ({
-          ...item,
-          id: item.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)),
-          schoolId
-        }));
+        const formatted = items.map((item) => sanitizeEquipmentItem(item, schoolId));
         const inserted = await db.insert(equipment).values(formatted).returning();
         res.json(inserted);
       } catch (error) {
