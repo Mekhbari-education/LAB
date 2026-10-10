@@ -745,7 +745,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main role="main" aria-label="المحتوى الرئيسي" className="p-4 md:p-8 print:p-0 overflow-x-hidden">
+        <main role="main" aria-label="المحتوى الرئيسي" className="p-4 md:p-8 print:p-0 overflow-x-hidden print:overflow-visible print:w-full">
           <Breadcrumbs />
           <ErrorBoundary>
             <Suspense fallback={

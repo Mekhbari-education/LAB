@@ -34,7 +34,15 @@ import {
   ArrowUp,
   ArrowDown,
   QrCode,
-  Layers
+  Layers,
+  Check,
+  CheckCircle2,
+  Copy,
+  Save,
+  Eye,
+  SlidersHorizontal,
+  Table as TableIcon,
+  Coins
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
@@ -60,6 +68,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     searchTerm, setSearchTerm,
     filterType, setFilterType,
     filterStatus, setFilterStatus,
+    filterExitStatus, setFilterExitStatus,
     isAddModalOpen, setIsAddModalOpen,
     editingEquipment, setEditingEquipment,
     isSmartUpdating,
@@ -89,6 +98,9 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     handleDownloadGeneralInventoryTemplate,
     handleExportGeneralInventoryXLS,
     handleUpdateStatus,
+    handleInlineUpdate,
+    handleQuickAddRow,
+    handleDuplicateEquipment,
     fetchHistory,
     handleExportXLS,
     handlePrintList,
@@ -111,8 +123,27 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     totalPieces,
     totalAvailable,
     totalBroken,
-    totalTypes
+    totalTypes,
+    totalEstimatedValue
   } = useEquipmentLogic(isNested);
+
+  const [isInlineEditMode, setIsInlineEditMode] = useState<boolean>(true);
+  const [saveIndicator, setSaveIndicator] = useState<{ [key: string]: boolean }>({});
+  const [isOfficialRegistryModalOpen, setIsOfficialRegistryModalOpen] = useState<boolean>(false);
+  const [isFitScreen, setIsFitScreen] = useState<boolean>(true);
+
+  const triggerInlineEdit = (id: string, field: keyof Equipment, val: any) => {
+    handleInlineUpdate(id, field, val);
+    const key = `${id}_${String(field)}`;
+    setSaveIndicator(prev => ({ ...prev, [key]: true }));
+    setTimeout(() => {
+      setSaveIndicator(prev => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+    }, 1500);
+  };
 
   return (
     <div className={cn("space-y-12 max-w-7xl mx-auto pb-24 font-sans", !isNested && "px-6")} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
@@ -285,34 +316,40 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
 
       {/* Stats */}
       {!isNested && (
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
-            { label: t('equipment.stat_types', 'أصناف العتاد'), value: totalTypes, icon: Layers, color: 'bg-primary/10', textColor: 'text-primary', status: 'all' },
-            { label: t('equipment.stat_total_pieces', 'إجمالي الكميات'), value: totalPieces, icon: Package, color: 'bg-primary/5', textColor: 'text-primary', status: 'all' },
-            { label: t('equipment.stat_functional', 'الحالة: جيدة'), value: totalAvailable, icon: CheckCircle, color: 'bg-green-50', textColor: 'text-green-600', status: 'functional' },
-            { label: t('equipment.stat_broken', 'الحالة: مكسورة'), value: totalBroken, icon: AlertTriangle, color: 'bg-error/10', textColor: 'text-error', status: 'broken' },
+            { label: t('equipment.stat_types', 'أصناف العتاد'), value: totalTypes, icon: Layers, color: 'bg-primary/10', textColor: 'text-primary', onClick: () => setFilterStatus('all') },
+            { label: t('equipment.stat_total_pieces', 'إجمالي الكميات'), value: totalPieces, icon: Package, color: 'bg-primary/5', textColor: 'text-primary', onClick: () => setFilterStatus('all') },
+            { 
+              label: 'القيمة التقديرية (دج)', 
+              value: totalEstimatedValue > 0 ? `${totalEstimatedValue.toLocaleString('fr-DZ')} دج` : 'قيد التسعير', 
+              icon: Coins, 
+              color: 'bg-emerald-500/10', 
+              textColor: 'text-emerald-700 dark:text-emerald-300',
+              onClick: () => {} 
+            },
+            { label: t('equipment.stat_functional', 'سليمة / جاهزة'), value: totalAvailable, icon: CheckCircle, color: 'bg-green-500/10', textColor: 'text-green-700 dark:text-green-300', onClick: () => setFilterStatus('functional') },
+            { label: t('equipment.stat_broken', 'صيانة / مشطوبة'), value: totalBroken, icon: AlertTriangle, color: 'bg-error/10', textColor: 'text-error', onClick: () => setFilterStatus('broken') },
           ].map((stat, i) => (
             <motion.div
               key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              onClick={() => setFilterStatus(stat.status)}
+              transition={{ delay: i * 0.05 }}
+              onClick={stat.onClick}
               className={cn(
-                "p-8 rounded-[40px] border border-outline/5 transition-all group relative overflow-hidden shadow-xl cursor-pointer",
-                stat.color,
-                filterStatus === stat.status && "ring-4 ring-primary/20 border-primary"
+                "p-5 rounded-3xl border border-outline/5 transition-all group relative overflow-hidden shadow-sm hover:shadow-md cursor-pointer",
+                stat.color
               )}
             >
-              <div className="absolute top-0 end-0 w-24 h-24 bg-surface/40 rounded-ee-[80px] -me-6 -mt-6 group-hover:scale-150 transition-transform duration-700" />
-              <div className="relative z-10 flex justify-between items-start mb-6">
-                <div className="p-4 bg-surface rounded-2xl shadow-sm text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors">
-                  <stat.icon size={24} />
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-[11px] text-on-surface/60 font-black uppercase tracking-wider">{stat.label}</p>
+                <div className="p-2 bg-surface rounded-xl shadow-sm text-primary group-hover:scale-110 transition-transform">
+                  <stat.icon size={18} />
                 </div>
               </div>
-              <div className="relative z-10">
-                <p className="text-xs text-on-surface/40 font-black uppercase tracking-widest mb-1">{stat.label}</p>
-                <span className={cn("text-5xl font-black tracking-tighter group-hover:scale-110 transition-transform inline-block", stat.textColor)}>{stat.value}</span>
+              <div>
+                <span className={cn("text-2xl lg:text-3xl font-black tracking-tight block truncate", stat.textColor)}>{stat.value}</span>
               </div>
             </motion.div>
           ))}
@@ -320,148 +357,236 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
       )}
 
       {/* Main Content */}
-      <div className="bg-surface rounded-[50px] overflow-hidden shadow-2xl border border-outline/5 relative">
-        <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-6 bg-surface-container-low/30 border-b border-outline/5">
-          <div className="relative w-full md:w-96 group">
-            <Search className="absolute start-5 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" size={20} />
-            <input 
-              className="w-full bg-surface border-2 border-outline/5 rounded-full ps-14 pe-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner text-start"
-              placeholder={t('equipment.search_placeholder', 'بحث في قائمة العتاد...')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2 bg-surface px-6 py-2 rounded-full border border-outline/10 shadow-sm">
-              <Filter size={18} className="text-primary/40" />
+      <div className="bg-surface rounded-[40px] overflow-hidden shadow-2xl border border-outline/5 relative">
+        {/* Controls & Filter Bar */}
+        <div className="p-5 flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-4 bg-surface-container-low/40 border-b border-outline/5">
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            {/* Search Input */}
+            <div className="relative min-w-[240px] flex-1 max-w-md group">
+              <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors" size={18} />
+              <input 
+                className="w-full bg-surface border border-outline/10 rounded-2xl ps-11 pe-4 py-2.5 text-xs md:text-sm font-bold focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-start"
+                placeholder="بحث شامل: التعيين، رقم التسجيل، المصدر، القيمة، الملاحظات..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')} 
+                  className="absolute end-3 top-1/2 -translate-y-1/2 text-on-surface/40 hover:text-primary p-1"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Type Filter */}
+            <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-2xl border border-outline/10 shadow-sm">
+              <Filter size={15} className="text-primary/40" />
               <select 
-                className="bg-transparent border-none text-sm font-black text-primary focus:ring-0 cursor-pointer"
+                className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer py-1"
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
               >
-                <option value="all">{t('equipment.all_types', 'كل الأنواع')}</option>
-                <option value="glassware">{t('nav.inventory_cards', 'زجاجيات')}</option>
+                <option value="all">كل الأنواع</option>
+                <option value="glassware">زجاجيات مخبرية</option>
                 <option value="tech">أجهزة تقنية</option>
                 <option value="smart">تحديث ذكي ✨</option>
                 <option value="other">أخرى</option>
               </select>
             </div>
-            <div className="flex items-center gap-2 text-primary/40 px-4">
-              <Sparkles size={20} />
-              <span className="text-xs font-black uppercase tracking-[0.3em]">قاعدة البيانات</span>
+
+            {/* Exit / Active Filter */}
+            <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-2xl border border-outline/10 shadow-sm">
+              <SlidersHorizontal size={15} className="text-primary/40" />
+              <select 
+                className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer py-1"
+                value={filterExitStatus}
+                onChange={(e) => setFilterExitStatus(e.target.value)}
+              >
+                <option value="all">كل المواد (الحالية + المشطوبة)</option>
+                <option value="active">المواد الحالية بالمخبر فقط</option>
+                <option value="exited">المواد المشطوبة / الخارجة</option>
+              </select>
             </div>
+          </div>
+
+          {/* Quick Actions & View Toggles */}
+          <div className="flex flex-wrap items-center gap-2.5 justify-end">
+            {/* Quick Add Row Button */}
+            <button
+              onClick={handleQuickAddRow}
+              className="bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white px-3.5 py-2 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              title="إضافة سطر جديد فارغ مباشرة في الجدول والبدء في تعبئته فوراً"
+            >
+              <Plus size={16} />
+              سطر جديد سريع
+            </button>
+
+            {/* Toggle Inline Edit Mode */}
+            <button 
+              onClick={() => setIsInlineEditMode(!isInlineEditMode)}
+              className={cn(
+                "px-3.5 py-2 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm border active:scale-95",
+                isInlineEditMode 
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-800 dark:text-amber-300 ring-2 ring-amber-500/20" 
+                  : "bg-surface border-outline/10 text-on-surface/60 hover:text-primary"
+              )}
+              title="تفعيل/تعطيل التعديل المباشر كبرنامج إكسل"
+            >
+              <Edit size={15} />
+              <span>تعديل مباشر في الجدول</span>
+              <span className={cn("w-2 h-2 rounded-full", isInlineEditMode ? "bg-amber-500 animate-pulse" : "bg-outline/40")} />
+            </button>
+
+            {/* Official Registry View Button */}
+            <button 
+              onClick={() => setIsOfficialRegistryModalOpen(true)}
+              className="bg-surface text-primary border border-outline/10 hover:border-primary/40 px-3.5 py-2 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              title="معاينة سجل الجرد العام الرسمي وفق النموذج الوزاري الجزائري جاهز للطباعة"
+            >
+              <FileText size={15} />
+              معاينة السجل الرسمي
+            </button>
+
+            {/* Screen Fit Mode Toggle */}
+            <button
+              onClick={() => setIsFitScreen(!isFitScreen)}
+              className={cn(
+                "px-3 py-2 rounded-2xl text-xs font-black flex items-center gap-1.5 transition-all shadow-sm border",
+                isFitScreen ? "bg-primary/10 border-primary/20 text-primary" : "bg-surface border-outline/10 text-on-surface/60"
+              )}
+              title={isFitScreen ? "الجدول ملائم لعرض الشاشة 100% بدون تمرير أفقي" : "الجدول بنمط موسّع"}
+            >
+              <TableIcon size={15} />
+              {isFitScreen ? "ملائم للشاشة (بدون تمرير)" : "عرض موسّع"}
+            </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[700px] overflow-y-auto custom-scrollbar" ref={parentRef}>
-          <table className="w-full text-right border-collapse">
+        {/* The Zero-Horizontal-Scroll Table */}
+        <div 
+          className={cn(
+            "overflow-y-auto max-h-[720px] custom-scrollbar",
+            isFitScreen ? "overflow-x-hidden w-full" : "overflow-x-auto"
+          )} 
+          ref={parentRef}
+        >
+          <table className={cn("w-full text-right border-collapse", isFitScreen ? "table-fixed text-xs" : "min-w-[1250px] text-xs")}>
             <thead className="sticky top-0 z-20">
-              <tr className="bg-surface-container-low text-on-surface/40 text-xs font-black uppercase tracking-[0.2em] border-b border-outline/5">
-                <th className="px-6 py-6 text-right w-12">
+              <tr className="bg-surface-container-low text-on-surface/60 text-[11px] font-black uppercase tracking-wider border-b border-outline/10">
+                <th className={cn("py-3 text-center", isFitScreen ? "w-9" : "w-10")}>
                   <div 
                     onClick={handleSelectAll}
                     className={cn(
-                      "w-5 h-5 rounded border-2 cursor-pointer flex items-center justify-center transition-all mx-auto",
+                      "w-4 h-4 rounded border-2 cursor-pointer flex items-center justify-center transition-all mx-auto",
                       selectedIds.length === filteredEquipment.length && filteredEquipment.length > 0
                         ? "bg-primary border-primary text-white" 
                         : "border-outline/30 hover:border-primary/50"
                     )}
                   >
-                    {selectedIds.length === filteredEquipment.length && filteredEquipment.length > 0 && <CheckCircle size={12} />}
+                    {selectedIds.length === filteredEquipment.length && filteredEquipment.length > 0 && <CheckCircle size={10} />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('serialNumber')}>
-                  <div className="flex items-center justify-center gap-2">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('serialNumber')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>رقم التسجيل</span>
                     {sortField === 'serialNumber' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('registrationDate')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <span>تاريخ التكفل بالتسجيل</span>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-24" : "w-28")} onClick={() => handleSort('registrationDate')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>تاريخ التكفل</span>
                     {sortField === 'registrationDate' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-8 py-6 cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('name')}>
-                  <div className="flex items-center gap-2">
+                <th className={cn("py-3 cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-2 text-start", isFitScreen ? "w-[22%]" : "w-64")} onClick={() => handleSort('name')}>
+                  <div className="flex items-center gap-1">
                     <span>تعيين الشيء</span>
                     {sortField === 'name' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('totalQuantity')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <span>{t('equipment.col_quantity', 'الكمية')}</span>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-14" : "w-16")} onClick={() => handleSort('totalQuantity')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>الكمية</span>
                     {sortField === 'totalQuantity' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('source')}>
-                  <div className="flex items-center justify-center gap-2">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[11%]" : "w-28")} onClick={() => handleSort('source')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>مصدره</span>
                     {sortField === 'source' || sortField === 'supplier' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('price')}>
-                  <div className="flex items-center justify-center gap-2">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('price')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>قیمته</span>
                     {sortField === 'price' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('location')}>
-                  <div className="flex items-center justify-center gap-2">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[10%]" : "w-28")} onClick={() => handleSort('location')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>التعيين</span>
                     {sortField === 'location' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('status')}>
-                  <div className="flex items-center justify-center gap-2">
-                    <span>{t('equipment.col_status', 'الحالة')}</span>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('status')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>الحالة</span>
                     {sortField === 'status' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap" onClick={() => handleSort('exitDate')}>
-                  <div className="flex items-center justify-center gap-2">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('exitDate')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>خروجه</span>
                     {sortField === 'exitDate' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-                    ) : <ArrowUpDown size={14} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : <ArrowUpDown size={12} className="opacity-20" />}
                   </div>
                 </th>
-                <th className="px-6 py-6 text-center whitespace-nowrap">ملاحظات</th>
-                <th className="px-6 py-6"></th>
+                <th className={cn("py-3 text-center whitespace-nowrap px-1", isFitScreen ? "w-[11%]" : "w-32")}>ملاحظات</th>
+                <th className={cn("py-3 text-center whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")}>إجراءات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline/5 relative w-full">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="px-10 py-24 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="w-12 h-12 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
-                      <p className="text-on-surface/40 font-black uppercase tracking-widest text-xs">{t('common.loading', 'جاري تحميل البيانات...')}</p>
+                  <td colSpan={12} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-10 h-10 border-4 border-primary/10 border-t-primary rounded-full animate-spin" />
+                      <p className="text-on-surface/40 font-black text-xs">{t('common.loading', 'جاري تحميل البيانات...')}</p>
                     </div>
                   </td>
                 </tr>
               ) : filteredEquipment.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-10 py-24 text-center">
-                    <div className="flex flex-col items-center gap-4 opacity-20">
-                      <Package size={64} />
-                      <p className="text-xl font-black">{t('common.empty', 'لا توجد أصناف مطابقة للبحث')}</p>
+                  <td colSpan={12} className="px-6 py-20 text-center">
+                    <div className="flex flex-col items-center gap-3 opacity-30">
+                      <Package size={52} />
+                      <p className="text-base font-black">{t('common.empty', 'لا توجد أصناف مطابقة للبحث')}</p>
+                      <button
+                        onClick={handleQuickAddRow}
+                        className="mt-2 bg-primary text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center gap-1.5"
+                      >
+                        <Plus size={14} />
+                        إضافة أول صنف الآن
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -472,130 +597,273 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                   )}
                   {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                     const e = filteredEquipment[virtualRow.index];
+                    const isSelected = selectedIds.includes(e.id);
                     return (
                       <tr 
                         key={e.id}
                         ref={rowVirtualizer.measureElement}
                         data-index={virtualRow.index}
                         className={cn(
-                          "hover:bg-primary/[0.02] transition-colors group",
-                          selectedIds.includes(e.id) && "bg-primary/[0.04]"
+                          "hover:bg-primary/[0.03] transition-colors group text-xs",
+                          isSelected && "bg-primary/[0.05]"
                         )}
                       >
-                        <td className="px-6 py-6">
+                        {/* Checkbox */}
+                        <td className="py-2 px-1 text-center">
                           <div 
                             onClick={(evt) => {
                               evt.stopPropagation();
                               handleToggleSelect(e.id);
                             }}
                             className={cn(
-                              "w-5 h-5 rounded border-2 cursor-pointer flex items-center justify-center transition-all mx-auto",
-                              selectedIds.includes(e.id) 
-                                ? "bg-primary border-primary text-white scale-110" 
+                              "w-4 h-4 rounded border cursor-pointer flex items-center justify-center transition-all mx-auto",
+                              isSelected 
+                                ? "bg-primary border-primary text-white" 
                                 : "border-outline/30 group-hover:border-primary/50"
                             )}
                           >
-                            {selectedIds.includes(e.id) && <CheckCircle size={12} />}
+                            {isSelected && <CheckCircle size={10} />}
                           </div>
                         </td>
-                        <td className="px-6 py-6 text-center whitespace-nowrap">
-                          <span className="text-sm font-black text-primary/70 bg-surface-container-low px-3 py-1.5 rounded-full border border-outline/5 inline-block">
-                            {e.serialNumber || '---'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6 text-center whitespace-nowrap">
-                          {e.registrationDate || e.foundationalInventory ? (
-                            <span className="text-xs font-bold text-primary/80 bg-primary/5 px-2.5 py-1 rounded-lg border border-primary/10 inline-block">
-                              {e.registrationDate || e.foundationalInventory}
-                            </span>
+
+                        {/* رقم التسجيل */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-black text-primary/80 text-xs transition-colors"
+                              defaultValue={e.serialNumber || ''}
+                              placeholder="---"
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'serialNumber', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
                           ) : (
-                            <span className="text-xs text-on-surface/30">---</span>
+                            <span className="font-black text-primary/80 bg-surface-container-low/60 px-2 py-0.5 rounded-md inline-block">
+                              {e.serialNumber || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_serialNumber`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
                           )}
                         </td>
-                        <td className="px-8 py-6">
-                          <div className="flex items-center gap-3.5 min-w-[280px]">
-                            <div className="w-11 h-11 rounded-2xl bg-surface-container-low flex items-center justify-center text-primary shadow-inner relative flex-shrink-0">
-                              {e.type === 'tech' ? <Monitor size={22} /> : <Beaker size={22} />}
-                              {e.smartNameAr && (
-                                <div className="absolute -top-1 -right-1 bg-primary text-on-primary p-1 rounded-full shadow-lg">
-                                  <Sparkles size={10} />
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-0.5">
-                              <p className="text-base font-black text-primary font-serif">{e.smartNameAr || e.name}</p>
-                              {e.smartNameAr && e.name !== e.smartNameAr && (
-                                <p className="text-[10px] font-bold text-on-surface/30 italic">الأصل: {e.name}</p>
-                              )}
-                              {e.smartDescriptionAr && (
-                                <p className="text-xs font-bold text-on-surface/40 max-w-xs line-clamp-1">{e.smartDescriptionAr}</p>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 text-center font-black text-primary text-lg whitespace-nowrap">
-                          {e.totalQuantity}
-                        </td>
-                        <td className="px-6 py-6 text-center text-sm font-bold text-on-surface/70 whitespace-nowrap">
-                          {e.source || e.supplier || '---'}
-                        </td>
-                        <td className="px-6 py-6 text-center whitespace-nowrap">
-                          {e.price ? (
-                            <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 inline-block">
-                              {e.price}
-                            </span>
+
+                        {/* تاريخ التكفل بالتسجيل */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-bold text-primary/80 text-[11px] transition-colors"
+                              defaultValue={e.registrationDate || e.foundationalInventory || ''}
+                              placeholder="DD/MM/YYYY"
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'registrationDate', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
                           ) : (
-                            <span className="text-xs text-on-surface/30">---</span>
+                            <span className="text-[11px] font-bold text-primary/80 bg-primary/5 px-1.5 py-0.5 rounded">
+                              {e.registrationDate || e.foundationalInventory || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_registrationDate`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
                           )}
                         </td>
-                        <td className="px-6 py-6 text-center text-sm font-bold text-on-surface/70 whitespace-nowrap">
-                          {e.location || '---'}
+
+                        {/* تعيين الشيء */}
+                        <td className="py-2 px-2 text-start relative">
+                          {isInlineEditMode ? (
+                            <div className="flex items-center gap-1.5 w-full">
+                              <span className="text-primary/40 flex-shrink-0" title={e.type === 'tech' ? 'جهاز تقني' : 'زجاجيات'}>
+                                {e.type === 'tech' ? <Monitor size={14} /> : <Beaker size={14} />}
+                              </span>
+                              <input 
+                                type="text"
+                                className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1.5 py-1 font-black text-primary text-xs transition-colors truncate focus:truncate-none"
+                                defaultValue={e.smartNameAr || e.name}
+                                placeholder="اسم الصنف..."
+                                onBlur={(ev) => triggerInlineEdit(e.id, 'name', ev.target.value)}
+                                onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="text-primary/50 flex-shrink-0">
+                                {e.type === 'tech' ? <Monitor size={14} /> : <Beaker size={14} />}
+                              </span>
+                              <span className="font-black text-primary truncate" title={e.smartNameAr || e.name}>
+                                {e.smartNameAr || e.name}
+                              </span>
+                            </div>
+                          )}
+                          {saveIndicator[`${e.id}_name`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
                         </td>
-                        <td className="px-6 py-6 text-center whitespace-nowrap">
+
+                        {/* الكمية */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="number"
+                              min="0"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-black text-primary text-xs transition-colors"
+                              defaultValue={e.totalQuantity}
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'totalQuantity', Number(ev.target.value) || 0)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className="font-black text-primary text-sm">
+                              {e.totalQuantity}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_totalQuantity`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
+                        </td>
+
+                        {/* مصدره */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-bold text-on-surface/80 text-[11px] transition-colors truncate"
+                              defaultValue={e.source || e.supplier || ''}
+                              placeholder="المصدر..."
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'source', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className="font-bold text-on-surface/70 text-[11px] truncate block" title={e.source || e.supplier || '---'}>
+                              {e.source || e.supplier || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_source`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
+                        </td>
+
+                        {/* قیمته */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-emerald-500/5 hover:bg-emerald-500/10 focus:bg-surface border border-emerald-500/20 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 rounded px-1 py-1 text-center font-black text-emerald-700 dark:text-emerald-300 text-[11px] transition-colors truncate"
+                              defaultValue={e.price || ''}
+                              placeholder="القيمة..."
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'price', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className="text-[11px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded truncate block">
+                              {e.price || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_price`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
+                        </td>
+
+                        {/* التعيين */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-bold text-on-surface/80 text-[11px] transition-colors truncate"
+                              defaultValue={e.location || ''}
+                              placeholder="الموقع..."
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'location', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className="font-bold text-on-surface/70 text-[11px] truncate block" title={e.location || '---'}>
+                              {e.location || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_location`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
+                        </td>
+
+                        {/* الحالة */}
+                        <td className="py-2 px-1 text-center relative">
                           <select 
                             className={cn(
-                              "px-3 py-1.5 rounded-full text-xs font-black border-2 transition-all cursor-pointer focus:ring-4 focus:ring-primary/10 appearance-none text-center",
+                              "w-full rounded-lg px-1 py-1 text-[11px] font-black border transition-all cursor-pointer text-center",
                               e.status === 'maintenance' ? "bg-tertiary/10 border-tertiary/20 text-tertiary" : 
                               e.status === 'broken' ? "bg-error/10 border-error/20 text-error" : "bg-primary/5 border-primary/10 text-primary"
                             )}
-                            value={e.status}
-                            onChange={(ev) => handleUpdateStatus(e.id, e.status, ev.target.value)}
+                            defaultValue={e.status}
+                            onChange={(ev) => triggerInlineEdit(e.id, 'status', ev.target.value)}
                           >
-                            <option value="functional">{t('equipment.status_functional', 'سليم')}</option>
-                            <option value="maintenance">{t('equipment.status_maintenance', 'صيانة')}</option>
-                            <option value="broken">{t('equipment.status_broken', 'تالف / مشطوب')}</option>
+                            <option value="functional">سليم</option>
+                            <option value="maintenance">صيانة</option>
+                            <option value="broken">تالف / مشطوب</option>
                           </select>
-                        </td>
-                        <td className="px-6 py-6 text-center whitespace-nowrap">
-                          {e.exitDate && e.exitDate !== '---' && e.exitDate !== '-' ? (
-                            <span className="text-xs font-bold text-error bg-error/10 px-2.5 py-1 rounded-lg border border-error/20 inline-block" title={`تاريخ أو سند الخروج: ${e.exitDate}`}>
-                              {e.exitDate}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-on-surface/30">---</span>
+                          {saveIndicator[`${e.id}_status`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
                           )}
                         </td>
-                        <td className="px-6 py-6 text-center min-w-[140px]">
-                          <p className="text-xs text-on-surface/50 max-w-[160px] truncate mx-auto" title={e.notes}>{e.notes || '---'}</p>
+
+                        {/* خروجه */}
+                        <td className="py-2 px-1 text-center relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className={cn(
+                                "w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-center font-bold text-[11px] transition-colors truncate",
+                                e.exitDate && e.exitDate !== '---' && e.exitDate !== '-' ? "text-error font-black bg-error/5" : "text-on-surface/60"
+                              )}
+                              defaultValue={e.exitDate || ''}
+                              placeholder="---"
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'exitDate', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className={cn(
+                              "text-[11px] font-bold block truncate",
+                              e.exitDate && e.exitDate !== '---' && e.exitDate !== '-' ? "text-error bg-error/10 px-1.5 py-0.5 rounded font-black" : "text-on-surface/40"
+                            )}>
+                              {e.exitDate || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_exitDate`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
                         </td>
-                        <td className="px-10 py-8 text-left">
-                          <div className="flex gap-3 justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+
+                        {/* ملاحظات */}
+                        <td className="py-2 px-1.5 text-start relative">
+                          {isInlineEditMode ? (
+                            <input 
+                              type="text"
+                              className="w-full bg-transparent hover:bg-surface-container-low/70 focus:bg-surface border border-transparent hover:border-outline/20 focus:border-primary focus:ring-1 focus:ring-primary rounded px-1 py-1 text-[11px] text-on-surface/70 transition-colors truncate focus:truncate-none"
+                              defaultValue={e.notes || ''}
+                              placeholder="ملاحظات..."
+                              onBlur={(ev) => triggerInlineEdit(e.id, 'notes', ev.target.value)}
+                              onKeyDown={(ev) => { if (ev.key === 'Enter') ev.currentTarget.blur(); }}
+                            />
+                          ) : (
+                            <span className="text-[11px] text-on-surface/50 truncate block" title={e.notes || '---'}>
+                              {e.notes || '---'}
+                            </span>
+                          )}
+                          {saveIndicator[`${e.id}_notes`] && (
+                            <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
+                          )}
+                        </td>
+
+                        {/* إجراءات سريعة */}
+                        <td className="py-2 px-1 text-center">
+                          <div className="flex items-center justify-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                            {/* Duplicate row */}
                             <button 
-                              onClick={() => {
-                                setQrCodeItem(e);
-                                setIsQRModalOpen(true);
-                              }}
-                              className="p-3 text-primary/40 hover:text-primary transition-colors rounded-2xl hover:bg-primary/10 shadow-sm border border-outline/5 bg-surface"
+                              onClick={() => handleDuplicateEquipment(e)}
+                              className="p-1 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="نسخ وتكرار هذا الصنف برقم تسجيل جديد"
                             >
-                              <QrCode size={20} />
+                              <Copy size={13} />
                             </button>
-                            <button 
-                              onClick={() => handleRequestSmartUpdate(e)}
-                              disabled={isAnalyzing}
-                              className="p-3 text-primary/40 hover:text-primary transition-colors rounded-2xl hover:bg-primary/10 shadow-sm border border-outline/5 bg-surface"
-                            >
-                              {isAnalyzing && selectedEquipment?.id === e.id ? <RefreshCw size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                            </button>
+
+                            {/* Full Edit Modal */}
                             <button 
                               onClick={() => {
                                 setEditingEquipment(e);
@@ -611,27 +879,40 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                                 });
                                 setIsAddModalOpen(true);
                               }}
-                              className="p-3 text-primary/40 hover:text-primary transition-colors rounded-2xl hover:bg-primary/10 shadow-sm border border-outline/5 bg-surface"
+                              className="p-1 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="تعديل تفصيلي كامل"
                             >
-                              <Edit size={20} />
+                              <Edit size={13} />
                             </button>
+
+                            {/* QR Code */}
+                            <button 
+                              onClick={() => {
+                                setQrCodeItem(e);
+                                setIsQRModalOpen(true);
+                              }}
+                              className="p-1 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="رمز الاستجابة السريعة QR"
+                            >
+                              <QrCode size={13} />
+                            </button>
+
+                            {/* Print Card */}
                             <button 
                               onClick={() => handlePrint(e)}
-                              className="p-3 text-primary/40 hover:text-primary transition-colors rounded-2xl hover:bg-primary/10 shadow-sm border border-outline/5 bg-surface"
+                              className="p-1 text-primary/60 hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                              title="طباعة بطاقة تقنية فردية"
                             >
-                              <Printer size={20} />
+                              <Printer size={13} />
                             </button>
-                            <button 
-                              onClick={() => fetchHistory(e.id, e.name)}
-                              className="p-3 text-primary/40 hover:text-primary transition-colors rounded-2xl hover:bg-primary/10 shadow-sm border border-outline/5 bg-surface"
-                            >
-                              <History size={20} />
-                            </button>
+
+                            {/* Delete */}
                             <button 
                               onClick={() => handleDeleteEquipment(e.id, e.name)}
-                              className="p-3 text-primary/40 hover:text-error transition-colors rounded-2xl hover:bg-error/10 shadow-sm border border-outline/5 bg-surface"
+                              className="p-1 text-error/60 hover:text-error hover:bg-error/10 rounded-md transition-colors"
+                              title="حذف الصنف"
                             >
-                              <Trash2 size={20} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </td>
@@ -1248,6 +1529,160 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               }
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Official Algerian General Inventory Registry Modal (سجل الجرد العام الرسمي للمؤسسة) */}
+      <AnimatePresence>
+        {isOfficialRegistryModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOfficialRegistryModalOpen(false)}
+              className="absolute inset-0 bg-primary/20 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative bg-surface w-full max-w-6xl max-h-[92vh] rounded-[36px] shadow-2xl overflow-hidden border border-outline/10 flex flex-col"
+            >
+              {/* Modal Header Bar */}
+              <div className="p-6 bg-surface-container-low border-b border-outline/10 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-primary text-white rounded-2xl shadow-md">
+                    <FileText size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-primary font-serif">سجل الجرد العام الرسمي الخاص بالمؤسسة</h3>
+                    <p className="text-xs text-on-surface/50 font-bold">النموذج الوزاري المعتمد وفق التشريع المدرسي الجزائري (8 أعمدة رسمية)</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={handlePrintList}
+                    className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-primary-container shadow-md transition-all active:scale-95"
+                  >
+                    <Printer size={15} />
+                    طباعة السجل الرسمي
+                  </button>
+                  <button 
+                    onClick={handleExportGeneralInventoryXLS}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black flex items-center gap-2 hover:bg-emerald-700 shadow-md transition-all active:scale-95"
+                  >
+                    <Download size={15} />
+                    تصدير Excel
+                  </button>
+                  <button 
+                    onClick={() => setIsOfficialRegistryModalOpen(false)}
+                    className="p-2.5 hover:bg-surface-container rounded-full text-on-surface/40 hover:text-primary transition-all"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Printable Sheet Body */}
+              <div className="p-8 overflow-y-auto flex-1 custom-scrollbar bg-white dark:bg-zinc-950 font-serif">
+                {/* Official Algerian Republic Header */}
+                <div className="border-b-2 border-black/80 pb-6 mb-6">
+                  <div className="flex justify-between items-start text-xs md:text-sm font-black text-zinc-900 dark:text-zinc-100">
+                    <div className="text-right space-y-1">
+                      <p>وزارة التربية الوطنية</p>
+                      <p>مديرية التربية لولاية: {directorate || 'أم البواقي'}</p>
+                      <p>{formatSchoolWithCommune(schoolName, commune) || 'المؤسسة التربوية'}</p>
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="font-black text-sm md:text-base">الجمهورية الجزائرية الديمقراطية الشعبية</p>
+                      <p className="text-xs text-zinc-500">نظام رقمنة سجلات المخابر المدرسية</p>
+                    </div>
+                    <div className="text-left text-xs space-y-1">
+                      <p>التاريخ: {new Date().toLocaleDateString('ar-DZ')}</p>
+                      <p>عدد الأصناف: {filteredEquipment.length}</p>
+                    </div>
+                  </div>
+
+                  <div className="text-center mt-6">
+                    <h2 className="text-xl md:text-2xl font-black text-zinc-900 dark:text-white uppercase tracking-wider underline underline-offset-8">
+                      سجل الجرد العام للمؤسسة
+                    </h2>
+                  </div>
+                </div>
+
+                {/* Official 8-Columns Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-center border-collapse border-2 border-zinc-800 text-xs">
+                    <thead>
+                      <tr className="bg-zinc-100 dark:bg-zinc-900 border-b-2 border-zinc-800 font-black text-zinc-900 dark:text-white">
+                        <th className="border border-zinc-800 py-3 px-2 w-14">رقم التسجيل</th>
+                        <th className="border border-zinc-800 py-3 px-2 w-24">تاريخ التكفل بالتسجيل</th>
+                        <th className="border border-zinc-800 py-3 px-3 text-start w-72">تعيين الشيء</th>
+                        <th className="border border-zinc-800 py-3 px-2 w-36">مصدره</th>
+                        <th className="border border-zinc-800 py-3 px-2 w-24">قیمته</th>
+                        <th className="border border-zinc-800 py-3 px-2 w-32">التعيين</th>
+                        <th className="border border-zinc-800 py-3 px-2 w-24">خروجه</th>
+                        <th className="border border-zinc-800 py-3 px-3 text-start">ملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-700">
+                      {filteredEquipment.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="py-12 text-center text-zinc-400">لا توجد بيانات مسجلة حالياً</td>
+                        </tr>
+                      ) : (
+                        filteredEquipment.map((e, idx) => (
+                          <tr key={e.id} className="border-b border-zinc-300 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 font-black text-zinc-900 dark:text-zinc-100">
+                              {e.serialNumber || (idx + 1).toString().padStart(2, '0')}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 text-[11px] font-bold">
+                              {e.registrationDate || e.foundationalInventory || '---'}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-3 text-start font-bold text-zinc-900 dark:text-white">
+                              {e.smartNameAr || e.name} {e.totalQuantity > 1 ? `(الكمية: ${e.totalQuantity})` : ''}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 text-[11px]">
+                              {e.source || e.supplier || '---'}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 font-bold text-[11px]">
+                              {e.price || '---'}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 text-[11px]">
+                              {e.location || 'مخبر العلوم'}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-2 text-[11px] font-bold text-red-600">
+                              {e.exitDate || '---'}
+                            </td>
+                            <td className="border border-zinc-300 dark:border-zinc-800 py-2.5 px-3 text-start text-[11px] text-zinc-600 dark:text-zinc-400">
+                              {e.notes || '---'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Official Signatures Footer */}
+                <div className="grid grid-cols-3 gap-6 text-center text-xs md:text-sm font-black pt-12 pb-6 text-zinc-900 dark:text-zinc-100">
+                  <div className="border border-zinc-400 dark:border-zinc-700 rounded-2xl p-4">
+                    <p className="mb-12">المقتصد / مسير المصالح الاقتصادية</p>
+                    <p className="text-[10px] text-zinc-400">الختم والتوقيع</p>
+                  </div>
+                  <div className="border border-zinc-400 dark:border-zinc-700 rounded-2xl p-4">
+                    <p className="mb-12">مسؤول المخبر / الأستاذ المشرف</p>
+                    <p className="text-[10px] text-zinc-400">الختم والتوقيع</p>
+                  </div>
+                  <div className="border border-zinc-400 dark:border-zinc-700 rounded-2xl p-4">
+                    <p className="mb-12">مدير المؤسسة التربوية</p>
+                    <p className="text-[10px] text-zinc-400">الختم والتوقيع</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

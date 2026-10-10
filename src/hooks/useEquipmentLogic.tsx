@@ -22,6 +22,7 @@ export function useEquipmentLogic(isNested = false) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>(searchParams.get('filter') || 'all');
+  const [filterExitStatus, setFilterExitStatus] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<Equipment | null>(null);
   const [isSmartUpdating, setIsSmartUpdating] = useState(false);
@@ -479,10 +480,114 @@ export function useEquipmentLogic(isNested = false) {
   const handleUpdateStatus = async (id: string, currentStatus: string, newStatus: string) => {
     if (currentStatus === newStatus) return;
     try {
+      setEquipment(prev => prev.map(item => item.id === id ? { ...item, status: newStatus as any } : item));
       const { updateEquipment } = await import('../lib/api/equipment');
       await updateEquipment(id, { status: newStatus as any });
     } catch (error) {
       console.error('Failed to update status', error);
+    }
+  };
+
+  const handleInlineUpdate = async (id: string, field: keyof Equipment, value: any) => {
+    setEquipment(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      const updated = { ...item, [field]: value };
+      if (field === 'source') updated.supplier = value;
+      if (field === 'supplier') updated.source = value;
+      return updated;
+    }));
+
+    try {
+      const { updateEquipment } = await import('../lib/api/equipment');
+      const payload: Partial<Equipment> = { [field]: value };
+      if (field === 'source') payload.supplier = value;
+      if (field === 'supplier') payload.source = value;
+      await updateEquipment(id, payload);
+    } catch (error) {
+      console.error(`Failed to inline update equipment ${id} field ${String(field)}:`, error);
+    }
+  };
+
+  const handleQuickAddRow = async (): Promise<Equipment | null> => {
+    try {
+      const numbers = equipment
+        .map(e => parseInt(e.serialNumber || '0', 10))
+        .filter(n => !isNaN(n) && n > 0);
+      const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : equipment.length + 1;
+      const nextSerial = nextNum.toString().padStart(2, '0');
+
+      const today = new Date();
+      const dd = String(today.getDate()).padStart(2, '0');
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const yyyy = today.getFullYear();
+      const todayFormatted = `${dd}/${mm}/${yyyy}`;
+
+      const newItem: Partial<Equipment> = {
+        name: 'صنف جديد في سجل الجرد',
+        serialNumber: nextSerial,
+        registrationDate: todayFormatted,
+        foundationalInventory: todayFormatted,
+        totalQuantity: 1,
+        availableQuantity: 1,
+        brokenQuantity: 0,
+        source: 'ميزانية المؤسسة',
+        supplier: 'ميزانية المؤسسة',
+        price: '',
+        location: 'مخبر العلوم',
+        status: 'functional',
+        type: 'glassware',
+        notes: ''
+      };
+
+      const { createEquipment } = await import('../lib/api/equipment');
+      const created = await createEquipment(newItem);
+      if (created) {
+        setEquipment(prev => [created, ...prev]);
+        return created;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to quick add row:', error);
+      alert('حدث خطأ أثناء إضافة السطر الجديد.');
+      return null;
+    }
+  };
+
+  const handleDuplicateEquipment = async (item: Equipment) => {
+    try {
+      const numbers = equipment
+        .map(e => parseInt(e.serialNumber || '0', 10))
+        .filter(n => !isNaN(n) && n > 0);
+      const nextNum = numbers.length > 0 ? Math.max(...numbers) + 1 : equipment.length + 1;
+      const nextSerial = nextNum.toString().padStart(2, '0');
+
+      const duplicated: Partial<Equipment> = {
+        name: `${item.name} (نسخة)`,
+        serialNumber: nextSerial,
+        registrationDate: item.registrationDate || '',
+        foundationalInventory: item.foundationalInventory || '',
+        totalQuantity: item.totalQuantity || 1,
+        availableQuantity: item.availableQuantity || 1,
+        brokenQuantity: item.brokenQuantity || 0,
+        source: item.source || item.supplier || '',
+        supplier: item.source || item.supplier || '',
+        price: item.price || '',
+        location: item.location || '',
+        status: item.status || 'functional',
+        type: item.type || 'glassware',
+        exitDate: '',
+        notes: item.notes || ''
+      };
+
+      const { createEquipment } = await import('../lib/api/equipment');
+      const created = await createEquipment(duplicated);
+      if (created) {
+        setEquipment(prev => [created, ...prev]);
+        alert(`تم نسخ الصنف بنجاح برقم تسجيل جديد: ${nextSerial}`);
+      }
+    } catch (error) {
+      console.error('Failed to duplicate equipment:', error);
+      alert('حدث خطأ أثناء نسخ الصنف.');
     }
   };
 
@@ -1065,16 +1170,30 @@ export function useEquipmentLogic(isNested = false) {
 
   const filteredEquipment = equipment
     .filter(e => {
-      const matchesSearch = 
-        e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.smartNameAr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        e.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+      const s = (searchTerm || '').toLowerCase().trim();
+      const matchesSearch = !s ||
+        e.name?.toLowerCase().includes(s) ||
+        e.smartNameAr?.toLowerCase().includes(s) ||
+        e.serialNumber?.toLowerCase().includes(s) ||
+        e.source?.toLowerCase().includes(s) ||
+        e.supplier?.toLowerCase().includes(s) ||
+        e.location?.toLowerCase().includes(s) ||
+        e.price?.toLowerCase().includes(s) ||
+        e.registrationDate?.toLowerCase().includes(s) ||
+        e.foundationalInventory?.toLowerCase().includes(s) ||
+        e.exitDate?.toLowerCase().includes(s) ||
+        e.notes?.toLowerCase().includes(s);
       
       const matchesType = filterType === 'all' || 
                          (filterType === 'smart' ? !!e.smartNameAr : e.type === filterType);
       
       const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
-      return matchesSearch && matchesType && matchesStatus;
+
+      const matchesExit = filterExitStatus === 'all' ||
+        (filterExitStatus === 'active' ? (!e.exitDate || e.exitDate === '---' || e.exitDate === '-') :
+        (filterExitStatus === 'exited' ? (!!e.exitDate && e.exitDate !== '---' && e.exitDate !== '-') : true));
+
+      return matchesSearch && matchesType && matchesStatus && matchesExit;
     })
     .sort((a, b) => {
       if (sortField === 'none') return 0;
@@ -1099,7 +1218,7 @@ export function useEquipmentLogic(isNested = false) {
   const rowVirtualizer = useVirtualizer({
     count: filteredEquipment.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 100,
+    estimateSize: () => 58,
     overscan: 10,
   });
 
@@ -1107,6 +1226,12 @@ export function useEquipmentLogic(isNested = false) {
   const totalAvailable = equipment.reduce((acc, curr) => acc + (Number(curr.availableQuantity) || 0), 0);
   const totalBroken = equipment.reduce((acc, curr) => acc + (Number(curr.brokenQuantity) || 0), 0);
   const totalTypes = equipment.length;
+  const totalEstimatedValue = equipment.reduce((acc, curr) => {
+    if (!curr.price) return acc;
+    const cleaned = curr.price.replace(/[^\d.]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? acc : acc + num;
+  }, 0);
 
   return {
     schoolId,
@@ -1116,10 +1241,12 @@ export function useEquipmentLogic(isNested = false) {
     searchParams,
     navigate,
     equipment,
+    setEquipment,
     loading,
     searchTerm, setSearchTerm,
     filterType, setFilterType,
     filterStatus, setFilterStatus,
+    filterExitStatus, setFilterExitStatus,
     isAddModalOpen, setIsAddModalOpen,
     editingEquipment, setEditingEquipment,
     isSmartUpdating,
@@ -1149,6 +1276,9 @@ export function useEquipmentLogic(isNested = false) {
     handleDownloadGeneralInventoryTemplate,
     handleExportGeneralInventoryXLS,
     handleUpdateStatus,
+    handleInlineUpdate,
+    handleQuickAddRow,
+    handleDuplicateEquipment,
     fetchHistory,
     handleExportXLS,
     handlePrintList,
@@ -1171,6 +1301,7 @@ export function useEquipmentLogic(isNested = false) {
     totalPieces,
     totalAvailable,
     totalBroken,
-    totalTypes
+    totalTypes,
+    totalEstimatedValue
   };
 }

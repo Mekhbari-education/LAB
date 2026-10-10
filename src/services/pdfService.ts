@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatSchoolWithCommune } from '../lib/utils';
+import { formatSchoolWithCommune, formatOfficialRankTitle } from '../lib/utils';
 
 /**
  * Sanitizes and normalizes text values for PDF rendering.
@@ -46,6 +46,7 @@ export interface LabReportPDFOptions {
   colorMode?: 'color' | 'grayscale' | 'blackAndWhite';
   disclaimer?: string;
   labManagerTitle?: string;
+  middleTitle?: string;
   principalTitle?: string;
 }
 
@@ -130,6 +131,7 @@ export class PDFService {
       colorMode = 'color',
       disclaimer,
       labManagerTitle = 'المسؤول عن المخبر',
+      middleTitle,
       principalTitle = 'مدير(ة) المؤسسة'
     } = options;
 
@@ -186,17 +188,16 @@ export class PDFService {
     doc.setFontSize(9);
     doc.setTextColor(50, 50, 50);
 
-    // Right-hand side (Directorate, School, Lab)
+    // Right-hand side (Directorate, School)
     doc.text(processArabic(`مديرية التربية: ${directorate}`), headerRightX, currentY + 3, { align: 'right' });
     const formattedSchool = formatSchoolWithCommune(school, schoolInfo.commune);
     doc.text(processArabic(formattedSchool), headerRightX, currentY + 8, { align: 'right' });
-    doc.text(processArabic(`المخبر: ${laboratory}`), headerRightX, currentY + 13, { align: 'right' });
 
-    // Left-hand side (Academic year, Date)
+    // Left-hand side: Academic Year above Laboratory
     doc.text(processArabic(`السنة الدراسية: ${academicYear}`), headerLeftX, currentY + 3, { align: 'left' });
-    doc.text(processArabic(`التاريخ: ${dateStr}`), headerLeftX, currentY + 8, { align: 'left' });
+    doc.text(processArabic(`المخبر: ${laboratory || 'مخبر العلوم الفيزيائية والطبيعية'}`), headerLeftX, currentY + 8, { align: 'left' });
 
-    currentY += 19;
+    currentY += 15;
 
     // Header Divider Line
     doc.setDrawColor(200, 210, 195);
@@ -315,7 +316,7 @@ export class PDFService {
         finalY += 8;
       }
 
-      const boxWidth = 55;
+      const boxWidth = middleTitle ? 52 : 55;
       const boxHeight = 22;
 
       // Right box: المسؤول عن المخبر
@@ -333,6 +334,20 @@ export class PDFService {
       doc.setTextColor(130, 130, 130);
       doc.text(processArabic('(الاسم، التوقيع والختم)'), rightBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
 
+      // Middle box: الناظر (if provided)
+      if (middleTitle) {
+        const middleBoxX = (pageWidth - boxWidth) / 2;
+        doc.roundedRect(middleBoxX, finalY, boxWidth, boxHeight, 2, 2, 'D');
+        doc.setFont(fontName, 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(brandColor[0], brandColor[1], brandColor[2]);
+        doc.text(processArabic(middleTitle), middleBoxX + boxWidth / 2, finalY + 5, { align: 'center' });
+        doc.setFont(fontName, 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(130, 130, 130);
+        doc.text(processArabic('(التوقيع والختم)'), middleBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
+      }
+
       // Left box: مدير المؤسسة
       const leftBoxX = margin;
       doc.roundedRect(leftBoxX, finalY, boxWidth, boxHeight, 2, 2, 'D');
@@ -344,7 +359,7 @@ export class PDFService {
       doc.setFont(fontName, 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(130, 130, 130);
-      doc.text(processArabic('(التوقيع وتأشيرة المصادقة)'), leftBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
+      doc.text(processArabic('(التوقيع والختم)'), leftBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
     }
 
     // --- Footer on all pages (Page numbers & platform badge) ---
@@ -483,41 +498,126 @@ export class PDFService {
    */
   static async generateDailyReportPDF(data: {
     date: string;
+    reportNumber?: string;
     schoolInfo?: SchoolInfo;
+    department?: string;
+    academicYear?: string;
+    location?: string;
+    routing?: string;
+    recipient?: string;
+    sender?: string;
+    signers?: string[];
+    noActivities?: boolean;
+    noActivitiesReason?: string;
+    observations?: {
+      labNotes?: string;
+      supervisorNotes?: string;
+      directorNotes?: string;
+    };
     rows: Array<{
       teacher: string;
       teacherSubject?: string;
       class: string;
       time: string;
+      activityType?: string;
       activityTitle: string;
       equipment: string;
       notes?: string;
     }>;
+    save?: boolean;
+    isBlank?: boolean;
   }): Promise<jsPDF> {
-    const headers = ['#', 'الأستاذ والمادة', 'التوقيت', 'القسم', 'عنوان النشاط البيداغوجي', 'الأدوات والمواد المستعملة', 'ملاحظات'];
-    const formattedRows = data.rows.map((r, index) => [
-      index + 1,
-      r.teacherSubject ? `${r.teacher} (${r.teacherSubject})` : r.teacher,
-      r.time,
-      r.class,
-      r.activityTitle,
-      r.equipment,
-      r.notes || '---'
-    ]);
+    const isBlank = Boolean(data.isBlank);
+    const isNoActivities = Boolean(data.noActivities);
+    const headers = ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط البيداغوجي والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'];
+    
+    let formattedRows: any[];
+    if (isBlank) {
+      formattedRows = Array.from({ length: 7 }, (_, index) => [
+        index + 1,
+        '........................................',
+        '...... : ......',
+        '....................',
+        '................................................................',
+        '................................................................',
+        '..............................'
+      ]);
+    } else if (isNoActivities) {
+      formattedRows = [
+        [
+          '-',
+          '---',
+          '---',
+          '---',
+          `لا توجد نشاطات تطبيقية لهذا اليوم (${data.noActivitiesReason || 'أعمال الصيانة والتحضير والجرد الإداري'})`,
+          '---',
+          'يوم بدون حصص مخبرية'
+        ]
+      ];
+    } else {
+      formattedRows = data.rows.map((r, index) => [
+        index + 1,
+        r.teacher ? (r.teacherSubject ? `${r.teacher} (${r.teacherSubject})` : r.teacher) : '---',
+        r.time || '---',
+        r.class || '---',
+        [r.activityType ? `[${r.activityType}]` : '', r.activityTitle].filter(Boolean).join(' ') || '---',
+        r.equipment || '---',
+        r.notes || '---'
+      ]);
+    }
+
+    const obsParts = [
+      data.observations?.labNotes ? `ملاحظات ${data.sender || 'مسؤول المخبر'}: ${data.observations.labNotes}` : '',
+      data.observations?.supervisorNotes ? `ملاحظات الناظر: ${data.observations.supervisorNotes}` : '',
+      data.observations?.directorNotes ? `ملاحظات السيد المدير: ${data.observations.directorNotes}` : '',
+      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${data.date}`
+    ].filter(Boolean);
+    const obsNotes = obsParts.length > 0 ? obsParts.join('\n\n') : undefined;
+
+    const summaryCards = isBlank ? [
+      { label: 'رقم التقرير', value: data.reportNumber || '01' },
+      { label: 'النوع', value: 'استمارة بيضاء للتحرير اليدوي' },
+      { label: 'تاريخ الاستخراج', value: data.date }
+    ] : isNoActivities ? [
+      { label: 'رقم التقرير', value: data.reportNumber || '01' },
+      { label: 'الوضعية', value: 'لا توجد نشاطات تطبيقية' },
+      { label: 'تاريخ اليوم', value: data.date }
+    ] : [
+      { label: 'رقم التقرير', value: data.reportNumber || '01' },
+      { label: 'إجمالي الحصص المسجلة', value: data.rows.length },
+      { label: 'تاريخ النشاط', value: data.date }
+    ];
+
+    const mergedSchoolInfo: SchoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: data.schoolInfo?.directorate || 'مديرية التربية لولاية أم البواقي',
+      school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
+      commune: data.schoolInfo?.commune || data.location || 'عين كرشة',
+      laboratory: data.department || 'مخبر العلوم الفيزيائية والطبيعية',
+      academicYear: data.academicYear || '2026 / 2027',
+      ...data.schoolInfo
+    };
 
     return this.exportLabReportPDF({
-      title: 'التقرير اليومي لأنشطة المخبر والتجارب العلمية',
-      subtitle: `سجل الحصص المخبرية المنجزة ليوم: ${data.date}`,
-      schoolInfo: data.schoolInfo,
+      title: isBlank ? 'استمارة التقرير اليومي للمخبر (نموذج رسمي فارغ)' : 'التقرير اليومي للمخبر',
+      subtitle: isBlank 
+        ? 'استمارة رسمية جاهزة للطباعة والملء اليدوي المباشر أثناء اليوم الدراسي' 
+        : isNoActivities
+        ? `سجل الحصص المخبرية ليوم: ${data.date} (يوم بدون أنشطة تطبيقية)`
+        : `سجل الحصص المخبرية المنجزة ليوم: ${data.date}${data.reportNumber ? ` (رقم: ${data.reportNumber})` : ''}`,
+      schoolInfo: mergedSchoolInfo,
       headers,
       rows: formattedRows,
-      fileName: `daily_report_${data.date}.pdf`,
+      fileName: isBlank ? `daily_report_blank_form.pdf` : `daily_report_${data.date}.pdf`,
       orientation: 'l', // Landscape layout for wide daily report table
-      summaryCards: [
-        { label: 'إجمالي الحصص المسجلة', value: data.rows.length },
-        { label: 'تاريخ النشاط', value: data.date }
-      ],
-      showSignatures: true
+      summaryCards,
+      notes: obsNotes,
+      showSignatures: true,
+      labManagerTitle: formatOfficialRankTitle(data.signers?.[0] || data.sender),
+      middleTitle: data.signers?.[1] || 'الناظر',
+      principalTitle: data.signers?.[data.signers.length - 1] || 'مدير المؤسسة',
+      save: data.save !== undefined ? data.save : true
     });
   }
 
@@ -690,6 +790,9 @@ export class PDFService {
     subject: string;
     content: string;
     notes?: string;
+    department?: string;
+    academicYear?: string;
+    location?: string;
     hasTable?: boolean;
     tableHeaders?: string[];
     tableRows?: (string | number)[][];
@@ -734,20 +837,24 @@ export class PDFService {
     doc.text(processArabic(ministry), pageWidth / 2, currentY, { align: 'center' });
 
     currentY += 5;
-    // Right info: Directorate & School
+    // Right info: Directorate, School, Department
     doc.setFont(fontName, 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(30, 41, 59);
     doc.text(processArabic(directorate), pageWidth - margin, currentY + 3, { align: 'right' });
     doc.text(processArabic(school), pageWidth - margin, currentY + 8, { align: 'right' });
+    const dept = options.department || schoolInfo.laboratory || 'مخبر العلوم الفيزيائية والطبيعية';
+    doc.text(processArabic(`المصلحة: ${dept}`), pageWidth - margin, currentY + 13, { align: 'right' });
 
-    // Left info: Date & Reference
-    doc.text(processArabic(`التاريخ: ${dateStr}`), margin, currentY + 3, { align: 'left' });
+    // Left info: Academic Year, Date, Reference
+    const yearStr = options.academicYear || schoolInfo.academicYear || '2026 / 2027';
+    doc.text(processArabic(`السنة الدراسية: ${yearStr}`), margin, currentY + 3, { align: 'left' });
+    doc.text(processArabic(`التاريخ: ${dateStr}`), margin, currentY + 8, { align: 'left' });
     if (options.reference) {
-      doc.text(processArabic(`المرجع: ${options.reference}`), margin, currentY + 8, { align: 'left' });
+      doc.text(processArabic(`المرجع: ${options.reference}`), margin, currentY + 13, { align: 'left' });
     }
 
-    currentY += 14;
+    currentY += 18;
     // Divider line
     doc.setDrawColor(15, 118, 110);
     doc.setLineWidth(0.7);
@@ -869,6 +976,14 @@ export class PDFService {
 
       currentY += 18;
     }
+
+    // 6b. Location and Date line
+    const releaseLocation = options.location || schoolInfo.commune || 'عين كرشة';
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(processArabic(`حرر بـ : ${releaseLocation} في : ${dateStr}`), margin, currentY + 2, { align: 'left' });
+    currentY += 8;
 
     // 7. Signatures
     const signers = options.signers && options.signers.length > 0 ? options.signers : ['مسير المخبر', 'مدير المؤسسة'];
@@ -1218,7 +1333,7 @@ export class PDFService {
                 </td>
                 <td>
                   <div class="sig-title">${principalTitle}</div>
-                  <div class="sig-space">(التوقيع وتأشيرة المصادقة)</div>
+                  <div class="sig-space">(التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">في: .............................</div>
                 </td>
               </tr>
@@ -1324,40 +1439,119 @@ export class PDFService {
    */
   static generateDailyReportWord(data: {
     date: string;
+    reportNumber?: string;
     schoolInfo?: SchoolInfo;
+    department?: string;
+    academicYear?: string;
+    location?: string;
+    routing?: string;
+    recipient?: string;
+    sender?: string;
+    signers?: string[];
+    noActivities?: boolean;
+    noActivitiesReason?: string;
+    observations?: {
+      labNotes?: string;
+      supervisorNotes?: string;
+      directorNotes?: string;
+    };
     rows: Array<{
       teacher: string;
       teacherSubject?: string;
       class: string;
       time: string;
+      activityType?: string;
       activityTitle: string;
       equipment: string;
       notes?: string;
     }>;
+    isBlank?: boolean;
   }): void {
-    const headers = ['#', 'الأستاذ والمادة', 'التوقيت', 'القسم', 'عنوان النشاط البيداغوجي', 'الأدوات والمواد المستعملة', 'ملاحظات'];
-    const formattedRows = data.rows.map((r, index) => [
-      index + 1,
-      r.teacherSubject ? `${r.teacher} (${r.teacherSubject})` : r.teacher,
-      r.time,
-      r.class,
-      r.activityTitle,
-      r.equipment,
-      r.notes || '---'
-    ]);
+    const isBlank = Boolean(data.isBlank);
+    const isNoActivities = Boolean(data.noActivities);
+    const headers = ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط البيداغوجي والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'];
+    
+    let formattedRows: any[];
+    if (isBlank) {
+      formattedRows = Array.from({ length: 7 }, (_, index) => [
+        index + 1,
+        '........................................',
+        '...... : ......',
+        '....................',
+        '................................................................',
+        '................................................................',
+        '..............................'
+      ]);
+    } else if (isNoActivities) {
+      formattedRows = [
+        [
+          '-',
+          '---',
+          '---',
+          '---',
+          `لا توجد نشاطات تطبيقية لهذا اليوم (${data.noActivitiesReason || 'أعمال الصيانة والتحضير والجرد الإداري'})`,
+          '---',
+          'يوم بدون حصص مخبرية'
+        ]
+      ];
+    } else {
+      formattedRows = data.rows.map((r, index) => [
+        index + 1,
+        r.teacher ? (r.teacherSubject ? `${r.teacher} (${r.teacherSubject})` : r.teacher) : '---',
+        r.time || '---',
+        r.class || '---',
+        [r.activityType ? `[${r.activityType}]` : '', r.activityTitle].filter(Boolean).join(' ') || '---',
+        r.equipment || '---',
+        r.notes || '---'
+      ]);
+    }
+
+    const obsParts = [
+      data.observations?.labNotes ? `ملاحظات ${data.sender || 'مسؤول المخبر'}: ${data.observations.labNotes}` : '',
+      data.observations?.supervisorNotes ? `ملاحظات الناظر: ${data.observations.supervisorNotes}` : '',
+      data.observations?.directorNotes ? `ملاحظات المدير: ${data.observations.directorNotes}` : '',
+      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${data.date}`
+    ].filter(Boolean);
+    const obsNotes = obsParts.length > 0 ? obsParts.join('\n\n') : undefined;
+
+    const mergedSchoolInfo: SchoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: data.schoolInfo?.directorate || 'مديرية التربية لولاية أم البواقي',
+      school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
+      commune: data.schoolInfo?.commune || data.location || 'عين كرشة',
+      laboratory: data.department || 'مخبر العلوم الفيزيائية والطبيعية',
+      academicYear: data.academicYear || '2026 / 2027',
+      ...data.schoolInfo
+    };
 
     this.exportLabReportWord({
-      title: 'التقرير اليومي لأنشطة المخبر والتجارب العلمية',
-      subtitle: `سجل الحصص المخبرية المنجزة ليوم: ${data.date}`,
-      schoolInfo: data.schoolInfo,
+      title: isBlank ? 'استمارة التقرير اليومي للمخبر (نموذج رسمي فارغ)' : 'التقرير اليومي للمخبر',
+      subtitle: isBlank 
+        ? 'استمارة رسمية جاهزة للطباعة والملء اليدوي المباشر أثناء اليوم الدراسي' 
+        : isNoActivities
+        ? `سجل الحصص المخبرية ليوم: ${data.date} (يوم بدون أنشطة تطبيقية)`
+        : `سجل الحصص المخبرية المنجزة ليوم: ${data.date}${data.reportNumber ? ` (رقم: ${data.reportNumber})` : ''}`,
+      schoolInfo: mergedSchoolInfo,
       headers,
       rows: formattedRows,
-      fileName: `daily_report_${data.date}.doc`,
+      fileName: isBlank ? `daily_report_blank_form.doc` : `daily_report_${data.date}.doc`,
       orientation: 'l',
-      summaryCards: [
+      summaryCards: isBlank ? [
+        { label: 'النوع', value: 'استمارة بيضاء للتحرير اليدوي' },
+        { label: 'تاريخ الاستخراج', value: data.date }
+      ] : isNoActivities ? [
+        { label: 'الوضعية', value: 'لا توجد نشاطات تطبيقية' },
+        { label: 'تاريخ اليوم', value: data.date },
+        ...(data.academicYear ? [{ label: 'السنة الدراسية', value: data.academicYear }] : [])
+      ] : [
         { label: 'إجمالي الحصص المسجلة', value: data.rows.length },
-        { label: 'تاريخ النشاط', value: data.date }
+        { label: 'تاريخ النشاط', value: data.date },
+        ...(data.academicYear ? [{ label: 'السنة الدراسية', value: data.academicYear }] : [])
       ],
+      notes: obsNotes,
+      labManagerTitle: formatOfficialRankTitle(data.signers?.[0] || data.sender),
+      principalTitle: data.signers?.[data.signers.length - 1] || 'مدير المؤسسة',
       showSignatures: true
     });
   }

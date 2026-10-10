@@ -160,26 +160,38 @@
 }
 
 @media print {
-  .no-print {
+  .no-print, .no-print * {
     display: none !important;
   }
 
-  body {
+  html, body {
     background-color: white !important;
     padding: 0 !important;
     margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    font-family: "ManaraDocsAmatti", "Amiri", "Cairo", sans-serif !important;
+    font-family: "Cairo", "Amiri", -apple-system, system-ui, sans-serif !important;
     direction: rtl !important;
   }
 
-  @page {
-    margin: 1.5cm;
-    size: A4 portrait;
+  ::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
-  /* Ensure the report container takes full width and is visible */
+  /* Ensure containers do not clip or produce scrollbars in print */
+  #root, main, div, section, article {
+    overflow: visible !important;
+    max-height: none !important;
+    scrollbar-width: none !important;
+  }
+
   #root, main {
     padding: 0 !important;
     margin: 0 !important;

@@ -25,12 +25,14 @@ export class PrintService {
 
         const iframe = document.createElement('iframe');
         iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
+        iframe.style.left = '-10000px';
+        iframe.style.top = '-10000px';
+        iframe.style.width = '1200px';
+        iframe.style.height = '800px';
         iframe.style.border = '0';
-        iframe.style.visibility = 'hidden';
+        iframe.style.opacity = '0.01';
+        iframe.style.pointerEvents = 'none';
+        iframe.style.zIndex = '-9999';
         iframe.setAttribute('aria-hidden', 'true');
         iframe.title = options?.title || 'طباعة الوثيقة';
 
@@ -97,6 +99,63 @@ export class PrintService {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Opens HTML content in a new browser tab and triggers print dialog,
+   * satisfying user requirements for direct print tabs with official preview.
+   */
+  static async printInNewTab(
+    htmlContent: string,
+    options?: {
+      title?: string;
+      existingWindow?: Window | null;
+      autoPrint?: boolean;
+    }
+  ): Promise<void> {
+    const title = options?.title || 'طباعة الوثيقة';
+    let targetWin = options?.existingWindow;
+
+    // If no window was provided or it was closed, open a new tab
+    if (!targetWin || targetWin.closed) {
+      try {
+        targetWin = window.open('', '_blank');
+      } catch (err) {
+        console.warn('Could not open new window directly:', err);
+      }
+    }
+
+    // Fallback to iframe if popups are completely blocked
+    if (!targetWin) {
+      console.warn('Window popup blocked, falling back to hidden iframe print');
+      return this.printHtml(htmlContent, { title });
+    }
+
+    try {
+      targetWin.document.open();
+      targetWin.document.write(htmlContent);
+      targetWin.document.close();
+      try {
+        targetWin.document.title = title;
+      } catch (e) {
+        // ignore
+      }
+
+      const autoPrint = options?.autoPrint !== false;
+      if (autoPrint) {
+        setTimeout(() => {
+          try {
+            targetWin?.focus();
+            targetWin?.print();
+          } catch (printErr) {
+            console.warn('Failed to call print() on new tab:', printErr);
+          }
+        }, 450);
+      }
+    } catch (err) {
+      console.error('Error populating new print tab:', err);
+      return this.printHtml(htmlContent, { title });
+    }
   }
 
   /**
@@ -996,7 +1055,7 @@ export class PrintService {
                 </td>
                 <td>
                   <div class="sig-title">${sig.principalTitle || 'مدير(ة) المؤسسة'}</div>
-                  <div class="sig-space">(التوقيع وتأشيرة المصادقة)</div>
+                  <div class="sig-space">(التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">في: .............................</div>
                 </td>
               </tr>

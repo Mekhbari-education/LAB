@@ -41,6 +41,15 @@ import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, or
 import SmartDocumentGeneratorModal from '../components/SmartDocumentGeneratorModal';
 
 export type DocCategory = 'all' | 'requests' | 'reports' | 'minutes' | 'forms' | 'saved';
+export type RoutingType = 'direct' | 'hierarchical_nazir' | 'hierarchical_cpe' | 'financial';
+
+export interface AdminTableRow {
+  col1: string;
+  col2: string;
+  col3: string;
+  col4: string;
+  col5?: string;
+}
 
 export interface AdminTemplateItem {
   id: string;
@@ -48,14 +57,18 @@ export interface AdminTemplateItem {
   title: string;
   subTitle: string;
   tag: string;
+  routingType?: RoutingType;
   recipientDefault: string;
   senderDefault: string;
+  departmentDefault?: string;
+  academicYearDefault?: string;
+  locationDefault?: string;
   subjectDefault: string;
   contentDefault: string;
   notesDefault?: string;
   hasTable?: boolean;
   tableHeaders?: string[];
-  defaultRows?: { col1: string; col2: string; col3: string; col4: string }[];
+  defaultRows?: AdminTableRow[];
   signers: string[];
 }
 
@@ -68,16 +81,44 @@ export interface SavedAdminDoc {
   reference: string;
   sender: string;
   recipient: string;
+  department?: string;
+  academicYear?: string;
+  location?: string;
+  routing?: RoutingType;
   subject: string;
   content: string;
   notes?: string;
-  rows?: { col1: string; col2: string; col3: string; col4: string }[];
+  rows?: AdminTableRow[];
   signers: string[];
   createdAt: any;
 }
 
 const TEMPLATES: AdminTemplateItem[] = [
   // --- 1. الطلبات الإدارية (Requests) ---
+  {
+    id: 'req-inventory-registers-cards',
+    category: 'requests',
+    title: 'طلب توفير سجلات وبطاقات الجرد الخاصة بالمخبر',
+    subTitle: 'طلب رسمي لتوفير سجلات الجرد والبطاقات موجه للمسؤول المباشر (المدير) أو عن طريق السلم الإداري (تحت إشراف الناظر)',
+    tag: 'سجلات وبطاقات الجرد',
+    routingType: 'direct',
+    recipientDefault: 'السيد: مدير المؤسسة',
+    senderDefault: 'الملحق الرئيس بالمخابر',
+    departmentDefault: 'مخبر العلوم الفيزيائية والطبيعية',
+    academicYearDefault: '2026 / 2027',
+    locationDefault: 'عين كرشة',
+    subjectDefault: 'طلب توفير سجلات وبطاقات الجرد الخاصة بالمخبر',
+    contentDefault: `نرجو من سيادتكم توفير السجلات وبطاقات المتابعة الموضحة في الجدول أدناه، وذلك لضمان التنظيم الإداري، المتابعة الدقيقة للجرد، والتأشير القانوني لعتاد واستغلال مخبر العلوم الفيزيائية والطبيعية:`,
+    notesDefault: 'نرجو التكرم بالتأشير على السجلات المذكورة بعد توفيرها لتدخل قيد الاستغلال الرسمي.',
+    hasTable: true,
+    tableHeaders: ['الرقم', 'السجل', 'المرجع / الرمز', 'الكمية', 'ملاحظات / مواصفات'],
+    defaultRows: [
+      { col1: '1', col2: 'سجل جرد المخبر العام', col3: '(نموذج 34.3)', col4: '1', col5: 'سجل' },
+      { col1: '2', col2: 'سجل استعمال واستغلال الوسائل المخبرية', col3: '(نموذج 36.3)', col4: '1', col5: 'سجل' },
+      { col1: '3', col2: 'بطاقات الجرد الفردية للوسائل والتجهيزات', col3: '(نموذج 2.6.2)', col4: '200', col5: 'بطاقة كرتونية' }
+    ],
+    signers: ['الملحق الرئيس بالمخابر', 'مدير المؤسسة']
+  },
   {
     id: 'req-equipment-purchase',
     category: 'requests',
@@ -426,10 +467,14 @@ export default function AdministrativeDocuments() {
   const [docRef, setDocRef] = useState('');
   const [docSender, setDocSender] = useState('');
   const [docRecipient, setDocRecipient] = useState('');
+  const [docDepartment, setDocDepartment] = useState('مخبر العلوم الفيزيائية والطبيعية');
+  const [docAcademicYear, setDocAcademicYear] = useState('2026 / 2027');
+  const [docLocation, setDocLocation] = useState(commune || 'عين كرشة');
+  const [docRouting, setDocRouting] = useState<RoutingType>('hierarchical_nazir');
   const [docSubject, setDocSubject] = useState('');
   const [docContent, setDocContent] = useState('');
   const [docNotes, setDocNotes] = useState('');
-  const [docRows, setDocRows] = useState<{ col1: string; col2: string; col3: string; col4: string }[]>([]);
+  const [docRows, setDocRows] = useState<AdminTableRow[]>([]);
   const [docSigners, setDocSigners] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -474,18 +519,75 @@ export default function AdministrativeDocuments() {
     setTimeout(() => setNotification(null), 4000);
   };
 
+  // Change administrative routing ladder
+  const handleSetRouting = (type: RoutingType, customSender?: string) => {
+    setDocRouting(type);
+    let recipientText = '';
+    let signersList: string[] = [];
+
+    const currentSender = customSender || docSender;
+    const baseSender = currentSender ? currentSender.split('/')[0].trim() : 'الملحق الرئيس بالمخابر';
+
+    switch (type) {
+      case 'hierarchical_nazir':
+        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس';
+        signersList = [baseSender, 'تحت إشراف ناظر الدروس', 'مدير المؤسسة'];
+        break;
+      case 'hierarchical_cpe':
+        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: المستشار الرئيسي للتربية';
+        signersList = [baseSender, 'تحت إشراف المستشار الرئيسي للتربية', 'مدير المؤسسة'];
+        break;
+      case 'financial':
+        recipientText = 'السيد: مدير المؤسسة — عن طريق السيد: المقتصد (المسير المالي)';
+        signersList = [baseSender, 'المصالح الاقتصادية (المقتصد)', 'مدير المؤسسة'];
+        break;
+      case 'direct':
+      default:
+        recipientText = 'السيد: مدير المؤسسة';
+        signersList = [baseSender, 'مدير المؤسسة'];
+        break;
+    }
+
+    setDocRecipient(recipientText);
+    setDocSigners(signersList);
+    showNotification(`تم ضبط التوجيه الإداري: ${
+      type === 'hierarchical_nazir' ? 'عبر السلّم الإداري (تحت إشراف الناظر)' :
+      type === 'hierarchical_cpe' ? 'تحت إشراف مستشار التربية' :
+      type === 'financial' ? 'عبر المصالح الاقتصادية' : 'مباشر إلى السيد المدير'
+    }`, 'info');
+  };
+
   // Open editor with template
-  const handleOpenTemplate = (template: AdminTemplateItem) => {
+  const handleOpenTemplate = (template: AdminTemplateItem, overrideRouting?: RoutingType) => {
     setSelectedTemplate(template);
     setDocDate(new Date().toISOString().split('T')[0]);
     setDocRef(`مخ/${new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`);
     setDocSender(template.senderDefault);
-    setDocRecipient(template.recipientDefault);
+    const chosenRouting = overrideRouting || template.routingType || 'direct';
+    setDocRouting(chosenRouting);
+
+    const baseSender = template.senderDefault ? template.senderDefault.split('/')[0].trim() : 'الملحق الرئيس بالمخابر';
+    if (chosenRouting === 'hierarchical_nazir') {
+      setDocRecipient('السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس');
+      setDocSigners([baseSender, 'تحت إشراف ناظر الدروس', 'مدير المؤسسة']);
+    } else if (chosenRouting === 'hierarchical_cpe') {
+      setDocRecipient('السيد: مدير المؤسسة — تحت إشراف السيد: المستشار الرئيسي للتربية');
+      setDocSigners([baseSender, 'تحت إشراف المستشار الرئيسي للتربية', 'مدير المؤسسة']);
+    } else if (chosenRouting === 'financial') {
+      setDocRecipient('السيد: مدير المؤسسة — عن طريق السيد: المقتصد (المسير المالي)');
+      setDocSigners([baseSender, 'المصالح الاقتصادية (المقتصد)', 'مدير المؤسسة']);
+    } else {
+      setDocRecipient(template.recipientDefault || 'السيد: مدير المؤسسة');
+      setDocSigners([...template.signers]);
+    }
+
+    setDocDepartment(template.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية');
+    setDocAcademicYear(template.academicYearDefault || '2026 / 2027');
+    setDocLocation(template.locationDefault || commune || 'عين كرشة');
     setDocSubject(template.subjectDefault);
     setDocContent(template.contentDefault);
     setDocNotes(template.notesDefault || '');
     setDocRows(template.defaultRows ? JSON.parse(JSON.stringify(template.defaultRows)) : []);
-    setDocSigners([...template.signers]);
     setIsEditorOpen(true);
   };
 
@@ -497,8 +599,12 @@ export default function AdministrativeDocuments() {
       title: savedDoc.title,
       subTitle: 'وثيقة إدارية محفوظة',
       tag: 'وثيقة مخصصة',
+      routingType: (savedDoc.routing as RoutingType) || 'direct',
       recipientDefault: savedDoc.recipient,
       senderDefault: savedDoc.sender,
+      departmentDefault: savedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية',
+      academicYearDefault: savedDoc.academicYear || '2026 / 2027',
+      locationDefault: savedDoc.location || 'عين كرشة',
       subjectDefault: savedDoc.subject,
       contentDefault: savedDoc.content,
       notesDefault: savedDoc.notes,
@@ -513,11 +619,15 @@ export default function AdministrativeDocuments() {
     setDocRef(savedDoc.reference || '');
     setDocSender(savedDoc.sender || '');
     setDocRecipient(savedDoc.recipient || '');
+    setDocDepartment(savedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية');
+    setDocAcademicYear(savedDoc.academicYear || '2026 / 2027');
+    setDocLocation(savedDoc.location || commune || 'عين كرشة');
+    setDocRouting((savedDoc.routing as RoutingType) || 'direct');
     setDocSubject(savedDoc.subject || '');
     setDocContent(savedDoc.content || '');
     setDocNotes(savedDoc.notes || '');
     setDocRows(savedDoc.rows || []);
-    setDocSigners(savedDoc.signers || ['مسير المخبر', 'مدير المؤسسة']);
+    setDocSigners(savedDoc.signers || ['الملحق الرئيس بالمخابر', 'مدير المؤسسة']);
     setIsEditorOpen(true);
   };
 
@@ -543,8 +653,9 @@ export default function AdministrativeDocuments() {
 
   // Add row to table
   const handleAddRow = () => {
-    const nextNum = (docRows.length + 1).toString().padStart(2, '0');
-    setDocRows([...docRows, { col1: nextNum, col2: '', col3: '', col4: '' }]);
+    const nextNum = (docRows.length + 1).toString();
+    const hasFive = (selectedTemplate?.tableHeaders?.length || 4) >= 5;
+    setDocRows([...docRows, { col1: nextNum, col2: '', col3: '', col4: '', ...(hasFive ? { col5: '' } : {}) }]);
   };
 
   // Remove row from table
@@ -553,9 +664,9 @@ export default function AdministrativeDocuments() {
   };
 
   // Update row
-  const handleUpdateRow = (index: number, field: 'col1' | 'col2' | 'col3' | 'col4', val: string) => {
+  const handleUpdateRow = (index: number, field: 'col1' | 'col2' | 'col3' | 'col4' | 'col5', val: string) => {
     const newRows = [...docRows];
-    newRows[index][field] = val;
+    newRows[index] = { ...newRows[index], [field]: val };
     setDocRows(newRows);
   };
 
@@ -573,6 +684,10 @@ export default function AdministrativeDocuments() {
         reference: docRef,
         sender: docSender,
         recipient: docRecipient,
+        department: docDepartment,
+        academicYear: docAcademicYear,
+        location: docLocation,
+        routing: docRouting,
         subject: docSubject,
         content: docContent,
         notes: docNotes,
@@ -607,7 +722,8 @@ export default function AdministrativeDocuments() {
   const generateOfficialHtml = () => {
     if (!selectedTemplate) return '';
 
-    const tableHeaders = selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'الكمية', 'الملاحظات'];
+    const tableHeaders = selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'الملاحظات'];
+    const hasCol5 = (tableHeaders.length >= 5) || docRows.some(r => Boolean(r.col5));
 
     let tableHtml = '';
     if (selectedTemplate.hasTable && docRows.length > 0) {
@@ -615,10 +731,11 @@ export default function AdministrativeDocuments() {
         <table style="width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13px; text-align: center;">
           <thead>
             <tr style="background-color: #f1f5f9; color: #1e293b;">
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 60px;">${tableHeaders[0]}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; text-align: right;">${tableHeaders[1]}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 140px;">${tableHeaders[2]}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px;">${tableHeaders[3]}</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 55px;">${tableHeaders[0] || 'الرقم'}</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; text-align: right;">${tableHeaders[1] || 'السجل / البيان'}</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: ${hasCol5 ? '130px' : '140px'};">${tableHeaders[2] || 'المرجع / الرمز'}</th>
+              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: ${hasCol5 ? '80px' : '100px'};">${tableHeaders[3] || 'الكمية'}</th>
+              ${hasCol5 ? `<th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 140px;">${tableHeaders[4] || 'ملاحظات / مواصفات'}</th>` : ''}
             </tr>
           </thead>
           <tbody>
@@ -628,6 +745,7 @@ export default function AdministrativeDocuments() {
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px; text-align: right;">${r.col2 || '-'}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px;">${r.col3 || '-'}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px;">${r.col4 || '-'}</td>
+                ${hasCol5 ? `<td style="border: 1px solid #cbd5e1; padding: 7px 10px;">${r.col5 || '-'}</td>` : ''}
               </tr>
             `).join('')}
           </tbody>
@@ -728,10 +846,12 @@ export default function AdministrativeDocuments() {
 
         <div class="inst-info">
           <div>
-            <div>${directorate || 'مديرية التربية الوطنية'}</div>
+            <div>${directorate || 'مديرية التربية لولاية أم البواقي'}</div>
             <div>${formattedSchool}</div>
+            <div style="margin-top: 3px; color: #0f766e; font-size: 13px;"><strong>المصلحة:</strong> ${docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}</div>
           </div>
           <div style="text-align: left;" dir="ltr">
+            <div style="font-size: 13px;"><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
             <div>التاريخ: ${docDate}</div>
             ${docRef ? `<div>المرجع: ${docRef}</div>` : ''}
           </div>
@@ -752,6 +872,10 @@ export default function AdministrativeDocuments() {
         ${tableHtml}
 
         ${docNotes ? `<div class="notes-box"><strong>ملاحظة هامة:</strong> ${docNotes}</div>` : ''}
+
+        <div style="text-align: left; margin: 24px 0 12px; font-weight: bold; font-size: 13.5px; color: #1e293b;">
+          حرر بـ : ${docLocation || 'عين كرشة'} في : ${docDate}
+        </div>
 
         ${signaturesHtml}
       </body>
@@ -777,6 +901,9 @@ export default function AdministrativeDocuments() {
 
     const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
     const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || 'مخبر العلوم الفيزيائية والطبيعية';
+    const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || '2026 / 2027';
+    const location = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || 'عين كرشة';
     const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
     const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
     const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
@@ -794,12 +921,15 @@ export default function AdministrativeDocuments() {
         date: date,
         sender: sender,
         recipient: recipient,
+        department: dept,
+        academicYear: academicYear,
+        location: location,
         subject: subject,
         content: content,
         notes: notes,
         hasTable: Boolean(tpl.hasTable && rows.length > 0),
         tableHeaders: tableHeaders,
-        tableRows: rows.map(r => [r.col1, r.col2, r.col3, r.col4]),
+        tableRows: rows.map(r => (tableHeaders.length >= 5 || r.col5 !== undefined) ? [r.col1, r.col2, r.col3, r.col4, r.col5 || ''] : [r.col1, r.col2, r.col3, r.col4]),
         signers: signers,
         schoolInfo: {
           country,
@@ -830,6 +960,9 @@ export default function AdministrativeDocuments() {
 
     const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
     const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || 'مخبر العلوم الفيزيائية والطبيعية';
+    const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || '2026 / 2027';
+    const location = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || 'عين كرشة';
     const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
     const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
     const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
@@ -847,12 +980,15 @@ export default function AdministrativeDocuments() {
         date: date,
         sender: sender,
         recipient: recipient,
+        department: dept,
+        academicYear: academicYear,
+        location: location,
         subject: subject,
         content: content,
         notes: notes,
         hasTable: Boolean(tpl.hasTable && rows.length > 0),
         tableHeaders: tableHeaders,
-        tableRows: rows.map(r => [r.col1, r.col2, r.col3, r.col4]),
+        tableRows: rows.map(r => (tableHeaders.length >= 5 || r.col5 !== undefined) ? [r.col1, r.col2, r.col3, r.col4, r.col5 || ''] : [r.col1, r.col2, r.col3, r.col4]),
         signers: signers,
         schoolInfo: {
           country,
@@ -878,6 +1014,9 @@ export default function AdministrativeDocuments() {
 
     const sender = customData?.sender || docSender || tpl.senderDefault;
     const recipient = customData?.recipient || docRecipient || tpl.recipientDefault;
+    const dept = customData?.department || docDepartment || tpl.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية';
+    const academicYear = customData?.academicYear || docAcademicYear || tpl.academicYearDefault || '2026 / 2027';
+    const releaseLoc = customData?.location || docLocation || tpl.locationDefault || commune || 'عين كرشة';
     const subject = customData?.subject || docSubject || tpl.subjectDefault;
     const content = customData?.content || docContent || tpl.contentDefault;
     const notes = customData?.notes !== undefined ? customData.notes : (docNotes !== undefined ? docNotes : tpl.notesDefault);
@@ -887,6 +1026,7 @@ export default function AdministrativeDocuments() {
     const signers = customData?.signers || docSigners || tpl.signers;
 
     const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+    const hasCol5 = (tableHeaders.length >= 5) || (rows && rows.some(r => Boolean(r.col5)));
 
     let tableHtml = '';
     if (tpl.hasTable && rows && rows.length > 0) {
@@ -894,10 +1034,11 @@ export default function AdministrativeDocuments() {
         <table class="items-table" style="width: 100%; border-collapse: collapse; margin-top: 16pt; margin-bottom: 16pt; border: 1.5pt solid #0f766e;" dir="rtl">
           <thead>
             <tr style="background-color: #0f766e; color: #ffffff;">
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 45pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[0]}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[1]}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 90pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[2]}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[3]}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 40pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[0] || 'الرقم'}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[1] || 'السجل / البيان'}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 85pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[2] || 'المرجع / الرمز'}</th>
+              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 60pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[3] || 'الكمية'}</th>
+              ${hasCol5 ? `<th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 95pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[4] || 'ملاحظات / مواصفات'}</th>` : ''}
             </tr>
           </thead>
           <tbody>
@@ -906,7 +1047,8 @@ export default function AdministrativeDocuments() {
                 <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-weight: bold; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col1 || (i + 1)}</td>
                 <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col2 || '-'}</td>
                 <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col3 || '-'}</td>
-                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col4 || '-'}</td>
+                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col4 || '-'}</td>
+                ${hasCol5 ? `<td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col5 || '-'}</td>` : ''}
               </tr>
             `).join('')}
           </tbody>
@@ -1070,10 +1212,12 @@ export default function AdministrativeDocuments() {
           <table class="meta-table" dir="rtl">
             <tr>
               <td style="text-align: right; vertical-align: top; font-weight: bold; font-size: 11.5pt; color: #1e293b;">
-                <div>${directorate || 'مديرية التربية الوطنية'}</div>
+                <div>${directorate || 'مديرية التربية لولاية أم البواقي'}</div>
                 <div>${formattedSchool}</div>
+                <div style="margin-top: 3pt; color: #0f766e;">المصلحة: ${dept}</div>
               </td>
               <td style="text-align: left; vertical-align: top; font-weight: bold; font-size: 11pt; color: #334155;" dir="ltr">
+                <div>السنة الدراسية: ${academicYear}</div>
                 <div>التاريخ: ${date}</div>
                 ${ref ? `<div>المرجع: ${ref}</div>` : ''}
               </td>
@@ -1109,6 +1253,10 @@ export default function AdministrativeDocuments() {
               </tr>
             </table>
           ` : ''}
+
+          <p style="text-align: left; margin: 18pt 0 10pt; font-weight: bold; font-size: 12pt; color: #1e293b;">
+            حرر بـ : ${releaseLoc} في : ${date}
+          </p>
 
           ${signersHtml}
 
@@ -1593,6 +1741,41 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                       <strong>الموضوع:</strong> {template.subjectDefault}
                     </div>
                   </div>
+
+                  {/* Routing Ladder Quick Open Buttons */}
+                  <div className="bg-surface-container/60 p-2 rounded-xl border border-outline-variant/30 space-y-1">
+                    <span className="text-[10px] font-bold text-secondary flex items-center justify-between">
+                      <span>مسار التوجيه المعتمد:</span>
+                      <span className="text-[9px] text-primary font-black">المدير أو السلم الإداري</span>
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenTemplate(template, 'direct');
+                        }}
+                        className="py-1 px-2 rounded-lg bg-surface hover:bg-surface-container-high border border-outline-variant/40 text-[10px] font-bold text-primary flex items-center justify-center gap-1 transition-all shadow-2xs"
+                        title="فتح الوثيقة موجهة مباشرة للسيد مدير المؤسسة"
+                      >
+                        <span>🏢</span>
+                        <span>مباشر للمدير</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenTemplate(template, 'hierarchical_nazir');
+                        }}
+                        className="py-1 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 flex items-center justify-center gap-1 transition-all shadow-2xs"
+                        title="فتح الوثيقة عن طريق السلم الإداري (تحت إشراف الناظر)"
+                      >
+                        <span>🪜</span>
+                        <span>تحت إشراف الناظر</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-outline-variant/40 flex items-center gap-1.5 flex-wrap">
@@ -1748,7 +1931,146 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                     {ministry || 'وزارة التربية الوطنية'}
                   </div>
                   <div className="text-[11px] text-secondary font-medium">
-                    {directorate || 'مديرية التربية الوطنية'} — {formattedSchool}
+                    {directorate || 'مديرية التربية لولاية أم البواقي'} — {formattedSchool}
+                  </div>
+                </div>
+
+                {/* Administrative Routing Ladder Selector (السلم الإداري / المسؤول المباشر) */}
+                <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Scale size={18} className="text-primary" />
+                      <span className="text-xs font-black text-primary">
+                        مسار التوجيه الإداري (السلم الوظيفي):
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-secondary font-medium">
+                      اختر جهة التوجيه ليتم ضبط صيغة "المرسل إليه" والتوقيعات تلقائياً
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSetRouting('direct')}
+                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                        docRouting === 'direct'
+                          ? 'bg-primary/10 border-primary text-primary font-bold shadow-xs'
+                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black flex items-center gap-1.5">
+                          <span>🏢</span> المسؤول المباشر (المدير)
+                        </span>
+                        {docRouting === 'direct' && <CheckCircle2 size={16} className="text-primary" />}
+                      </div>
+                      <p className="text-[10px] text-secondary leading-relaxed">
+                        موجهة مباشرة للمدير: [الملحق الرئيس بالمخابر ↔ مدير المؤسسة]
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSetRouting('hierarchical_nazir')}
+                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                        docRouting === 'hierarchical_nazir'
+                          ? 'bg-emerald-500/10 border-emerald-600 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs'
+                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black flex items-center gap-1.5">
+                          <span>🪜</span> السلم الإداري (تحت إشراف الناظر)
+                        </span>
+                        {docRouting === 'hierarchical_nazir' && <CheckCircle2 size={16} className="text-emerald-600" />}
+                      </div>
+                      <p className="text-[10px] text-secondary leading-relaxed">
+                        تحت إشراف ناظر الدروس مع تأشيرة الناظر في التوقيعات الرسمية
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSetRouting('hierarchical_cpe')}
+                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                        docRouting === 'hierarchical_cpe'
+                          ? 'bg-amber-500/10 border-amber-600 text-amber-800 dark:text-amber-300 font-bold shadow-xs'
+                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black flex items-center gap-1.5">
+                          <span>📋</span> السلم الإداري (تحت إشراف مستشار التربية)
+                        </span>
+                        {docRouting === 'hierarchical_cpe' && <CheckCircle2 size={16} className="text-amber-600" />}
+                      </div>
+                      <p className="text-[10px] text-secondary leading-relaxed">
+                        تحت إشراف المستشار الرئيسي للتربية (CPE) للمسائل الانضباطية
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSetRouting('financial')}
+                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                        docRouting === 'financial'
+                          ? 'bg-blue-500/10 border-blue-600 text-blue-800 dark:text-blue-300 font-bold shadow-xs'
+                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-black flex items-center gap-1.5">
+                          <span>💰</span> المصالح الاقتصادية (المقتصد)
+                        </span>
+                        {docRouting === 'financial' && <CheckCircle2 size={16} className="text-blue-600" />}
+                      </div>
+                      <p className="text-[10px] text-secondary leading-relaxed">
+                        عن طريق المقتصد (المسير المالي) لتوفير الوسائل أو الصيانة
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Institution & Letterhead Metadata */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-container-low p-3.5 rounded-2xl border border-outline-variant/40">
+                  <div>
+                    <label className="block text-[11px] font-black text-primary mb-1">
+                      المصلحة الطالبة
+                    </label>
+                    <input
+                      type="text"
+                      value={docDepartment}
+                      onChange={(e) => setDocDepartment(e.target.value)}
+                      placeholder="مخبر العلوم الفيزيائية والطبيعية"
+                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-black text-primary mb-1">
+                      السنة الدراسية
+                    </label>
+                    <input
+                      type="text"
+                      value={docAcademicYear}
+                      onChange={(e) => setDocAcademicYear(e.target.value)}
+                      placeholder="2026 / 2027"
+                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-black text-primary mb-1">
+                      مكان التحرير
+                    </label>
+                    <input
+                      type="text"
+                      value={docLocation}
+                      onChange={(e) => setDocLocation(e.target.value)}
+                      placeholder="عين كرشة"
+                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                    />
                   </div>
                 </div>
 
@@ -1851,68 +2173,89 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                     </div>
 
                     <div className="border border-outline-variant rounded-2xl overflow-hidden shadow-xs">
-                      <table className="w-full text-xs text-right border-collapse">
-                        <thead className="bg-surface-container-high text-primary font-black">
-                          <tr>
-                            <th className="p-2.5 border-b border-outline-variant w-16 text-center">الرقم</th>
-                            <th className="p-2.5 border-b border-outline-variant">البيان والتسمية</th>
-                            <th className="p-2.5 border-b border-outline-variant w-32">الكمية</th>
-                            <th className="p-2.5 border-b border-outline-variant">ملاحظات / مواصفة</th>
-                            <th className="p-2.5 border-b border-outline-variant w-12 text-center"></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-outline-variant/40 bg-surface">
-                          {docRows.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-surface-container-low/50">
-                              <td className="p-2 text-center">
-                                <input
-                                  type="text"
-                                  value={row.col1}
-                                  onChange={(e) => handleUpdateRow(rIdx, 'col1', e.target.value)}
-                                  className="w-full text-center bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <input
-                                  type="text"
-                                  placeholder="اسم العتاد أو المادة..."
-                                  value={row.col2}
-                                  onChange={(e) => handleUpdateRow(rIdx, 'col2', e.target.value)}
-                                  className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <input
-                                  type="text"
-                                  placeholder="مثال: 05 قطع"
-                                  value={row.col3}
-                                  onChange={(e) => handleUpdateRow(rIdx, 'col3', e.target.value)}
-                                  className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                />
-                              </td>
-                              <td className="p-2">
-                                <input
-                                  type="text"
-                                  placeholder="المواصفات..."
-                                  value={row.col4}
-                                  onChange={(e) => handleUpdateRow(rIdx, 'col4', e.target.value)}
-                                  className="w-full bg-transparent border-0 focus:ring-0 outline-none"
-                                />
-                              </td>
-                              <td className="p-2 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveRow(rIdx)}
-                                  className="p-1 text-error/60 hover:text-error rounded-lg"
-                                  title="حذف السطر"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      {(() => {
+                        const tableHeaders = selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'ملاحظات / مواصفات'];
+                        const hasCol5 = (tableHeaders.length >= 5) || docRows.some(r => r.col5 !== undefined);
+
+                        return (
+                          <table className="w-full text-xs text-right border-collapse">
+                            <thead className="bg-surface-container-high text-primary font-black">
+                              <tr>
+                                <th className="p-2.5 border-b border-outline-variant w-14 text-center">{tableHeaders[0] || 'الرقم'}</th>
+                                <th className="p-2.5 border-b border-outline-variant">{tableHeaders[1] || 'السجل / البيان'}</th>
+                                <th className="p-2.5 border-b border-outline-variant w-32">{tableHeaders[2] || 'المرجع / الرمز'}</th>
+                                <th className="p-2.5 border-b border-outline-variant w-24">{tableHeaders[3] || 'الكمية'}</th>
+                                {hasCol5 && (
+                                  <th className="p-2.5 border-b border-outline-variant w-40">{tableHeaders[4] || 'ملاحظات / مواصفات'}</th>
+                                )}
+                                <th className="p-2.5 border-b border-outline-variant w-10 text-center"></th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/40 bg-surface">
+                              {docRows.map((row, rIdx) => (
+                                <tr key={rIdx} className="hover:bg-surface-container-low/50">
+                                  <td className="p-2 text-center">
+                                    <input
+                                      type="text"
+                                      value={row.col1}
+                                      onChange={(e) => handleUpdateRow(rIdx, 'col1', e.target.value)}
+                                      className="w-full text-center bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="text"
+                                      placeholder="اسم السجل أو الوسيلة..."
+                                      value={row.col2}
+                                      onChange={(e) => handleUpdateRow(rIdx, 'col2', e.target.value)}
+                                      className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="text"
+                                      placeholder="المرجع / الرمز..."
+                                      value={row.col3}
+                                      onChange={(e) => handleUpdateRow(rIdx, 'col3', e.target.value)}
+                                      className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                    />
+                                  </td>
+                                  <td className="p-2">
+                                    <input
+                                      type="text"
+                                      placeholder="الكمية..."
+                                      value={row.col4}
+                                      onChange={(e) => handleUpdateRow(rIdx, 'col4', e.target.value)}
+                                      className="w-full bg-transparent border-0 focus:ring-0 outline-none"
+                                    />
+                                  </td>
+                                  {hasCol5 && (
+                                    <td className="p-2">
+                                      <input
+                                        type="text"
+                                        placeholder="المواصفات / الملاحظات..."
+                                        value={row.col5 || ''}
+                                        onChange={(e) => handleUpdateRow(rIdx, 'col5', e.target.value)}
+                                        className="w-full bg-transparent border-0 focus:ring-0 outline-none"
+                                      />
+                                    </td>
+                                  )}
+                                  <td className="p-2 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveRow(rIdx)}
+                                      className="p-1 text-error/60 hover:text-error rounded-lg"
+                                      title="حذف السطر"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        );
+                      })()}
                     </div>
                   </div>
                 )}
@@ -1931,11 +2274,32 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                   />
                 </div>
 
+                {/* Release Location & Date preview */}
+                <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center justify-between flex-wrap gap-2 text-xs text-primary font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Calendar size={14} className="text-secondary" />
+                    <span>صيغة مكان وتاريخ التحرير:</span>
+                  </span>
+                  <span className="bg-surface px-2.5 py-1 rounded-lg border border-outline-variant/40 font-black text-primary">
+                    حرر بـ : {docLocation || 'عين كرشة'} في : {docDate}
+                  </span>
+                </div>
+
                 {/* Signers list */}
                 <div>
-                  <label className="block text-xs font-black text-primary mb-2">
-                    الموقعون والمصادقون على الوثيقة
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs font-black text-primary">
+                      الموقعون والمصادقون على الوثيقة ({docSigners.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setDocSigners([...docSigners, 'موقع إضافي'])}
+                      className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                    >
+                      <Plus size={13} />
+                      <span>إضافة موقع</span>
+                    </button>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {docSigners.map((sig, sIdx) => (
                       <div key={sIdx} className="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/40 flex items-center gap-2">
@@ -1950,6 +2314,16 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                           }}
                           className="bg-transparent border-0 text-xs font-bold focus:ring-0 outline-none w-full"
                         />
+                        {docSigners.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setDocSigners(docSigners.filter((_, i) => i !== sIdx))}
+                            className="text-error/60 hover:text-error p-1"
+                            title="حذف هذا الموقع"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
