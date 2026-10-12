@@ -7,7 +7,7 @@ import { useTimeSlots } from './useTimeSlots';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 import { ReportRow, Teacher, InstitutionSettings, SavedReport, DaySummaryStats, RoutingType } from '../types/reports';
-import { cleanSchoolName, formatSchoolWithCommune, formatOfficialRankTitle } from '../lib/utils';
+import { cleanSchoolName, formatSchoolWithCommune, formatOfficialRankTitle, getNextWorkingDay } from '../lib/utils';
 import { usePdfPreview } from '../context/PdfPreviewContext';
 import { ExperimentPreset } from '../data/labExperimentPresets';
 import * as XLSX from 'xlsx';
@@ -300,8 +300,17 @@ export function useDailyReport() {
 
   const getDayName = (dateString: string) => {
     const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    if (!dateString) return '';
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      return days[d.getDay()] || '';
+    }
     const d = new Date(dateString);
-    return days[d.getDay()];
+    return isNaN(d.getTime()) ? '' : (days[d.getDay()] || '');
   };
 
   const fetchReportForDate = async (selectedDate: string) => {
@@ -759,6 +768,10 @@ export function useDailyReport() {
     const activeDateIso = formatIsoDate(sourceReport?.date || date);
     const activeDateLtrSpan = `<span dir="ltr" style="direction: ltr; unicode-bidi: isolate; display: inline-block; font-family: 'Cairo', Arial, sans-serif;">${activeDateIso}</span>`;
 
+    // Release date is the next working day (Sun-Thu work week; Thu report -> Sun release)
+    const releaseDateIso = getNextWorkingDay(activeDateIso);
+    const releaseDateLtrSpan = `<span dir="ltr" style="direction: ltr; unicode-bidi: isolate; display: inline-block; font-family: 'Cairo', Arial, sans-serif;">${releaseDateIso}</span>`;
+
     // Document Title Banner (matching PDF)
     const docTitle = isBlank 
       ? 'استمارة التقرير اليومي للمخبر (نموذج رسمي فارغ)' 
@@ -1049,16 +1062,6 @@ export function useDailyReport() {
             font-size: 10px;
             font-family: 'Amiri', serif;
           }
-          .doc-footer {
-            border-top: 1px solid #e6ebe1;
-            margin-top: 8px;
-            padding-top: 4px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 9.5px;
-            color: #828c7d;
-            font-family: 'Amiri', serif;
-          }
           @media print {
             .no-print-toolbar {
               display: none !important;
@@ -1155,7 +1158,7 @@ export function useDailyReport() {
 
         <!-- Release Formula -->
         <div class="release-line">
-          حرر بـ : ${activeLocation} في : ${activeDateLtrSpan}
+          حرر بـ : ${activeLocation} في : ${releaseDateLtrSpan}
         </div>
 
         <!-- Official Signatures Block (Matching PDF exactly) -->
@@ -1178,13 +1181,6 @@ export function useDailyReport() {
               <span class="sig-placeholder">(التوقيع والختم)</span>
             </div>
           </div>
-        </div>
-
-        <!-- Page Footer (Matching PDF) -->
-        <div class="doc-footer">
-          <div>الأرضية الرقمية لتسيير المخابر المدرسية</div>
-          <div>${activeDateLtrSpan}</div>
-          <div>صفحة 1 من 1</div>
         </div>
       </body>
       </html>

@@ -119,3 +119,67 @@ export function formatOfficialRankTitle(rank?: string): string {
 
   return 'ال' + clean;
 }
+
+/**
+ * Computes the next official working day for Algerian educational institutions
+ * (working days are Sunday through Thursday, weekend is Friday and Saturday).
+ * - Sunday through Wednesday reports -> released on next calendar day (+1 day)
+ * - Thursday reports -> released on Sunday (+3 days, skipping Fri & Sat)
+ * - Friday/Saturday fallback -> released on Sunday
+ * Output format: YYYY-MM-DD
+ */
+export function getNextWorkingDay(dateInput?: string | Date | null): string {
+  if (!dateInput) return '';
+
+  let year: number;
+  let month: number; // 0-indexed
+  let day: number;
+
+  if (dateInput instanceof Date) {
+    if (isNaN(dateInput.getTime())) return '';
+    year = dateInput.getFullYear();
+    month = dateInput.getMonth();
+    day = dateInput.getDate();
+  } else {
+    const str = String(dateInput).trim();
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (match) {
+      year = parseInt(match[1], 10);
+      month = parseInt(match[2], 10) - 1;
+      day = parseInt(match[3], 10);
+    } else {
+      const parsed = new Date(str);
+      if (isNaN(parsed.getTime())) return str;
+      year = parsed.getFullYear();
+      month = parsed.getMonth();
+      day = parsed.getDate();
+    }
+  }
+
+  // Construct local date without timezone interference
+  const d = new Date(year, month, day);
+  const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat
+
+  let daysToAdd = 1;
+  if (dayOfWeek === 4) {
+    // Thursday -> next working day is Sunday (+3 days)
+    daysToAdd = 3;
+  } else if (dayOfWeek === 5) {
+    // Friday -> next working day is Sunday (+2 days)
+    daysToAdd = 2;
+  } else if (dayOfWeek === 6) {
+    // Saturday -> next working day is Sunday (+1 day)
+    daysToAdd = 1;
+  } else {
+    // Sunday (0), Monday (1), Tuesday (2), Wednesday (3) -> next day (+1)
+    daysToAdd = 1;
+  }
+
+  d.setDate(d.getDate() + daysToAdd);
+
+  const nextYear = d.getFullYear();
+  const nextMonth = String(d.getMonth() + 1).padStart(2, '0');
+  const nextDay = String(d.getDate()).padStart(2, '0');
+
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}

@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatSchoolWithCommune, formatOfficialRankTitle } from '../lib/utils';
+import { formatSchoolWithCommune, formatOfficialRankTitle, getNextWorkingDay } from '../lib/utils';
 
 /**
  * Sanitizes and normalizes text values for PDF rendering.
@@ -45,6 +45,7 @@ export interface LabReportPDFOptions {
   margins?: number;
   colorMode?: 'color' | 'grayscale' | 'blackAndWhite';
   disclaimer?: string;
+  showFooter?: boolean;
   labManagerTitle?: string;
   middleTitle?: string;
   principalTitle?: string;
@@ -130,6 +131,7 @@ export class PDFService {
       margins = 14,
       colorMode = 'color',
       disclaimer,
+      showFooter = true,
       labManagerTitle = 'المسؤول عن المخبر',
       middleTitle,
       principalTitle = 'مدير(ة) المؤسسة'
@@ -363,27 +365,32 @@ export class PDFService {
     }
 
     // --- Footer on all pages (Page numbers & platform badge) ---
-    const totalPages = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFont(fontName, 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(130, 140, 125);
+    if (showFooter) {
+      const totalPages = (doc as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        doc.setFont(fontName, 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(130, 140, 125);
 
-      const footerY = pageHeight - 8;
-      // Top thin line for footer
-      doc.setDrawColor(230, 235, 225);
-      doc.setLineWidth(0.3);
-      doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
+        const footerY = pageHeight - 8;
+        // Top thin line for footer
+        doc.setDrawColor(230, 235, 225);
+        doc.setLineWidth(0.3);
+        doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
 
-      // Right side: Platform title or custom disclaimer
-      doc.text(processArabic(disclaimer || 'الأرضية الرقمية لتسيير المخابر المدرسية'), pageWidth - margin, footerY, { align: 'right' });
+        // Right side: Platform title or custom disclaimer (omitted if disclaimer is empty string)
+        const footerDisclaimer = disclaimer !== undefined ? disclaimer : 'الأرضية الرقمية لتسيير المخابر المدرسية';
+        if (footerDisclaimer) {
+          doc.text(processArabic(footerDisclaimer), pageWidth - margin, footerY, { align: 'right' });
+        }
 
-      // Center: Document reference/date
-      doc.text(processArabic(dateStr), pageWidth / 2, footerY, { align: 'center' });
+        // Center: Document reference/date
+        doc.text(processArabic(dateStr), pageWidth / 2, footerY, { align: 'center' });
 
-      // Left side: Page X of Y
-      doc.text(processArabic(`صفحة ${i} من ${totalPages}`), margin, footerY, { align: 'left' });
+        // Left side: Page X of Y
+        doc.text(processArabic(`صفحة ${i} من ${totalPages}`), margin, footerY, { align: 'left' });
+      }
     }
 
     if (save) {
@@ -566,11 +573,12 @@ export class PDFService {
       ]);
     }
 
+    const releaseDate = getNextWorkingDay(data.date);
     const obsParts = [
       data.observations?.labNotes ? `ملاحظات ${data.sender || 'مسؤول المخبر'}: ${data.observations.labNotes}` : '',
       data.observations?.supervisorNotes ? `ملاحظات الناظر: ${data.observations.supervisorNotes}` : '',
       data.observations?.directorNotes ? `ملاحظات السيد المدير: ${data.observations.directorNotes}` : '',
-      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${data.date}`
+      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${releaseDate}`
     ].filter(Boolean);
     const obsNotes = obsParts.length > 0 ? obsParts.join('\n\n') : undefined;
 
@@ -617,6 +625,8 @@ export class PDFService {
       labManagerTitle: formatOfficialRankTitle(data.signers?.[0] || data.sender),
       middleTitle: data.signers?.[1] || 'الناظر',
       principalTitle: data.signers?.[data.signers.length - 1] || 'مدير المؤسسة',
+      disclaimer: '',
+      showFooter: false,
       save: data.save !== undefined ? data.save : true
     });
   }
@@ -1057,6 +1067,7 @@ export class PDFService {
       showSignatures = true,
       notes,
       disclaimer,
+      showFooter = true,
       labManagerTitle = 'المسؤول عن المخبر',
       principalTitle = 'مدير(ة) المؤسسة'
     } = options;
@@ -1340,6 +1351,7 @@ export class PDFService {
             </table>
           ` : ''}
 
+          ${showFooter ? `
           <table class="footer-table" dir="rtl">
             <tr>
               <td style="text-align: right;">${disclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية'}</td>
@@ -1347,6 +1359,7 @@ export class PDFService {
               <td style="text-align: left;">صفحة 1 من 1</td>
             </tr>
           </table>
+          ` : ''}
         </div>
       </body>
       </html>
@@ -1506,11 +1519,12 @@ export class PDFService {
       ]);
     }
 
+    const releaseDate = getNextWorkingDay(data.date);
     const obsParts = [
       data.observations?.labNotes ? `ملاحظات ${data.sender || 'مسؤول المخبر'}: ${data.observations.labNotes}` : '',
       data.observations?.supervisorNotes ? `ملاحظات الناظر: ${data.observations.supervisorNotes}` : '',
       data.observations?.directorNotes ? `ملاحظات المدير: ${data.observations.directorNotes}` : '',
-      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${data.date}`
+      `حرر بـ : ${data.location || data.schoolInfo?.commune || 'عين كرشة'} في : ${releaseDate}`
     ].filter(Boolean);
     const obsNotes = obsParts.length > 0 ? obsParts.join('\n\n') : undefined;
 
@@ -1552,7 +1566,8 @@ export class PDFService {
       notes: obsNotes,
       labManagerTitle: formatOfficialRankTitle(data.signers?.[0] || data.sender),
       principalTitle: data.signers?.[data.signers.length - 1] || 'مدير المؤسسة',
-      showSignatures: true
+      showSignatures: true,
+      showFooter: false
     });
   }
 

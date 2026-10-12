@@ -41,7 +41,7 @@ import {
   SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn, formatOfficialRankTitle } from '../lib/utils';
+import { cn, formatOfficialRankTitle, getNextWorkingDay } from '../lib/utils';
 import TimeSlotManager from '../components/TimeSlotManager';
 import ClassPicker from '../components/ClassPicker';
 import ResourcePicker from '../components/ResourcePicker';
@@ -854,7 +854,7 @@ export default function DailyReport() {
             </div>
 
             <div className="p-3 bg-surface-container-low/50 rounded-2xl text-[11px] font-bold text-secondary flex items-center justify-between">
-              <span><strong>صيغة التحرير المعتمدة في أسفل الوثيقة:</strong> حرر بـ : {docLocation || 'عين كرشة'} في : {date}</span>
+              <span><strong>صيغة التحرير المعتمدة في أسفل الوثيقة:</strong> حرر بـ : {docLocation || 'عين كرشة'} في : {getNextWorkingDay(date)}</span>
               <span className="text-primary font-black">جاهزة للطباعة والتصدير</span>
             </div>
           </motion.div>
@@ -1400,10 +1400,10 @@ export default function DailyReport() {
             <div className="relative z-10 flex items-center justify-between text-base font-black text-primary mt-8 px-2 border-t border-primary/10 pt-4">
               <div className="flex items-center gap-2">
                 <MapPin size={18} className="text-primary/60" />
-                <span>حرر بـ : <strong>{docLocation || 'عين كرشة'}</strong> في : <strong dir="ltr" className="inline-block font-mono tracking-wider">{date}</strong></span>
+                <span>حرر بـ : <strong>{docLocation || 'عين كرشة'}</strong> في : <strong dir="ltr" className="inline-block font-mono tracking-wider">{getNextWorkingDay(date)}</strong></span>
               </div>
               <span className="text-xs font-bold text-secondary">
-                الموافق ليوم: {getDayName(date)}
+                الموافق ليوم: {getDayName(getNextWorkingDay(date))}
               </span>
             </div>
 
