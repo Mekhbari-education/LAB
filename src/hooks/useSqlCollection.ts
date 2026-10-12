@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '../lib/api/client';
 import { queryClient } from '../lib/queryClient';
+import { auth, getUserCollection } from '../firebase';
+import { getDocs } from 'firebase/firestore';
 
 export function useSqlCollection<T>(key: string, endpoint: string) {
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
@@ -31,7 +33,27 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
         }
         return result;
       } catch (err) {
-        // Attempt offline cache retrieval if network failed
+        // 1. If backend API failed (e.g. 404 on GitHub Pages or static host), attempt Firestore
+        try {
+          if (auth.currentUser) {
+            const schoolId = auth.currentUser.uid;
+            const colRef = getUserCollection(schoolId, key);
+            const snap = await getDocs(colRef);
+            if (!snap.empty) {
+              const firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
+              try {
+                localStorage.setItem(`offline_cache_${key}`, JSON.stringify(firestoreItems));
+              } catch (e) {
+                // Ignore quota
+              }
+              return firestoreItems;
+            }
+          }
+        } catch (fsErr) {
+          // Ignore Firestore error and fall through to localStorage
+        }
+
+        // 2. Attempt offline cache retrieval if network/API/Firestore failed
         const cached = localStorage.getItem(`offline_cache_${key}`);
         if (cached) {
           try {
@@ -40,7 +62,8 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
             // Ignore parse error
           }
         }
-        throw err;
+        // If nothing is cached and on static deployment, return empty array instead of throwing
+        return [];
       }
     },
     placeholderData: () => {
@@ -55,6 +78,8 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
     staleTime: 1000 * 60 * 5,
     retry: (failureCount, error) => {
       if (!navigator.onLine) return false;
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('404') || msg.includes('401') || msg.includes('User not authenticated')) return false;
       return failureCount < 2;
     }
   });
