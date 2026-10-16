@@ -33,12 +33,20 @@ import {
   Microscope,
   CalendarCheck,
   ArrowUpRight,
-  FileDown
+  FileDown,
+  Building2,
+  FileCheck,
+  GraduationCap,
+  Wallet,
+  FileSpreadsheet,
+  Coins
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import { cn } from '../lib/utils';
 import { ROUTES } from '../config/routes';
+import { useUserRole } from '../context/UserRoleContext';
+import { isRouteAllowedForRole } from '../config/permissions';
 
 import { 
   BarChart, 
@@ -152,6 +160,7 @@ KPICard.displayName = 'KPICard';
 // ── Main Dashboard ─────────────────────────────────────────────────────
 export default function Dashboard() {
   const { schoolId } = useSchool();
+  const { currentRole, roleConfig, userProfile, teacherProfile } = useUserRole();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -169,6 +178,16 @@ export default function Dashboard() {
     const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Strict role enforcement: If role is specialized (teacher, censor, economist), redirect to their dedicated portal
+  useEffect(() => {
+    if (currentRole && currentRole !== 'lab_manager' && currentRole !== 'director') {
+      const target = roleConfig?.defaultPath;
+      if (target && target !== ROUTES.HOME) {
+        navigate(target, { replace: true });
+      }
+    }
+  }, [currentRole, roleConfig, navigate]);
 
   // Today's Arabic Day name for schedule matching
   const todayArabicDay = useMemo(() => {
@@ -665,51 +684,73 @@ export default function Dashboard() {
     }
   };
 
-  // Specialized Functional Modules
-  const coreModules = [
-    { 
-      title: 'الجرد والمخزون', 
-      desc: 'إدارة الكواشف الكيميائية، الأجهزة، بطاقات الجرد، ومصفوفات التوافق المخبري.', 
-      count: `${counts.chemicals + counts.equipment} مادة وجهاز`, 
-      icon: Database, 
-      path: ROUTES.INVENTORY_DASHBOARD 
-    },
-    { 
-      title: 'المتابعة البيداغوجية', 
-      desc: 'تسيير جدول استعمال المخابر، الأساتذة، الأفواج، والتجارب المخبرية المنفذة.', 
-      count: `${counts.experiments} تجربة`, 
-      icon: BookOpen, 
-      path: ROUTES.PEDAGOGICAL_DASHBOARD 
-    },
-    { 
-      title: 'الأمن والسلامة المخبرية', 
-      desc: 'إدارة المخاطر والنفايات، بروتوكولات الطوارئ والإسعافات الأولية وتتبع الحوادث.', 
-      count: `${counts.incidents} بلاغ`, 
-      icon: ShieldAlert, 
-      path: ROUTES.SAFETY_HUB 
-    },
-    { 
-      title: 'الموارد العلمية والمحاكاة', 
-      desc: 'الجدول الدوري التفاعلي، المحاكاة الفيزيائية، النماذج ثلاثية الأبعاد والمجهر الافتراضي.', 
-      count: 'أدوات علمية', 
-      icon: Atom, 
-      path: ROUTES.SCIENTIFIC_HUB 
-    },
-    { 
-      title: 'الإدارة والإعدادات', 
-      desc: 'إعدادات المؤسسة، الميزانية والمشتريات، واستيراد ونسخ قواعد البيانات.', 
-      count: 'مركز التحكم', 
-      icon: Settings, 
-      path: ROUTES.SETTINGS_HUB 
-    },
-    ...(isAdmin ? [{ 
-      title: 'لوحة الإدارة المركزية', 
-      desc: 'التحكم الشامل في المستخدمين، الصلاحيات المتقدمة، وسجلات النظام الكاملة.', 
-      count: 'مشرف النظام', 
-      icon: ShieldCheck, 
-      path: ROUTES.ADMIN 
-    }] : [])
-  ];
+  // Specialized Functional Modules - Strictly filtered by role
+  const coreModules = useMemo(() => {
+    const list = [
+      { 
+        title: 'الجرد والمخزون', 
+        desc: 'إدارة الكواشف الكيميائية، الأجهزة، بطاقات الجرد، ومصفوفات التوافق المخبري.', 
+        count: `${counts.chemicals + counts.equipment} مادة وجهاز`, 
+        icon: Database, 
+        path: ROUTES.INVENTORY_DASHBOARD 
+      },
+      { 
+        title: 'المتابعة البيداغوجية', 
+        desc: 'تسيير جدول استعمال المخابر، الأساتذة، الأفواج، والتجارب المخبرية المنفذة.', 
+        count: `${counts.experiments} تجربة`, 
+        icon: BookOpen, 
+        path: ROUTES.PEDAGOGICAL_DASHBOARD 
+      },
+      { 
+        title: 'الأمن والسلامة المخبرية', 
+        desc: 'إدارة المخاطر والنفايات، بروتوكولات الطوارئ والإسعافات الأولية وتتبع الحوادث.', 
+        count: `${counts.incidents} بلاغ`, 
+        icon: ShieldAlert, 
+        path: ROUTES.SAFETY_HUB 
+      },
+      { 
+        title: 'الموارد العلمية والمحاكاة', 
+        desc: 'الجدول الدوري التفاعلي، المحاكاة الفيزيائية، النماذج ثلاثية الأبعاد والمجهر الافتراضي.', 
+        count: 'أدوات علمية', 
+        icon: Atom, 
+        path: ROUTES.SCIENTIFIC_HUB 
+      },
+      { 
+        title: 'الإدارة والإعدادات', 
+        desc: 'إعدادات المؤسسة، الميزانية والمشتريات، واستيراد ونسخ قواعد البيانات.', 
+        count: 'مركز التحكم', 
+        icon: Settings, 
+        path: ROUTES.SETTINGS_HUB 
+      },
+      ...(isAdmin ? [{ 
+        title: 'لوحة الإدارة المركزية', 
+        desc: 'التحكم الشامل في المستخدمين، الصلاحيات المتقدمة، وسجلات النظام الكاملة.', 
+        count: 'مشرف النظام', 
+        icon: ShieldCheck, 
+        path: ROUTES.ADMIN 
+      }] : [])
+    ];
+    return list.filter(item => isRouteAllowedForRole(currentRole, item.path));
+  }, [counts.chemicals, counts.equipment, counts.experiments, counts.incidents, isAdmin, currentRole]);
+
+  // Dynamic quick actions filtered strictly by role
+  const quickActions = useMemo(() => {
+    const allActions = [
+      { title: 'فضاء الإدارة العليا', icon: Building2, path: ROUTES.DIRECTOR_PORTAL },
+      { title: 'تحرير تقرير يومي', icon: FileText, path: ROUTES.DAILY_REPORT },
+      { title: 'تسجيل تجربة مخبرية', icon: FlaskConical, path: ROUTES.LAB_EXPERIMENTS },
+      { title: 'جرد عتاد أو مادة', icon: Database, path: ROUTES.INVENTORY_DASHBOARD },
+      { title: 'سجل صيانة وأعطال', icon: Hammer, path: ROUTES.MAINTENANCE },
+      { title: 'طلب إعارة أجهزة', icon: ArrowUpRight, path: ROUTES.LOAN_REQUEST },
+      { title: 'بروتوكولات السلامة', icon: ShieldCheck, path: ROUTES.SAFETY_HUB },
+      { title: 'التقارير السنوية', icon: BarChart3, path: ROUTES.REPORTS },
+      { title: 'الميزانية والمشتريات', icon: Wallet, path: ROUTES.BUDGET_PURCHASES },
+      { title: 'الأرشيف والسجلات', icon: BookOpen, path: ROUTES.ARCHIVE },
+      { title: 'التشريع المدرسي', icon: FileCheck, path: ROUTES.SCHOOL_LEGISLATION },
+      { title: 'وثائق الإدارة', icon: FileSpreadsheet, path: ROUTES.ADMIN_TEMPLATES },
+    ];
+    return allActions.filter(action => isRouteAllowedForRole(currentRole, action.path));
+  }, [currentRole]);
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto px-4 sm:px-6 pb-24 rtl font-sans" dir="rtl">
@@ -807,77 +848,23 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <button
-            onClick={() => navigate(ROUTES.DAILY_REPORT)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <FileText size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              تحرير تقرير يومي
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate(ROUTES.LAB_EXPERIMENTS)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <FlaskConical size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              تسجيل تجربة مخبرية
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate(ROUTES.INVENTORY_DASHBOARD)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <Database size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              جرد عتاد أو مادة
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate(ROUTES.MAINTENANCE)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <Hammer size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              سجل صيانة وأعطال
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate(ROUTES.LOAN_REQUEST)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <ArrowUpRight size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              طلب إعارة أجهزة
-            </span>
-          </button>
-
-          <button
-            onClick={() => navigate(ROUTES.SAFETY_HUB)}
-            className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group"
-          >
-            <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
-              <ShieldCheck size={20} />
-            </div>
-            <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
-              بروتوكولات السلامة
-            </span>
-          </button>
+          {quickActions.map((action) => {
+            const ActionIcon = action.icon;
+            return (
+              <button
+                key={action.title}
+                onClick={() => navigate(action.path)}
+                className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-primary/40 hover:bg-primary/5 transition-all text-center group cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-colors">
+                  <ActionIcon size={20} />
+                </div>
+                <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
+                  {action.title}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
 

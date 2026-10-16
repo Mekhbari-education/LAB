@@ -30,6 +30,7 @@ export interface InventoryCardPrintOptions {
   directorate: string;
   schoolName: string;
   commune: string;
+  academicYear?: string;
   includeOfficialHeader?: boolean;
   includeQrCode?: boolean;
   includeStampBox?: boolean;
@@ -520,6 +521,7 @@ export function generateInventoryCardsHtml(options: InventoryCardPrintOptions): 
 
 function renderRegistrySummaryTable(items: InventoryItemForPrint[], options: InventoryCardPrintOptions): string {
   const { directorate, schoolName, commune } = options;
+  const academicYear = options.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026';
   const currentDate = new Date().toLocaleDateString('ar-DZ');
 
   return `
@@ -534,7 +536,7 @@ function renderRegistrySummaryTable(items: InventoryItemForPrint[], options: Inv
           <div class="header-center">
             <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية</div>
             <div class="min-title">وزارة التربية الوطنية</div>
-            <div class="year-title">السنة الدراسية: 2025 / 2026</div>
+            <div class="year-title">السنة الدراسية: ${academicYear}</div>
           </div>
           <div class="header-left">
             سجل بطاقات الجرد العام<br>
@@ -656,8 +658,10 @@ function renderSingleCardFront(
     includeQrCode = true,
     includeStampBox = true,
     paperFormat,
+    academicYear: optAcademicYear,
   } = options;
 
+  const academicYear = optAcademicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026';
   const isA5 = paperFormat === 'A5';
   const qrSvg = includeQrCode ? renderQrCodeSvg(`DZ-EDU-INV:${item.serialNumber}:${item.name}`, isA5 ? 24 : 26) : '';
   const category = getItemCategory(item.name);
@@ -680,7 +684,7 @@ function renderSingleCardFront(
             <div class="header-center">
               <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية</div>
               <div class="min-title">وزارة التربية الوطنية</div>
-              <div class="year-title">السنة الدراسية: 2025 / 2026</div>
+              <div class="year-title">السنة الدراسية: ${academicYear}</div>
             </div>
             <div class="header-left">
               بطاقة الجرد رقم:<br>

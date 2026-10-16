@@ -16,7 +16,8 @@ import { formatSchoolWithCommune } from '../lib/utils';
 import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 export function useChemicalsLogic(isNested = false) {
-  const { schoolId, schoolName, directorate: stateName, commune } = useSchool();
+  const { schoolId, schoolName, directorate: stateName, commune, academicYear: contextAcademicYear } = useSchool();
+  const academicYear = contextAcademicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025/2026';
   const [searchParams] = useSearchParams();
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,7 +305,6 @@ export function useChemicalsLogic(isNested = false) {
     const hazardousCount = sortedChemicals.filter(c => (c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger').length;
     const today = new Date();
     const formattedDate = today.toLocaleDateString('ar-DZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const academicYear = "2025/2026";
 
     const tableRows = sortedChemicals.map((c, index) => {
       const isHazardous = (c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger';
@@ -720,7 +720,6 @@ export function useChemicalsLogic(isNested = false) {
 
   const handlePrintInventoryCards = (items: Chemical[]) => {
     const today = new Date();
-    const academicYear = "2025/2026"; 
 
     const cardsHtml = items.map((c, index) => {
       const stateAr = c.state === 'solid' ? 'صلب' : c.state === 'liquid' ? 'سائل' : 'غاز';

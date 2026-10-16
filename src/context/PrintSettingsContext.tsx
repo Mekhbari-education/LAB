@@ -25,7 +25,7 @@ interface PrintSettingsContextType {
 const PrintSettingsContext = createContext<PrintSettingsContextType | undefined>(undefined);
 
 export function PrintSettingsProvider({ children }: { children: React.ReactNode }) {
-  const { schoolName, directorate, commune, jobTitle, schoolLogo } = useSchool();
+  const { schoolName, directorate, commune, jobTitle, academicYear, schoolLogo } = useSchool();
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PrintPreviewData | null>(null);
@@ -112,6 +112,30 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
     }
   }, [schoolName, directorate, commune, jobTitle, schoolLogo]);
 
+  // Synchronize academic year from SchoolContext into PrintSettings
+  useEffect(() => {
+    if (academicYear) {
+      setSettings(prev => {
+        if (prev.institution.academicYear !== academicYear) {
+          const updated = {
+            ...prev,
+            institution: {
+              ...prev.institution,
+              academicYear: academicYear
+            }
+          };
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+            } catch (e) {}
+          }
+          return updated;
+        }
+        return prev;
+      });
+    }
+  }, [academicYear]);
+
   // Load from Firestore if logged in
   useEffect(() => {
     const loadCloudSettings = async () => {
@@ -124,12 +148,14 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
         if (snap.exists()) {
           const data = snap.data();
           if (data.printSettings) {
+            const canonicalYear = data.academicYear || data.schoolYear || academicYear;
             setSettings(prev => ({
               ...prev,
               ...data.printSettings,
               institution: {
                 ...prev.institution,
-                ...(data.printSettings.institution || {})
+                ...(data.printSettings.institution || {}),
+                ...(canonicalYear ? { academicYear: canonicalYear } : {})
               },
               layout: {
                 ...prev.layout,

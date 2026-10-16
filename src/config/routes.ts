@@ -2,6 +2,13 @@ export const ROUTES = {
   HOME: '/',
   DASHBOARD: '/',
   
+  // Role Portals
+  TEACHER_PORTAL: '/teacher-portal',
+  CENSOR_PORTAL: '/censor-portal',
+  DIRECTOR_PORTAL: '/director-portal',
+  ECONOMIST_PORTAL: '/economist-portal',
+  SIGNUP: '/signup',
+
   // Main Dashboards
   INVENTORY_DASHBOARD: '/inventory',
   PEDAGOGICAL_DASHBOARD: '/pedagogical',

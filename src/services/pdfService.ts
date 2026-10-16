@@ -49,6 +49,18 @@ export interface LabReportPDFOptions {
   labManagerTitle?: string;
   middleTitle?: string;
   principalTitle?: string;
+  releaseLocation?: string;
+  releaseDate?: string;
+}
+
+export function resolveAcademicYear(passed?: string, secondary?: string): string {
+  if (passed && passed.trim()) return passed.trim();
+  if (secondary && secondary.trim()) return secondary.trim();
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('algeria_lab_academic_year');
+    if (stored && stored.trim()) return stored.trim();
+  }
+  return '2025/2026';
 }
 
 /**
@@ -165,7 +177,7 @@ export class PDFService {
     const directorate = schoolInfo.directorate || 'مديرية التربية لولاية الجزائر';
     const school = schoolInfo.school || 'مؤسسة التعليم الثانوي والتقني';
     const laboratory = schoolInfo.laboratory || 'مخبر العلوم والتكنولوجيا';
-    const academicYear = schoolInfo.academicYear || `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`;
+    const academicYear = resolveAcademicYear(schoolInfo.academicYear);
     const dateStr = schoolInfo.date || new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' });
 
     let currentY = 12;
@@ -228,29 +240,36 @@ export class PDFService {
 
     // --- Summary Cards (Key Metrics) if provided ---
     if (summaryCards && summaryCards.length > 0) {
-      const cardGap = 4;
-      const totalGaps = (summaryCards.length - 1) * cardGap;
-      const cardWidth = (contentWidth - totalGaps) / summaryCards.length;
-      const cardHeight = 12;
+      const cardsPerRow = summaryCards.length > 4 ? 4 : summaryCards.length;
+      const cardGap = 3.5;
+      const cardHeight = 11;
+      const totalRows = Math.ceil(summaryCards.length / cardsPerRow);
 
-      summaryCards.forEach((card, idx) => {
-        const cardX = margin + idx * (cardWidth + cardGap);
-        doc.setFillColor(245, 248, 242);
-        doc.setDrawColor(215, 225, 205);
-        doc.roundedRect(cardX, currentY, cardWidth, cardHeight, 2, 2, 'FD');
+      for (let r = 0; r < totalRows; r++) {
+        const rowCards = summaryCards.slice(r * cardsPerRow, (r + 1) * cardsPerRow);
+        const actualWidth = (contentWidth - (rowCards.length - 1) * cardGap) / rowCards.length;
 
-        doc.setFont(fontName, 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(100, 115, 95);
-        doc.text(processArabic(card.label), cardX + cardWidth / 2, currentY + 4.5, { align: 'center' });
+        rowCards.forEach((card, idx) => {
+          const cardX = margin + idx * (actualWidth + cardGap);
+          doc.setFillColor(245, 248, 242);
+          doc.setDrawColor(215, 225, 205);
+          doc.roundedRect(cardX, currentY, actualWidth, cardHeight, 2, 2, 'FD');
 
-        doc.setFont(fontName, 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(brandColor[0], brandColor[1], brandColor[2]);
-        doc.text(processArabic(String(card.value)), cardX + cardWidth / 2, currentY + 9.5, { align: 'center' });
-      });
+          doc.setFont(fontName, 'normal');
+          doc.setFontSize(7.5);
+          doc.setTextColor(100, 115, 95);
+          doc.text(processArabic(card.label), cardX + actualWidth / 2, currentY + 3.8, { align: 'center' });
 
-      currentY += cardHeight + 5;
+          doc.setFont(fontName, 'bold');
+          doc.setFontSize(9.5);
+          doc.setTextColor(brandColor[0], brandColor[1], brandColor[2]);
+          doc.text(processArabic(String(card.value)), cardX + actualWidth / 2, currentY + 8.2, { align: 'center' });
+        });
+
+        currentY += cardHeight + 2.5;
+      }
+
+      currentY += 2;
     }
 
     // --- Prepare Table Data (RTL Ordering & Arabic Processing) ---
@@ -311,11 +330,21 @@ export class PDFService {
 
     // --- Official Signatures Block ---
     if (showSignatures) {
-      if (finalY + 30 > pageHeight - 20) {
+      if (finalY + 36 > pageHeight - 20) {
         doc.addPage();
         finalY = 20;
       } else {
-        finalY += 8;
+        finalY += 6;
+      }
+
+      if (options.releaseLocation || options.releaseDate || options.schoolInfo?.commune) {
+        const releaseLoc = options.releaseLocation || options.schoolInfo?.commune || 'عين كرشة';
+        const releaseD = options.releaseDate || options.schoolInfo?.date || new Date().toISOString().split('T')[0];
+        doc.setFont(fontName, 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(brandColor[0], brandColor[1], brandColor[2]);
+        doc.text(processArabic(`حرر بـ : ${releaseLoc} في : ${releaseD}`), pageWidth - margin, finalY, { align: 'right' });
+        finalY += 5;
       }
 
       const boxWidth = middleTitle ? 52 : 55;
@@ -603,7 +632,7 @@ export class PDFService {
       school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
       commune: data.schoolInfo?.commune || data.location || 'عين كرشة',
       laboratory: data.department || 'مخبر العلوم الفيزيائية والطبيعية',
-      academicYear: data.academicYear || '2026 / 2027',
+      academicYear: resolveAcademicYear(data.academicYear, data.schoolInfo?.academicYear),
       ...data.schoolInfo
     };
 
@@ -625,6 +654,139 @@ export class PDFService {
       labManagerTitle: formatOfficialRankTitle(data.signers?.[0] || data.sender),
       middleTitle: data.signers?.[1] || 'الناظر',
       principalTitle: data.signers?.[data.signers.length - 1] || 'مدير المؤسسة',
+      disclaimer: '',
+      showFooter: false,
+      save: data.save !== undefined ? data.save : true
+    });
+  }
+
+  /**
+   * Dedicated generator for Activity Preparation Request (طلب تحضير نشاط تجريبي / تطبيقي)
+   * Matches Algerian Daily Lab Report official header, without footer (showFooter: false).
+   */
+  static async generateActivityRequestPDF(data: {
+    orderNum?: string;
+    teacherName?: string;
+    requestDate?: string;
+    requestTime?: string;
+    executionDate?: string;
+    timing?: string;
+    className?: string;
+    activityType?: string;
+    lab?: string;
+    activityTitle?: string;
+    jobTitle?: string;
+    schoolInfo?: SchoolInfo;
+    equipItems?: Array<{ name: string; quantity: number | string; notes?: string }>;
+    chemItems?: Array<{ name: string; quantity: string; formula?: string; notes?: string }>;
+    signDate?: string;
+    isBlank?: boolean;
+    save?: boolean;
+  }): Promise<jsPDF> {
+    const isBlank = Boolean(data.isBlank);
+    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+    const headers = ['#', 'النوع / التصنيف', 'البيان (الوسيلة أو المادة الكيميائية)', 'الكمية المطلوبة', 'الصيغة / الملاحظات'];
+
+    let rows: (string | number)[][] = [];
+
+    if (isBlank) {
+      // 14 clean dotted rows for manual handwritten fill (7 equipment + 7 chemicals)
+      rows = Array.from({ length: 14 }, (_, idx) => [
+        idx + 1,
+        idx < 7 ? 'وسائل وتجهيزات' : 'مواد كيميائية',
+        '....................................................................',
+        '............',
+        '................................................'
+      ]);
+    } else {
+      const equip = data.equipItems?.filter(e => e.name?.trim()) || [];
+      const chem = data.chemItems?.filter(c => c.name?.trim()) || [];
+
+      equip.forEach((item, idx) => {
+        rows.push([
+          idx + 1,
+          'وسائل وتجهيزات',
+          item.name,
+          item.quantity || 1,
+          item.notes || 'صالحة وجاهزة للتجربة'
+        ]);
+      });
+
+      chem.forEach((item, idx) => {
+        rows.push([
+          equip.length + idx + 1,
+          'مواد كيميائية',
+          item.name,
+          item.quantity || 'حسب التجربة',
+          item.formula ? `[${item.formula}] ${item.notes || ''}` : (item.notes || '---')
+        ]);
+      });
+
+      if (rows.length === 0) {
+        rows.push(['1', 'وسائل وتجهيزات', 'وسائل وتجهيزات التجربة المقررة في المنهاج', '1', 'جاهزة بالمخبر']);
+      }
+    }
+
+    const title = isBlank 
+      ? 'طلب تحضير نشاط تجريبي / تطبيقي' 
+      : 'طلب تحضير نشاط تجريبي / تطبيقي';
+
+    const subtitle = isBlank
+      ? 'المخبر المخصص: .................................... — عنوان النشاط التطبيقي: ....................................................................'
+      : `المخبر المخصص: ${data.lab || 'مخبر العلوم'} — عنوان النشاط التطبيقي: ${data.activityTitle || 'نشاط مخبري'}`;
+
+    const summaryCards = isBlank ? [
+      { label: 'الرقم', value: '...............' },
+      { label: 'الأستاذ/ة المادة', value: '....................' },
+      { label: 'القسم', value: '.........' },
+      { label: 'توقيت الحصة', value: '...... : ......' },
+      { label: 'تاريخ الطلب', value: '..... / ..... / 2026' },
+      { label: 'ساعة الطلب', value: '...... : ......' },
+      { label: 'تاريخ الإجراء', value: '..... / ..... / 2026' },
+      { label: 'نوع النشاط', value: 'عملي / محاكاة' }
+    ] : [
+      { label: 'الرقم', value: data.orderNum || '---' },
+      { label: 'الأستاذ/ة المادة', value: data.teacherName || '---' },
+      { label: 'القسم', value: data.className || '---' },
+      { label: 'توقيت الحصة', value: data.timing || '---' },
+      { label: 'تاريخ الطلب', value: data.requestDate || '---' },
+      { label: 'ساعة الطلب', value: data.requestTime || '---' },
+      { label: 'تاريخ الإجراء', value: data.executionDate || data.requestDate || '---' },
+      { label: 'نوع النشاط', value: data.activityType || 'عملي' }
+    ];
+
+    const mergedSchoolInfo: SchoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: data.schoolInfo?.directorate || 'مديرية التربية لولاية أم البواقي',
+      school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
+      commune: data.schoolInfo?.commune || 'عين كرشة',
+      laboratory: data.lab || data.schoolInfo?.laboratory || 'مخبر العلوم والتكنولوجيا',
+      academicYear: resolveAcademicYear(data.schoolInfo?.academicYear),
+      date: data.requestDate || new Date().toISOString().split('T')[0],
+      ...data.schoolInfo
+    };
+
+    const communeLoc = mergedSchoolInfo.commune || 'عين كرشة';
+    const releaseD = isBlank ? '....................................' : (data.signDate || data.requestDate || new Date().toISOString().split('T')[0]);
+
+    return this.exportLabReportPDF({
+      title,
+      subtitle,
+      schoolInfo: mergedSchoolInfo,
+      headers,
+      rows,
+      fileName: isBlank 
+        ? 'activity_request_blank_form.pdf' 
+        : `activity_request_${(data.orderNum || 'doc').replace(/[/\\?%*:|"<>]/g, '_')}.pdf`,
+      orientation: 'p',
+      summaryCards,
+      notes: 'تقدم هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل للعتاد والمحاليل.',
+      releaseLocation: communeLoc,
+      releaseDate: releaseD,
+      showSignatures: true,
+      labManagerTitle: 'توقيع أستاذ(ة) المادة',
+      principalTitle: `توقيع ${labOfficerTitle}`,
       disclaimer: '',
       showFooter: false,
       save: data.save !== undefined ? data.save : true
@@ -857,7 +1019,7 @@ export class PDFService {
     doc.text(processArabic(`المصلحة: ${dept}`), pageWidth - margin, currentY + 13, { align: 'right' });
 
     // Left info: Academic Year, Date, Reference
-    const yearStr = options.academicYear || schoolInfo.academicYear || '2026 / 2027';
+    const yearStr = resolveAcademicYear(options.academicYear, schoolInfo.academicYear);
     doc.text(processArabic(`السنة الدراسية: ${yearStr}`), margin, currentY + 3, { align: 'left' });
     doc.text(processArabic(`التاريخ: ${dateStr}`), margin, currentY + 8, { align: 'left' });
     if (options.reference) {
@@ -1078,7 +1240,7 @@ export class PDFService {
     const directorate = schoolInfo.directorate || 'مديرية التربية لولاية الجزائر';
     const school = schoolInfo.school || 'مؤسسة التعليم الثانوي والتقني';
     const laboratory = schoolInfo.laboratory || 'مخبر العلوم والتكنولوجيا';
-    const academicYear = schoolInfo.academicYear || `${new Date().getFullYear() - 1}/${new Date().getFullYear()}`;
+    const academicYear = resolveAcademicYear(schoolInfo.academicYear);
     const dateStr = schoolInfo.date || new Date().toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' });
     const formattedSchool = formatSchoolWithCommune(school, schoolInfo.commune);
 
@@ -1535,7 +1697,7 @@ export class PDFService {
       school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
       commune: data.schoolInfo?.commune || data.location || 'عين كرشة',
       laboratory: data.department || 'مخبر العلوم الفيزيائية والطبيعية',
-      academicYear: data.academicYear || '2026 / 2027',
+      academicYear: resolveAcademicYear(data.academicYear, data.schoolInfo?.academicYear),
       ...data.schoolInfo
     };
 
@@ -1605,6 +1767,674 @@ export class PDFService {
       labManagerTitle: 'مسؤول التوثيق والأرشيف',
       principalTitle: 'مدير المؤسسة التعليمية'
     });
+  }
+
+  /**
+   * Generates and downloads an Activity Preparation Request as Word (.doc)
+   * Matches Algerian Daily Lab Report official header, without footer (showFooter: false).
+   */
+  static generateActivityRequestWord(data: {
+    orderNum?: string;
+    teacherName?: string;
+    requestDate?: string;
+    requestTime?: string;
+    executionDate?: string;
+    timing?: string;
+    className?: string;
+    activityType?: string;
+    lab?: string;
+    activityTitle?: string;
+    jobTitle?: string;
+    schoolInfo?: SchoolInfo;
+    equipItems?: Array<{ name: string; quantity: number | string; notes?: string }>;
+    chemItems?: Array<{ name: string; quantity: string; formula?: string; notes?: string }>;
+    signDate?: string;
+    isBlank?: boolean;
+  }): void {
+    const isBlank = Boolean(data.isBlank);
+    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+    const headers = ['#', 'النوع / التصنيف', 'البيان (الوسيلة أو المادة الكيميائية)', 'الكمية المطلوبة', 'الصيغة / الملاحظات'];
+
+    let rows: (string | number)[][] = [];
+
+    if (isBlank) {
+      rows = Array.from({ length: 14 }, (_, idx) => [
+        idx + 1,
+        idx < 7 ? 'وسائل وتجهيزات' : 'مواد كيميائية',
+        '....................................................................',
+        '............',
+        '................................................'
+      ]);
+    } else {
+      const equip = data.equipItems?.filter(e => e.name?.trim()) || [];
+      const chem = data.chemItems?.filter(c => c.name?.trim()) || [];
+
+      equip.forEach((item, idx) => {
+        rows.push([
+          idx + 1,
+          'وسائل وتجهيزات',
+          item.name,
+          item.quantity || 1,
+          item.notes || 'صالحة وجاهزة للتجربة'
+        ]);
+      });
+
+      chem.forEach((item, idx) => {
+        rows.push([
+          equip.length + idx + 1,
+          'مواد كيميائية',
+          item.name,
+          item.quantity || 'حسب التجربة',
+          item.formula ? `[${item.formula}] ${item.notes || ''}` : (item.notes || '---')
+        ]);
+      });
+
+      if (rows.length === 0) {
+        rows.push(['1', 'وسائل وتجهيزات', 'وسائل وتجهيزات التجربة المقررة في المنهاج', '1', 'جاهزة بالمخبر']);
+      }
+    }
+
+    const title = isBlank 
+      ? 'طلب تحضير نشاط تجريبي / تطبيقي' 
+      : 'طلب تحضير نشاط تجريبي / تطبيقي';
+
+    const subtitle = isBlank
+      ? 'المخبر المخصص: .................................... — عنوان النشاط التطبيقي: ....................................................................'
+      : `المخبر المخصص: ${data.lab || 'مخبر العلوم'} — عنوان النشاط التطبيقي: ${data.activityTitle || 'نشاط مخبري'}`;
+
+    const summaryCards = isBlank ? [
+      { label: 'الرقم', value: '...............' },
+      { label: 'الأستاذ/ة المادة', value: '....................' },
+      { label: 'القسم', value: '.........' },
+      { label: 'توقيت الحصة', value: '...... : ......' },
+      { label: 'تاريخ الطلب', value: '..... / ..... / 2026' },
+      { label: 'ساعة الطلب', value: '...... : ......' },
+      { label: 'تاريخ الإجراء', value: '..... / ..... / 2026' },
+      { label: 'نوع النشاط', value: 'عملي / محاكاة' }
+    ] : [
+      { label: 'الرقم', value: data.orderNum || '---' },
+      { label: 'الأستاذ/ة المادة', value: data.teacherName || '---' },
+      { label: 'القسم', value: data.className || '---' },
+      { label: 'توقيت الحصة', value: data.timing || '---' },
+      { label: 'تاريخ الطلب', value: data.requestDate || '---' },
+      { label: 'ساعة الطلب', value: data.requestTime || '---' },
+      { label: 'تاريخ الإجراء', value: data.executionDate || data.requestDate || '---' },
+      { label: 'نوع النشاط', value: data.activityType || 'عملي' }
+    ];
+
+    const mergedSchoolInfo: SchoolInfo = {
+      country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
+      ministry: 'وزارة التربية الوطنية',
+      directorate: data.schoolInfo?.directorate || 'مديرية التربية لولاية أم البواقي',
+      school: data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة',
+      commune: data.schoolInfo?.commune || 'عين كرشة',
+      laboratory: data.lab || data.schoolInfo?.laboratory || 'مخبر العلوم والتكنولوجيا',
+      academicYear: resolveAcademicYear(data.schoolInfo?.academicYear),
+      date: data.requestDate || new Date().toISOString().split('T')[0],
+      ...data.schoolInfo
+    };
+
+    this.exportLabReportWord({
+      title,
+      subtitle,
+      schoolInfo: mergedSchoolInfo,
+      headers,
+      rows,
+      fileName: isBlank 
+        ? 'activity_request_blank_form.doc' 
+        : `activity_request_${(data.orderNum || 'doc').replace(/[/\\?%*:|"<>]/g, '_')}.doc`,
+      orientation: 'p',
+      summaryCards,
+      notes: 'تقدم هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل للعتاد والمحاليل.',
+      showSignatures: true,
+      labManagerTitle: 'توقيع أستاذ(ة) المادة',
+      principalTitle: `توقيع ${labOfficerTitle}`,
+      showFooter: false
+    });
+  }
+
+  /**
+   * Generates pure printable HTML for Activity Preparation Request matching the Daily Report header style.
+   * Completely excludes footer elements.
+   */
+  static generateActivityRequestHtml(data: {
+    orderNum?: string;
+    teacherName?: string;
+    requestDate?: string;
+    requestTime?: string;
+    executionDate?: string;
+    timing?: string;
+    className?: string;
+    activityType?: string;
+    lab?: string;
+    activityTitle?: string;
+    jobTitle?: string;
+    schoolInfo?: SchoolInfo;
+    equipItems?: Array<{ name: string; quantity: number | string; notes?: string }>;
+    chemItems?: Array<{ name: string; quantity: string; formula?: string; notes?: string }>;
+    signDate?: string;
+    isBlank?: boolean;
+    isEconomical?: boolean;
+    copies?: number;
+    lineStyle?: 'dotted' | 'solid';
+    blankRowsCount?: number;
+    paperSize?: 'a4' | 'a3' | 'letter' | 'legal';
+    orientation?: 'portrait' | 'landscape';
+    pagesPerSheet?: 1 | 2 | 4;
+    margins?: 'default' | 'minimum' | 'none' | 'wide';
+    scale?: number;
+    showHeader?: boolean;
+    backgroundGraphics?: boolean;
+  }): string {
+    const isBlank = Boolean(data.isBlank);
+    const isEconomical = Boolean(data.isEconomical);
+    const copiesCount = Math.max(1, Math.min(5, data.copies || 1));
+    const rowsCount = data.blankRowsCount || 12;
+    const lineStyle = data.lineStyle || 'dotted';
+    const paperSize = data.paperSize || 'a4';
+    const orientation = data.orientation || 'portrait';
+    const pagesPerSheet = data.pagesPerSheet || 1;
+    const marginsType = data.margins || 'default';
+    const scale = data.scale || 100;
+    const showHeader = data.showHeader !== false;
+    const backgroundGraphics = data.backgroundGraphics !== false && !isEconomical;
+
+    let marginCss = '7mm 10mm 7mm 10mm';
+    if (marginsType === 'minimum') marginCss = '3mm 4mm 3mm 4mm';
+    else if (marginsType === 'none') marginCss = '0mm';
+    else if (marginsType === 'wide') marginCss = '14mm 16mm 14mm 16mm';
+
+    const country = 'الجمهورية الجزائرية الديمقراطية الشعبية';
+    const ministry = 'وزارة التربية الوطنية';
+    const directorate = data.schoolInfo?.directorate || 'مديرية التربية لولاية أم البواقي';
+    const school = data.schoolInfo?.school || 'متوسطة قطاف الطاهر - عين كرشة';
+    const commune = data.schoolInfo?.commune || 'عين كرشة';
+    const formattedSchool = formatSchoolWithCommune(school, commune);
+    const laboratory = data.lab || data.schoolInfo?.laboratory || 'مخبر العلوم الطبيعية والفيزيائية';
+    const academicYear = resolveAcademicYear(data.schoolInfo?.academicYear);
+    const signDate = data.signDate || data.requestDate || new Date().toISOString().split('T')[0];
+    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+
+    const title = 'طلب تحضير نشاط تجريبي / تطبيقي';
+
+    const subtitle = isBlank
+      ? 'المخبر المخصص: .................................... — عنوان النشاط التطبيقي: ....................................................................'
+      : `المخبر المخصص: ${laboratory} — عنوان النشاط التطبيقي: ${data.activityTitle || 'نشاط مخبري'}`;
+
+    const summaryCards = isBlank ? [
+      { label: 'الرقم', value: '...............' },
+      { label: 'الأستاذ/ة المادة', value: '....................' },
+      { label: 'القسم', value: '.........' },
+      { label: 'توقيت الحصة', value: '...... : ......' },
+      { label: 'تاريخ الطلب', value: '..... / ..... / 2026' },
+      { label: 'ساعة الطلب', value: '...... : ......' },
+      { label: 'تاريخ الإجراء', value: '..... / ..... / 2026' },
+      { label: 'نوع النشاط', value: 'عملي / محاكاة' }
+    ] : [
+      { label: 'الرقم', value: data.orderNum || '---' },
+      { label: 'الأستاذ/ة المادة', value: data.teacherName || '---' },
+      { label: 'القسم', value: data.className || '---' },
+      { label: 'توقيت الحصة', value: data.timing || '---' },
+      { label: 'تاريخ الطلب', value: data.requestDate || '---' },
+      { label: 'ساعة الطلب', value: data.requestTime || '---' },
+      { label: 'تاريخ الإجراء', value: data.executionDate || data.requestDate || '---' },
+      { label: 'نوع النشاط', value: data.activityType || 'عملي' }
+    ];
+
+    let equipRowsHtml = '';
+    let chemRowsHtml = '';
+
+    const dottedGuide = lineStyle === 'solid' ? '&nbsp;' : '............................................................';
+    const shortDottedGuide = lineStyle === 'solid' ? '&nbsp;' : '..............';
+    const tinyDottedGuide = lineStyle === 'solid' ? '&nbsp;' : '.......';
+    const borderBottomStyle = lineStyle === 'solid' ? 'border-bottom: 1px solid #cbd5e1;' : '';
+
+    if (isBlank) {
+      equipRowsHtml = Array.from({ length: rowsCount }, (_, idx) => `
+        <tr style="height: 27px; ${borderBottomStyle}">
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 4px; text-align: center; font-weight: bold; color: #2b3d22; background: ${isEconomical ? '#fff' : '#fafbf9'}; font-size: 10px;">${idx + 1}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 6px; color: #94a3b8; font-size: 9px; overflow: hidden; ${borderBottomStyle}">${dottedGuide}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 4px; text-align: center; color: #94a3b8; font-size: 9px; ${borderBottomStyle}">${tinyDottedGuide}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 6px; color: #94a3b8; font-size: 9px; ${borderBottomStyle}">${shortDottedGuide}</td>
+        </tr>
+      `).join('');
+
+      chemRowsHtml = Array.from({ length: rowsCount }, (_, idx) => `
+        <tr style="height: 27px; ${borderBottomStyle}">
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 4px; text-align: center; font-weight: bold; color: #1e3a8a; background: ${isEconomical ? '#fff' : '#fafbf9'}; font-size: 10px;">${idx + 1}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 6px; color: #94a3b8; font-size: 9px; overflow: hidden; ${borderBottomStyle}">${dottedGuide}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 4px; text-align: center; color: #94a3b8; font-size: 9px; ${borderBottomStyle}">${shortDottedGuide}</td>
+          <td style="border: 1px solid ${isEconomical ? '#888' : '#d2d7cd'}; padding: 2px 4px; text-align: center; color: #94a3b8; font-size: 9px; ${borderBottomStyle}">${tinyDottedGuide}</td>
+        </tr>
+      `).join('');
+    } else {
+      const equip = data.equipItems?.filter(e => e.name?.trim()) || [];
+      const chem = data.chemItems?.filter(c => c.name?.trim()) || [];
+
+      if (equip.length === 0) {
+        equipRowsHtml = `
+          <tr>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #2b3d22;">1</td>
+            <td style="border: 1px solid #e1e6d7; padding: 5px 6px; font-weight: bold; color: #0f172a;">وسائل وتجهيزات التجربة المقررة</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #2b3d22;">1</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px 6px; color: #475569; font-size: 10px;">جاهزة بالمخبر</td>
+          </tr>
+        `;
+      } else {
+        equipRowsHtml = equip.map((item, idx) => `
+          <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#fcfaf6'};">
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #2b3d22; background: #fafbf9;">${idx + 1}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 5px 6px; font-weight: bold; color: #0f172a;">${item.name}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #2b3d22;">${item.quantity || 1}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px 6px; color: #475569; font-size: 10px;">${item.notes || 'جاهزة'}</td>
+          </tr>
+        `).join('');
+      }
+
+      if (chem.length === 0) {
+        chemRowsHtml = `
+          <tr>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #1e3a8a;">1</td>
+            <td style="border: 1px solid #e1e6d7; padding: 5px 6px; font-weight: bold; color: #0f172a;">لا تتطلب محاليل كيميائية خاصة</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; color: #64748b; font-size: 10px;">---</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; color: #64748b; font-size: 10px;">---</td>
+          </tr>
+        `;
+      } else {
+        chemRowsHtml = chem.map((item, idx) => `
+          <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#fcfaf6'};">
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #1e3a8a; background: #fafbf9;">${idx + 1}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 5px 6px; font-weight: bold; color: #0f172a;">${item.name}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-mono; font-size: 10px; color: #2563eb;">${item.formula || '---'}</td>
+            <td style="border: 1px solid #e1e6d7; padding: 4px; text-align: center; font-weight: bold; color: #2b3d22;">${item.quantity || 'حسب التجربة'}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    return `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="utf-8">
+        <title>${title} - ${data.activityTitle || data.orderNum || 'طلب نشاط'}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <style>
+          @page {
+            size: ${paperSize.toUpperCase()} ${orientation};
+            margin: ${marginCss};
+          }
+          * {
+            box-sizing: border-box;
+          }
+          body {
+            font-family: 'Amiri', 'Traditional Arabic', serif;
+            margin: 0;
+            padding: ${marginsType === 'none' ? '0' : '2px 4px'};
+            color: #282d23;
+            line-height: 1.35;
+            direction: rtl;
+            background: #fff;
+            -webkit-print-color-adjust: ${backgroundGraphics ? 'exact' : 'economy'};
+            print-color-adjust: ${backgroundGraphics ? 'exact' : 'economy'};
+          }
+          .republic-header {
+            text-align: center;
+            font-size: 14.5px;
+            font-weight: 900;
+            color: #1e2819;
+            margin-bottom: 2px;
+            font-family: 'Amiri', serif;
+            letter-spacing: 0.3px;
+          }
+          .ministry-header {
+            text-align: center;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #3c4632;
+            margin-bottom: 5px;
+            font-family: 'Amiri', serif;
+          }
+          .institution-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 11px;
+            font-weight: bold;
+            color: #32382c;
+            border-bottom: 1.5px solid #c8d2c3;
+            padding-bottom: 6px;
+            margin-bottom: 8px;
+            line-height: 1.5;
+            font-family: 'Amiri', serif;
+          }
+          .title-banner {
+            background-color: #2b3d22;
+            color: #ffffff;
+            border-radius: 5px;
+            padding: 7px 14px;
+            text-align: center;
+            margin: 6px 0 8px;
+            box-shadow: 0 1px 3px rgba(43,61,34,0.2);
+          }
+          .title-banner h1 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 800;
+            color: #ffffff;
+            font-family: 'Cairo', sans-serif;
+            letter-spacing: 0.4px;
+          }
+          .title-banner .subtitle {
+            margin: 2px 0 0;
+            font-size: 10.5px;
+            color: #e6f0dc;
+            font-family: 'Amiri', serif;
+          }
+          .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 8px;
+          }
+          .summary-card {
+            background: #f5f8f2;
+            border: 1px solid #d7e1cd;
+            border-radius: 4px;
+            padding: 4px 6px;
+            text-align: center;
+          }
+          .summary-card .label {
+            font-size: 9px;
+            color: #64735f;
+            font-family: 'Amiri', serif;
+            margin-bottom: 1px;
+          }
+          .summary-card .value {
+            font-size: 11px;
+            font-weight: bold;
+            color: #2b3d22;
+            font-family: 'Cairo', sans-serif;
+          }
+          .dual-tables-grid {
+            display: flex;
+            gap: 10px;
+            margin: 6px 0;
+          }
+          .table-block {
+            flex: 1;
+          }
+          .table-title {
+            background-color: #2b3d22;
+            color: #ffffff;
+            padding: 4px 8px;
+            font-weight: bold;
+            font-size: 11px;
+            text-align: center;
+            border-radius: 4px 4px 0 0;
+            font-family: 'Cairo', sans-serif;
+          }
+          table.sub-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+          }
+          table.sub-table th {
+            background-color: #f5f8f2;
+            color: #2b3d22;
+            font-weight: bold;
+            border: 1px solid #d2d7cd;
+            padding: 4px;
+            text-align: right;
+            font-family: 'Cairo', sans-serif;
+            font-size: 9.5px;
+          }
+          table.sub-table td {
+            border: 1px solid #e1e6d7;
+            padding: 4px 6px;
+            vertical-align: middle;
+          }
+          .notes-box {
+            background: #fafbf9;
+            border: 1px dashed #c8d2c3;
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-size: 9.5px;
+            color: #475569;
+            margin: 6px 0 8px;
+          }
+          .release-line {
+            text-align: left;
+            margin: 5px 0;
+            font-weight: bold;
+            font-size: 11px;
+            color: #2b3d22;
+            font-family: 'Cairo', sans-serif;
+          }
+          .signatures-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 6px;
+            text-align: center;
+          }
+          .sig-box {
+            flex: 1;
+            border: 1px solid #d2d7cd;
+            border-radius: 4px;
+            padding: 6px 8px;
+            background: #fefefd;
+            height: 76px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          .sig-title {
+            font-weight: bold;
+            font-size: 11.5px;
+            color: #2b3d22;
+            font-family: 'Cairo', sans-serif;
+          }
+          .sig-placeholder {
+            color: #828c7d;
+            font-size: 9.5px;
+            font-family: 'Amiri', serif;
+          }
+          ${scale !== 100 ? `body { zoom: ${scale / 100}; }` : ''}
+          .sheet-page {
+            width: 100%;
+            min-height: calc(100vh - 10mm);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            page-break-inside: avoid;
+            box-sizing: border-box;
+          }
+          .pages-grid-2 {
+            display: grid;
+            grid-template-columns: ${orientation === 'landscape' ? '1fr 1fr' : '1fr'};
+            grid-template-rows: ${orientation === 'landscape' ? '1fr' : '1fr 1fr'};
+            gap: 6mm;
+            min-height: calc(100vh - 8mm);
+            box-sizing: border-box;
+          }
+          .pages-grid-2 .sheet-cell {
+            border: 1px dashed #ccc;
+            padding: 3mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            font-size: 85%;
+          }
+          .pages-grid-4 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 4mm;
+            min-height: calc(100vh - 6mm);
+            box-sizing: border-box;
+          }
+          .pages-grid-4 .sheet-cell {
+            border: 1px dashed #ccc;
+            padding: 2.5mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            font-size: 70%;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+            .sheet-page {
+              page-break-after: always;
+            }
+            .sheet-page:last-child {
+              page-break-after: avoid;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${Array.from({ length: copiesCount }, (_, cIdx) => {
+          const renderSheetContent = (badgeText?: string) => `
+            <div>
+              ${badgeText ? `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; font-size:9px; color:#666;">
+                  <span style="background:#eee; padding:1px 5px; border-radius:3px; font-weight:bold;">${badgeText}</span>
+                  <span>طلب نشاط تجريبي</span>
+                </div>
+              ` : ''}
+
+              <!-- Official Header (Matches Algerian Daily Lab Report) -->
+              ${showHeader ? `
+                <div class="republic-header">${country}</div>
+                <div class="ministry-header">${ministry}</div>
+
+                <div class="institution-bar">
+                  <div style="text-align: right;">
+                    <div><strong>مديرية التربية:</strong> ${directorate}</div>
+                    <div><strong>المؤسسة:</strong> ${formattedSchool}</div>
+                  </div>
+                  <div style="text-align: left;">
+                    <div><strong>السنة الدراسية:</strong> ${academicYear}</div>
+                    <div><strong>المخبر:</strong> ${laboratory}</div>
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Document Title Banner -->
+              <div class="title-banner">
+                <h1>${title}</h1>
+                <div class="subtitle">${subtitle}</div>
+              </div>
+
+              <!-- 8 Detailed Summary Cards (2 rows of 4) -->
+              <div class="summary-cards">
+                ${summaryCards.map(c => `
+                  <div class="summary-card">
+                    <div class="label">${c.label}</div>
+                    <div class="value">${c.value}</div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Dual Tables Side-by-Side: الوسائل والتجهيزات | المواد الكيميائية -->
+              <div class="dual-tables-grid">
+                <!-- Table 1: الوسائل والتجهيزات -->
+                <div class="table-block">
+                  <div class="table-title">الوسائل والتجهيزات</div>
+                  <table class="sub-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>الوسيلة / التجهيز المطلوب</th>
+                        <th style="width: 45px; text-align: center;">الكمية</th>
+                        <th style="width: 65px;">الملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${equipRowsHtml}
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Table 2: المواد الكيميائية -->
+                <div class="table-block">
+                  <div class="table-title">المواد الكيميائية</div>
+                  <table class="sub-table">
+                    <thead>
+                      <tr>
+                        <th style="width: 25px; text-align: center;">#</th>
+                        <th>المادة الكيميائية المطلوبة</th>
+                        <th style="width: 55px; text-align: center;">الصيغة</th>
+                        <th style="width: 50px; text-align: center;">الكمية</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${chemRowsHtml}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Bottom Section -->
+            <div style="margin-top:auto;">
+              <!-- Notice -->
+              <div class="notes-box">
+                <strong>ملاحظة هامة:</strong> تقدم هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل للعتاد والمحاليل.
+              </div>
+
+              <!-- Release Date: Empty writing space for blank form, exact date for filled form -->
+              <div class="release-line">
+                حرر بـ : ${commune} في : <span dir="ltr">${isBlank ? '<span style="display:inline-block; border-bottom: 1.5px dashed #444; width: 140px; margin-right: 6px;">&nbsp;</span>' : (data.signDate || signDate)}</span>
+              </div>
+
+              <!-- Signatures -->
+              <div class="signatures-grid">
+                <div class="sig-box">
+                  <div class="sig-title">توقيع أستاذ(ة) المادة</div>
+                  <div class="sig-placeholder">(الاسم والتوقيع)</div>
+                </div>
+                <div class="sig-box">
+                  <div class="sig-title">توقيع ${labOfficerTitle}</div>
+                  <div class="sig-placeholder">(التأشيرة والختم)</div>
+                </div>
+              </div>
+            </div>
+          `;
+
+          if (pagesPerSheet === 2) {
+            return `
+              <div class="sheet-page pages-grid-2">
+                <div class="sheet-cell">${renderSheetContent('النسخة 1: الأصلية (المخبر)')}</div>
+                <div class="sheet-cell">${renderSheetContent('النسخة 2: نسخة أستاذ(ة) المادة')}</div>
+              </div>
+            `;
+          }
+
+          if (pagesPerSheet === 4) {
+            return `
+              <div class="sheet-page pages-grid-4">
+                ${[1, 2, 3, 4].map(idx => `<div class="sheet-cell">${renderSheetContent(`نسخة ${idx}`)}</div>`).join('')}
+              </div>
+            `;
+          }
+
+          return `
+            <div class="sheet-page">
+              ${renderSheetContent(copiesCount > 1 ? `النسخة ${cIdx + 1} من ${copiesCount}` : undefined)}
+            </div>
+          `;
+        }).join('')}
+      </body>
+      </html>
+    `;
   }
 }
 

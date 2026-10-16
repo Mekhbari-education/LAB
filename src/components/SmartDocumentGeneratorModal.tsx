@@ -81,7 +81,7 @@ export default function SmartDocumentGeneratorModal({
   onClose,
   onSaveDocument
 }: SmartDocumentGeneratorModalProps) {
-  const { schoolName, directorate, commune } = useSchool();
+  const { schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
 
   const [prompt, setPrompt] = useState('');
@@ -99,6 +99,7 @@ export default function SmartDocumentGeneratorModal({
     schoolName,
     directorate,
     commune,
+    academicYear: academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026',
     country: 'الجمهورية الجزائرية الديمقراطية الشعبية',
     ministry: 'وزارة التربية الوطنية'
   };

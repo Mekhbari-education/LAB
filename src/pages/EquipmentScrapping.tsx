@@ -72,7 +72,7 @@ interface AttachmentDoc {
 type Tab = 'list' | 'pv' | 'proposal' | 'attachments';
 
 export default function EquipmentScrapping() {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [isSaving, setIsSaving] = useState(false);
@@ -485,7 +485,7 @@ export default function EquipmentScrapping() {
                   <p className="text-sm">وزارة التربية الوطنية</p>
                 </div>
                 <div className="md:text-left text-primary font-black">
-                  <p className="text-sm">السنة الدراسية: <span className="border-b-2 border-primary/20 px-4">2025 - 2026</span></p>
+                  <p className="text-sm">السنة الدراسية: <span className="border-b-2 border-primary/20 px-4">{academicYear || '2025/2026'}</span></p>
                 </div>
              </div>
              

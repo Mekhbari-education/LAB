@@ -57,7 +57,7 @@ export class PurchaseOrderPrintService {
   static generateOrderHtml(order: PrintablePurchaseOrder, school: SchoolPrintInfo): string {
     const formattedSchool = formatSchoolWithCommune(school.schoolName, school.commune) || 'المؤسسة التعليمية';
     const directorate = school.directorate || 'مديرية التربية لولاية';
-    const academicYear = school.academicYear || '2025 / 2026';
+    const academicYear = school.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026';
     const labName = school.laboratoryName || 'مخبر العلوم الفيزيائية والطبيعية';
     
     const formattedDate = order.date 
@@ -478,7 +478,7 @@ export class PurchaseOrderPrintService {
   static generateOrderWordHtml(order: PrintablePurchaseOrder, school: SchoolPrintInfo): string {
     const formattedSchool = formatSchoolWithCommune(school.schoolName, school.commune) || 'المؤسسة التعليمية';
     const directorate = school.directorate || 'مديرية التربية لولاية';
-    const academicYear = school.academicYear || '2025 / 2026';
+    const academicYear = school.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026';
     const labName = school.laboratoryName || 'مخبر العلوم الفيزيائية والطبيعية';
     
     const formattedDate = order.date 
@@ -865,7 +865,7 @@ export class PurchaseOrderPrintService {
 
     const formattedSchool = formatSchoolWithCommune(school.schoolName, school.commune) || 'المؤسسة التعليمية';
     const directorate = school.directorate || 'مديرية التربية لولاية';
-    const academicYear = school.academicYear || '2025 / 2026';
+    const academicYear = school.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025 / 2026';
     const labName = school.laboratoryName || 'مخبر العلوم الفيزيائية والطبيعية';
     const formattedDate = order.date 
       ? (typeof order.date === 'string' ? order.date : new Date(order.date).toLocaleDateString('ar-DZ', { year: 'numeric', month: 'long', day: 'numeric' }))

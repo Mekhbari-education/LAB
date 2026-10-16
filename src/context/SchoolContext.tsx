@@ -11,6 +11,8 @@ interface SchoolContextType {
   commune: string;
   address: string;
   jobTitle: string;
+  academicYear: string;
+  setAcademicYear: (year: string) => void;
   schoolLogo: string;
   setSchoolLogo: (logo: string) => void;
   loading: boolean;
@@ -51,6 +53,12 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   });
   const [address, setAddress] = useState('');
   const [jobTitle, setJobTitle] = useState('ملحق بالمخابر');
+  const [academicYear, setAcademicYearState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_academic_year') || '2025/2026';
+    }
+    return '2025/2026';
+  });
   const [schoolLogo, setSchoolLogoState] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('algeria_lab_school_logo') || '';
@@ -84,6 +92,7 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
               }
               const sName = data.schoolName || data.school || 'ثانوية عامة';
               const dName = data.directorateName || data.directorate || 'مديرية التربية';
+              const aYear = data.academicYear || data.schoolYear || '2025/2026';
               const cName = data.communeName || data.commune || '';
               const logoUrl = data.schoolLogo || data.institutionLogo || '';
               
@@ -92,11 +101,13 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
               setCommune(cName);
               setAddress(data.address || '');
               setJobTitle(data.jobTitle || 'ملحق بالمخابر');
+              setAcademicYearState(aYear);
               setSchoolLogoState(logoUrl);
 
               if (typeof window !== 'undefined') {
                 localStorage.setItem('algeria_lab_school_name', sName);
                 localStorage.setItem('algeria_lab_directorate', dName);
+                localStorage.setItem('algeria_lab_academic_year', aYear);
                 if (cName) localStorage.setItem('algeria_lab_commune', cName);
                 if (logoUrl) {
                   localStorage.setItem('algeria_lab_school_logo', logoUrl);
@@ -130,8 +141,44 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(SCHOOL_ID_KEY, schoolId);
   }, [schoolId]);
 
+  useEffect(() => {
+    const handleSync = () => {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('algeria_lab_academic_year');
+        if (stored && stored !== academicYear) {
+          setAcademicYearState(stored);
+        }
+      }
+    };
+
+    window.addEventListener('academic_year_changed', handleSync);
+    window.addEventListener('storage', handleSync);
+    return () => {
+      window.removeEventListener('academic_year_changed', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
+  }, [academicYear]);
+
   const setSchoolId = (id: string) => {
     setSchoolIdState(id);
+  };
+
+  const setAcademicYear = (year: string) => {
+    const cleanYear = year.trim();
+    setAcademicYearState(cleanYear);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('algeria_lab_academic_year', cleanYear);
+      try {
+        const storedPrint = localStorage.getItem('algeria_lab_print_settings');
+        if (storedPrint) {
+          const parsed = JSON.parse(storedPrint);
+          if (!parsed.institution) parsed.institution = {};
+          parsed.institution.academicYear = cleanYear;
+          localStorage.setItem('algeria_lab_print_settings', JSON.stringify(parsed));
+        }
+      } catch (e) {}
+      window.dispatchEvent(new Event('academic_year_changed'));
+    }
   };
 
   const setSchoolLogo = (logoUrl: string) => {
@@ -154,6 +201,8 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
       commune, 
       address, 
       jobTitle,
+      academicYear,
+      setAcademicYear,
       schoolLogo,
       setSchoolLogo,
       loading

@@ -13,7 +13,7 @@ import { ExperimentPreset } from '../data/labExperimentPresets';
 import * as XLSX from 'xlsx';
 
 export function useDailyReport() {
-  const { schoolId } = useSchool();
+  const { schoolId, academicYear } = useSchool();
   const navigate = useNavigate();
   const { openPdfPreview } = usePdfPreview();
   const { timeSlots, loading: loadingTimeSlots } = useTimeSlots();
@@ -37,7 +37,13 @@ export function useDailyReport() {
   // Routing ladder and administrative metadata
   const [docRouting, setDocRouting] = useState<RoutingType>('hierarchical_nazir');
   const [docDepartment, setDocDepartment] = useState('مخبر العلوم الفيزيائية والطبيعية');
-  const [docAcademicYear, setDocAcademicYear] = useState('2026 / 2027');
+  const [docAcademicYear, setDocAcademicYear] = useState(() => academicYear || '2025/2026');
+
+  useEffect(() => {
+    if (academicYear) {
+      setDocAcademicYear(academicYear);
+    }
+  }, [academicYear]);
   const [docLocation, setDocLocation] = useState('عين كرشة');
   const [docSender, setDocSender] = useState('الملحق الرئيس بالمخابر');
   const [docRecipient, setDocRecipient] = useState('السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس');

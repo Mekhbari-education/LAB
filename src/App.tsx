@@ -68,6 +68,7 @@ const SafetyGuide = React.lazy(() => import('./pages/SafetyGuide'));
 const LabCalculators = React.lazy(() => import('./pages/LabCalculators'));
 const AdministrativeDocuments = React.lazy(() => import('./pages/AdministrativeDocuments'));
 import { SchoolProvider } from './context/SchoolContext';
+import { UserRoleProvider, useUserRole } from './context/UserRoleContext';
 import { PrintSettingsProvider } from './context/PrintSettingsContext';
 import PrintPreviewModal from './components/PrintPreviewModal';
 import { PdfPreviewProvider } from './context/PdfPreviewContext';
@@ -76,6 +77,11 @@ const Diagnostic = React.lazy(() => import('./pages/Diagnostic'));
 const DesignSystem = React.lazy(() => import('./pages/DesignSystem'));
 const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
 const Support = React.lazy(() => import('./pages/Support'));
+const TeacherPortal = React.lazy(() => import('./pages/TeacherPortal'));
+const CensorPortal = React.lazy(() => import('./pages/CensorPortal'));
+const DirectorPortal = React.lazy(() => import('./pages/DirectorPortal'));
+const EconomistPortal = React.lazy(() => import('./pages/EconomistPortal'));
+const Signup = React.lazy(() => import('./pages/Signup'));
 
 const PeriodicTable = React.lazy(() => import('./pages/PeriodicTable'));
 const ChemistryTools = React.lazy(() => import('./pages/ChemistryTools'));
@@ -91,11 +97,38 @@ const Astronomy = React.lazy(() => import('./pages/Astronomy'));
 const EarthSciences = React.lazy(() => import('./pages/EarthSciences'));
 const Anatomy = React.lazy(() => import('./pages/Anatomy'));
 
+function RoleBasedRedirect() {
+  const { roleConfig } = useUserRole();
+  return <Navigate to={roleConfig?.defaultPath || ROUTES.HOME} replace />;
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupComplete, setSetupComplete] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [hasRoleSession, setHasRoleSession] = useState<boolean>(() => {
+    try {
+      return Boolean(localStorage.getItem('current_app_role') || localStorage.getItem('current_teacher_profile'));
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const handleRoleChanged = () => {
+      try {
+        const hasSession = Boolean(localStorage.getItem('current_app_role') || localStorage.getItem('current_teacher_profile'));
+        setHasRoleSession(hasSession);
+      } catch {}
+    };
+    window.addEventListener('storage', handleRoleChanged);
+    window.addEventListener('role_changed', handleRoleChanged);
+    return () => {
+      window.removeEventListener('storage', handleRoleChanged);
+      window.removeEventListener('role_changed', handleRoleChanged);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -135,12 +168,13 @@ export default function App() {
       <ErrorBoundary>
         <ThemeProvider>
           <SchoolProvider>
-            <PrintSettingsProvider>
-              <PdfPreviewProvider>
-                <Router>
-                <OfflineBanner />
-                <PrintPreviewModal />
-                <PdfReviewModal />
+            <UserRoleProvider>
+              <PrintSettingsProvider>
+                <PdfPreviewProvider>
+                  <Router>
+                  <OfflineBanner />
+                  <PrintPreviewModal />
+                  <PdfReviewModal />
             {user && connectionError && (
               <div className="fixed bottom-4 end-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm w-[calc(100vw-2rem)]">
                 <div className="flex items-center justify-between">
@@ -165,17 +199,27 @@ export default function App() {
               </div>
             }>
               {(!user || setupComplete) ? (
-                <Routes>
-                <Route path={ROUTES.LOGIN} element={user ? <Navigate to={ROUTES.HOME} /> : <Login />} />
-                <Route path="/admin-setup" element={<Navigate to={ROUTES.ADMIN} replace />} />
-                <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
-                <Route path={ROUTES.DATA_DELETION} element={<DataDeletion />} />
-                <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
-                <Route
-                  path={ROUTES.HOME}
-                  element={user ? <Layout /> : <Navigate to={ROUTES.LOGIN} />}
-                >
+                (() => {
+                  const isAuthenticated = Boolean(user || hasRoleSession);
+                  return (
+                    <Routes>
+                    <Route path={ROUTES.LOGIN} element={isAuthenticated ? <RoleBasedRedirect /> : <Login onRoleLogin={() => setHasRoleSession(true)} />} />
+                    <Route path={ROUTES.SIGNUP} element={isAuthenticated ? <RoleBasedRedirect /> : <Signup />} />
+                    <Route path="/admin-setup" element={<Navigate to={ROUTES.ADMIN} replace />} />
+                    <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
+                    <Route path={ROUTES.DATA_DELETION} element={<DataDeletion />} />
+                    <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
+                    <Route
+                      path={ROUTES.HOME}
+                      element={isAuthenticated ? <Layout /> : <Navigate to={ROUTES.LOGIN} />}
+                    >
                   <Route index element={<Dashboard />} />
+                  {/* Role Portals */}
+                  <Route path={ROUTES.TEACHER_PORTAL.substring(1)} element={<TeacherPortal />} />
+                  <Route path={ROUTES.CENSOR_PORTAL.substring(1)} element={<CensorPortal />} />
+                  <Route path={ROUTES.DIRECTOR_PORTAL.substring(1)} element={<DirectorPortal />} />
+                  <Route path={ROUTES.ECONOMIST_PORTAL.substring(1)} element={<EconomistPortal />} />
+
                   <Route path={ROUTES.ADMIN.substring(1)} element={<AdminDashboard />} />
                   <Route path={ROUTES.SUPPORT.substring(1)} element={<Support />} />
                   <Route path={ROUTES.DOCUMENT_LIBRARY.substring(1)} element={<DocumentLibrary />} />
@@ -245,6 +289,8 @@ export default function App() {
               <Route path="/not-found" element={<NotFound />} />
               <Route path="*" element={<Navigate to="/not-found" replace />} />
             </Routes>
+                  );
+                })()
             ) : (
               <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
                 <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center">
@@ -257,12 +303,13 @@ export default function App() {
           </Suspense>
             </ErrorBoundary>
           </Router>
-              </PdfPreviewProvider>
-        </PrintSettingsProvider>
-        </SchoolProvider>
-        </ThemeProvider>
-      </ErrorBoundary>
-    </HelmetProvider>
+        </PdfPreviewProvider>
+      </PrintSettingsProvider>
+    </UserRoleProvider>
+  </SchoolProvider>
+</ThemeProvider>
+</ErrorBoundary>
+</HelmetProvider>
   );
 }
 

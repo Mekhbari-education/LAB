@@ -50,7 +50,7 @@ interface Equipment {
 }
 
 export default function LoanRequest() {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -294,7 +294,7 @@ export default function LoanRequest() {
                 <p className="text-sm font-bold text-on-surface/60">وزارة التربية الوطنية</p>
               </div>
               <div className="text-center md:text-left">
-                <p className="text-sm font-black text-primary">السنة الدراسية: <span className="border-b-2 border-primary/20 px-4">2025 - 2026</span></p>
+                <p className="text-sm font-black text-primary">السنة الدراسية: <span className="border-b-2 border-primary/20 px-4">{academicYear || '2025/2026'}</span></p>
               </div>
             </div>
             

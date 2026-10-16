@@ -445,7 +445,7 @@ const TEMPLATES: AdminTemplateItem[] = [
 
 export default function AdministrativeDocuments() {
   const navigate = useNavigate();
-  const { schoolName, directorate, commune } = useSchool();
+  const { schoolName, directorate, commune, academicYear } = useSchool();
   const country = 'الجمهورية الجزائرية الديمقراطية الشعبية';
   const ministry = 'وزارة التربية الوطنية';
   const { openPdfPreview } = usePdfPreview();
@@ -468,7 +468,13 @@ export default function AdministrativeDocuments() {
   const [docSender, setDocSender] = useState('');
   const [docRecipient, setDocRecipient] = useState('');
   const [docDepartment, setDocDepartment] = useState('مخبر العلوم الفيزيائية والطبيعية');
-  const [docAcademicYear, setDocAcademicYear] = useState('2026 / 2027');
+  const [docAcademicYear, setDocAcademicYear] = useState(() => academicYear || '2025/2026');
+
+  useEffect(() => {
+    if (academicYear) {
+      setDocAcademicYear(academicYear);
+    }
+  }, [academicYear]);
   const [docLocation, setDocLocation] = useState(commune || 'عين كرشة');
   const [docRouting, setDocRouting] = useState<RoutingType>('hierarchical_nazir');
   const [docSubject, setDocSubject] = useState('');

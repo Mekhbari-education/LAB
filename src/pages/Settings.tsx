@@ -33,7 +33,8 @@ import {
   UploadCloud,
   Image as ImageIcon,
   Sparkles,
-  Eye
+  Eye,
+  Calendar
 } from 'lucide-react';
 import ministryLogo from '/ministry-logo.png';
 import { motion, AnimatePresence } from 'motion/react';
@@ -58,7 +59,26 @@ import { cn } from '../lib/utils';
 import LocationCard, { InstitutionSuggestion } from '../components/LocationCard';
 
 export default function SettingsPage() {
-  const { schoolId, schoolLogo, setSchoolLogo } = useSchool();
+  const { 
+    schoolId, 
+    schoolLogo, 
+    setSchoolLogo, 
+    academicYear: contextAcademicYear, 
+    setAcademicYear: setContextAcademicYear 
+  } = useSchool();
+  const [academicYear, setAcademicYear] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('algeria_lab_academic_year') || contextAcademicYear || '2025/2026';
+    }
+    return contextAcademicYear || '2025/2026';
+  });
+
+  useEffect(() => {
+    if (contextAcademicYear) {
+      setAcademicYear(contextAcademicYear);
+    }
+  }, [contextAcademicYear]);
+
   const [displayName, setDisplayName] = useState(auth.currentUser?.displayName || '');
   const [email] = useState(auth.currentUser?.email || '');
   const [userPhotoUrl, setUserPhotoUrl] = useState<string>(auth.currentUser?.photoURL || '');
@@ -766,6 +786,9 @@ export default function SettingsPage() {
           setSpecialty(data.specialty || '');
           setSchoolAddress(data.address || '');
           setEmployeeId(data.employeeId || '1010101010101010');
+          if (data.academicYear || data.schoolYear) {
+            setAcademicYear(data.academicYear || data.schoolYear);
+          }
           if (data.levels) setLevels(data.levels);
           if (data.timeSlots) setTimeSlots(data.timeSlots);
           const logoUrl = data.schoolLogo || data.institutionLogo || '';
@@ -781,7 +804,8 @@ export default function SettingsPage() {
             commune: data.commune || data.communeName || '',
             cycle: data.cycle || '',
             school: data.school || data.schoolName || '',
-            schoolName: data.schoolName || ''
+            schoolName: data.schoolName || '',
+            academicYear: data.academicYear || data.schoolYear || ''
           });
         }
       } catch (error) {
@@ -842,55 +866,95 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!auth.currentUser) return;
     setIsSaving(true);
+    const cleanAcademicYear = academicYear.trim() || '2025/2026';
+    const dirName = currentDirData?.name || selectedDirectorate || 'مديرية التربية';
+    const comName = currentCommune?.name || selectedCommune || '';
+    const matchedSchoolObj = schoolsList.find((s: any) => s.code === selectedSchool);
+    const resolvedSchoolName = isCustomSchool 
+      ? (customSchoolName || 'ثانوية عامة') 
+      : (matchedSchoolObj?.name || (selectedSchool === '__custom__' ? (customSchoolName || 'ثانوية عامة') : (selectedSchool || 'ثانوية عامة')));
+
     try {
-      await updateProfile(auth.currentUser, { displayName });
-      
-      const dirName = currentDirData?.name || selectedDirectorate || 'مديرية التربية';
-      const comName = currentCommune?.name || selectedCommune || '';
-      const matchedSchoolObj = schoolsList.find((s: any) => s.code === selectedSchool);
-      const resolvedSchoolName = isCustomSchool 
-        ? (customSchoolName || 'ثانوية عامة') 
-        : (matchedSchoolObj?.name || (selectedSchool === '__custom__' ? (customSchoolName || 'ثانوية عامة') : (selectedSchool || 'ثانوية عامة')));
+      // 1. Instantly apply to Context and LocalStorage so all pages and documents update immediately
+      setContextAcademicYear(cleanAcademicYear);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('algeria_lab_academic_year', cleanAcademicYear);
+        localStorage.setItem('algeria_lab_school_name', resolvedSchoolName);
+        localStorage.setItem('algeria_lab_directorate', dirName);
+        if (comName) localStorage.setItem('algeria_lab_commune', comName);
+        try {
+          const storedPrint = localStorage.getItem('algeria_lab_print_settings');
+          if (storedPrint) {
+            const parsed = JSON.parse(storedPrint);
+            if (!parsed.institution) parsed.institution = {};
+            parsed.institution.academicYear = cleanAcademicYear;
+            parsed.institution.school = resolvedSchoolName;
+            parsed.institution.directorate = dirName;
+            if (comName) parsed.institution.commune = comName;
+            localStorage.setItem('algeria_lab_print_settings', JSON.stringify(parsed));
+          }
+        } catch (e) {}
 
-      await setDoc(doc(db, 'settings', auth.currentUser.uid), {
-        jobTitle,
-        grade,
-        specialty,
-        directorate: selectedDirectorate,
-        directorateName: dirName,
-        commune: selectedCommune,
-        communeName: comName,
-        cycle: selectedCycle,
-        school: selectedSchool,
-        schoolName: resolvedSchoolName,
-        address: schoolAddress,
-        employeeId,
-        levels,
-        timeSlots,
-        schoolLogo: customLogoUrl || null,
-        institutionLogo: customLogoUrl || null,
-        profilePhoto: auth.currentUser?.photoURL || null,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+        // Broadcast change to all listening components, pages, and tabs
+        window.dispatchEvent(new CustomEvent('academic_year_changed', { detail: cleanAcademicYear }));
+        window.dispatchEvent(new Event('storage'));
+      }
 
-      if (newPassword) {
-        if (newPassword !== confirmPassword) {
-          throw new Error('كلمات المرور غير متطابقة');
+      // 2. Persist to Firestore & Auth if logged in
+      if (auth.currentUser) {
+        try {
+          await updateProfile(auth.currentUser, { displayName });
+        } catch (e) {
+          console.warn('Profile name update skipped:', e);
         }
-        await updatePassword(auth.currentUser, newPassword);
-        setNewPassword('');
-        setConfirmPassword('');
+
+        await setDoc(doc(db, 'settings', auth.currentUser.uid), {
+          jobTitle,
+          grade,
+          specialty,
+          academicYear: cleanAcademicYear,
+          schoolYear: cleanAcademicYear,
+          directorate: selectedDirectorate,
+          directorateName: dirName,
+          commune: selectedCommune,
+          communeName: comName,
+          cycle: selectedCycle,
+          school: selectedSchool,
+          schoolName: resolvedSchoolName,
+          address: schoolAddress,
+          employeeId,
+          levels,
+          timeSlots,
+          schoolLogo: customLogoUrl || null,
+          institutionLogo: customLogoUrl || null,
+          profilePhoto: auth.currentUser?.photoURL || null,
+          'printSettings.institution.academicYear': cleanAcademicYear,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        if (newPassword) {
+          if (newPassword !== confirmPassword) {
+            throw new Error('كلمات المرور غير متطابقة');
+          }
+          await updatePassword(auth.currentUser, newPassword);
+          setNewPassword('');
+          setConfirmPassword('');
+        }
       }
 
       setShowSuccess(true);
+      showToast('تم تثبيت كافة التغييرات وتطبيق السنة الدراسية بنجاح على كافة الوثائق والصفحات!', 'success');
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error: any) {
       if (error.code === 'auth/requires-recent-login') {
         showToast('يجب عليك تسجيل الخروج ثم الدخول مرة أخرى لتغيير كلمة المرور لأسباب أمنية.', 'error');
       } else {
-        handleFirestoreError(error, OperationType.WRITE, `settings/${auth.currentUser.uid}`);
+        if (auth.currentUser) {
+          handleFirestoreError(error, OperationType.WRITE, `settings/${auth.currentUser.uid}`);
+        } else {
+          showToast('حدث خطأ أثناء حفظ التغييرات.', 'error');
+        }
       }
     } finally {
       setIsSaving(false);
@@ -1490,7 +1554,7 @@ export default function SettingsPage() {
                             </div>
 
                             <div className="text-left leading-relaxed font-bold" dir="rtl">
-                              <div>السنة الدراسية: 2025/2026</div>
+                              <div>السنة الدراسية: {academicYear || '2025/2026'}</div>
                               <div className="text-neutral-500">الصفة: {jobTitle}</div>
                             </div>
                           </div>
@@ -1625,6 +1689,29 @@ export default function SettingsPage() {
                           onChange={(e) => setCustomSchoolName(e.target.value)}
                         />
                       )}
+                    </div>
+
+                    {/* السنة الدراسية الحالية */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between mr-2">
+                        <label className="text-sm font-black text-secondary flex items-center gap-2">
+                          <Calendar size={16} className="text-primary" />
+                          <span>السنة الدراسية الحالية</span>
+                        </label>
+                        <span className="text-[11px] font-bold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                          تُطبّق على كافة الوثائق والصفحات
+                        </span>
+                      </div>
+                      <input 
+                        type="text"
+                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all font-bold text-base"
+                        placeholder="مثال: 2025/2026 أو 2026/2027"
+                        value={academicYear}
+                        onChange={(e) => setAcademicYear(e.target.value)}
+                      />
+                      <p className="text-[11px] text-on-surface/60 font-medium mr-2">
+                        تظهر تلقائياً في ترويسات كافة المحاضر الرسمية، بطاقات الجرد، جداول التوقيت، والتقارير اليومية وسندات الطلبيات.
+                      </p>
                     </div>
                   </div>
 

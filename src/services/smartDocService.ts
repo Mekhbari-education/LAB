@@ -40,6 +40,7 @@ export interface SchoolContext {
   commune?: string;
   country?: string;
   ministry?: string;
+  academicYear?: string;
 }
 
 const SYSTEM_PROMPT = `
@@ -70,7 +71,7 @@ export async function generateSmartAdminDocument(
   schoolContext: SchoolContext
 ): Promise<SmartAdminDocument> {
   const currentYear = new Date().getFullYear();
-  const academicYear = `${currentYear - 1} / ${currentYear}`;
+  const academicYear = schoolContext.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || `${currentYear - 1} / ${currentYear}`;
   const currentDate = new Date().toISOString().split('T')[0];
   const schoolFormatted = formatSchoolWithCommune(schoolContext.schoolName, schoolContext.commune) || 'المؤسسة التعليمية';
 
@@ -179,7 +180,7 @@ export function generateFallbackSmartDocument(
   schoolContext: SchoolContext
 ): SmartAdminDocument {
   const currentYear = new Date().getFullYear();
-  const academicYear = `${currentYear - 1} / ${currentYear}`;
+  const academicYear = schoolContext.academicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || `${currentYear - 1} / ${currentYear}`;
   const currentDate = new Date().toISOString().split('T')[0];
 
   let title = 'سند طلب مصلحي داخلي';

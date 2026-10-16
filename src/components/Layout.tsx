@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { 
@@ -23,6 +23,8 @@ import {
   Package,
   Folder,
   BookOpen,
+  Building2,
+  FileCheck,
   Sun,
   Moon,
   QrCode,
@@ -55,7 +57,7 @@ import {
   Heart,
   FileSpreadsheet
 } from 'lucide-react';
-import { useState, useRef, useEffect, Suspense } from 'react';
+import { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -67,11 +69,18 @@ import Breadcrumbs from './Breadcrumbs';
 import NotificationCenter from './NotificationCenter';
 import logo from '/ministry-logo.png';
 import { ROUTES } from '../config/routes';
+import { isRouteAllowedForRole } from '../config/permissions';
 import { useTheme } from '../context/ThemeContext';
+import { useUserRole, ROLE_CONFIGS, UserRole } from '../context/UserRoleContext';
+import RoleProtectedRoute from './RoleProtectedRoute';
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { currentRole, roleConfig, setRole, teacherProfile, logoutRole } = useUserRole();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const roleMenuRef = useRef<HTMLDivElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024;
@@ -114,6 +123,16 @@ export default function Layout() {
   const { t, i18n } = useTranslation();
 
   const navigationGroups = [
+    {
+      title: t('nav.roles_group', 'فضاءات الرتب والمهام'),
+      icon: Award,
+      items: [
+        { name: t('nav.director_portal', 'فضاء مدير المؤسسة'), path: ROUTES.DIRECTOR_PORTAL, icon: Building2 },
+        { name: t('nav.censor_portal', 'فضاء ناظر الدروس'), path: ROUTES.CENSOR_PORTAL, icon: FileCheck },
+        { name: t('nav.teacher_portal', 'فضاء الأستاذ'), path: ROUTES.TEACHER_PORTAL, icon: GraduationCap },
+        { name: t('nav.economist_portal', 'فضاء المقتصد والمسير المالي'), path: ROUTES.ECONOMIST_PORTAL, icon: Wallet },
+      ]
+    },
     {
       title: t('nav.dashboard_group', 'لوحة التحكم الرئيسية'),
       icon: LayoutDashboard,
@@ -219,7 +238,20 @@ export default function Layout() {
       ]
     },
   ];
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(['لوحة التحكم الرئيسية', 'الجرد والمخزون']);
+
+  // Strictly filter navigation items and groups according to user role:
+  // "كل حساب تظهر له فقط البطاقات والصفحات التي تعنيه فقط"
+  const filteredNavigationGroups = useMemo(() => {
+    return navigationGroups.map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        if (item.external) return true;
+        return isRouteAllowedForRole(currentRole, item.path);
+      })
+    })).filter(group => group.items.length > 0);
+  }, [navigationGroups, currentRole]);
+
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(['فضاءات الرتب والمهام', 'لوحة التحكم الرئيسية', 'الجرد والمخزون']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
@@ -227,7 +259,7 @@ export default function Layout() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [hoveredGroupFlyout, setHoveredGroupFlyout] = useState<{
-    group: (typeof navigationGroups)[0];
+    group: (typeof filteredNavigationGroups)[0];
     top: number;
   } | null>(null);
   const [hoveredItemTooltip, setHoveredItemTooltip] = useState<{
@@ -236,7 +268,7 @@ export default function Layout() {
   } | null>(null);
   const flyoutTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleGroupMouseEnter = (group: (typeof navigationGroups)[0], e: React.MouseEvent<HTMLElement>) => {
+  const handleGroupMouseEnter = (group: (typeof filteredNavigationGroups)[0], e: React.MouseEvent<HTMLElement>) => {
     if (!isSidebarOpen) {
       if (flyoutTimeoutRef.current) clearTimeout(flyoutTimeoutRef.current);
       const rect = e.currentTarget.getBoundingClientRect();
@@ -281,22 +313,34 @@ export default function Layout() {
     setHoveredItemTooltip(null);
   };
 
-  const handleLogout = () => signOut(auth);
+  const handleLogout = async () => {
+    logoutRole();
+    try {
+      await signOut(auth);
+    } catch {}
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('role_changed'));
+    }
+    navigate(ROUTES.LOGIN);
+  };
 
-  // Close profile menu when clicking outside
+  // Close profile and role menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setIsProfileMenuOpen(false);
       }
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
+        setIsRoleMenuOpen(false);
+      }
     };
-    if (isProfileMenuOpen) {
+    if (isProfileMenuOpen || isRoleMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isProfileMenuOpen]);
+  }, [isProfileMenuOpen, isRoleMenuOpen]);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -408,7 +452,7 @@ export default function Layout() {
             isSidebarOpen ? "px-4 py-4 space-y-3" : "px-2 py-3 space-y-2 overflow-x-hidden"
           )}
         >
-          {navigationGroups.map((group) => {
+          {filteredNavigationGroups.map((group) => {
             const isExpanded = expandedGroups.includes(group.title);
             const hasActiveItem = group.items.some(item => !item.external && location.pathname === item.path);
             const GroupIcon = group.icon;
@@ -674,6 +718,157 @@ export default function Layout() {
               </button>
               <Search className="absolute end-3 top-1/2 -translate-y-1/2 text-secondary" size={18} />
             </div>
+            {/* Role Switcher in Top Bar */}
+            <div className="relative" ref={roleMenuRef}>
+              <button 
+                onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}
+                className={cn(
+                  "flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-bold transition-all border shadow-xs hover:opacity-90 active:scale-95",
+                  roleConfig.badgeClass
+                )}
+                title="تبديل الرتبة / فضاء العمل المخصص"
+                aria-label="تبديل الرتبة الحالية"
+              >
+                {currentRole === 'director' && <Building2 size={14} className="shrink-0" />}
+                {currentRole === 'censor' && <FileCheck size={14} className="shrink-0" />}
+                {currentRole === 'teacher' && <GraduationCap size={14} className="shrink-0" />}
+                {currentRole === 'lab_manager' && <FlaskConical size={14} className="shrink-0" />}
+                {currentRole === 'economist' && <Wallet size={14} className="shrink-0" />}
+                <span className="max-w-[90px] sm:max-w-[130px] truncate">{teacherProfile ? teacherProfile.name : roleConfig.shortLabel}</span>
+                <ChevronDown size={12} className={cn("shrink-0 transition-transform duration-200", isRoleMenuOpen && "rotate-180")} />
+              </button>
+
+              <AnimatePresence>
+                {isRoleMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                    className="absolute end-0 top-full mt-2 w-64 bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/40 p-2 z-50 text-start"
+                  >
+                    <div className="px-3 py-2 border-b border-outline-variant/40 mb-1">
+                      <p className="text-[10px] text-secondary font-black uppercase tracking-wider">الفضاءات والرتب المخصصة</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setRole('director');
+                        setIsRoleMenuOpen(false);
+                        navigate(ROUTES.DIRECTOR_PORTAL);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors mb-1 text-start",
+                        currentRole === 'director' ? "bg-indigo-100 text-indigo-950 font-black dark:bg-indigo-950/80 dark:text-indigo-200" : "hover:bg-surface-container text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                          <Building2 size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">فضاء مدير المؤسسة</p>
+                          <p className="text-[10px] text-secondary">المصادقة الإدارية ومؤشرات الأداء</p>
+                        </div>
+                      </div>
+                      {currentRole === 'director' && <span className="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold">نشط</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setRole('censor');
+                        setIsRoleMenuOpen(false);
+                        navigate(ROUTES.CENSOR_PORTAL);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors mb-1 text-start",
+                        currentRole === 'censor' ? "bg-emerald-100 text-emerald-950 font-black dark:bg-emerald-950/80 dark:text-emerald-200" : "hover:bg-surface-container text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                          <FileCheck size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">فضاء ناظر الدروس</p>
+                          <p className="text-[10px] text-secondary">اعتماد الحصص وتأشيرة التقارير</p>
+                        </div>
+                      </div>
+                      {currentRole === 'censor' && <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">نشط</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setRole('teacher');
+                        setIsRoleMenuOpen(false);
+                        navigate(ROUTES.TEACHER_PORTAL);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors mb-1 text-start",
+                        currentRole === 'teacher' ? "bg-sky-100 text-sky-950 font-black dark:bg-sky-950/80 dark:text-sky-200" : "hover:bg-surface-container text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-600">
+                          <GraduationCap size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">فضاء الأستاذ</p>
+                          <p className="text-[10px] text-secondary">حجز الحصص وطلب العتاد والإتلاف</p>
+                        </div>
+                      </div>
+                      {currentRole === 'teacher' && <span className="text-[10px] bg-sky-600 text-white px-2 py-0.5 rounded-full font-bold">نشط</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setRole('lab_manager');
+                        setIsRoleMenuOpen(false);
+                        navigate(ROUTES.HOME);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors mb-1 text-start",
+                        currentRole === 'lab_manager' ? "bg-amber-100 text-amber-950 font-black dark:bg-amber-950/80 dark:text-amber-200" : "hover:bg-surface-container text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600">
+                          <FlaskConical size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">فضاء مسؤول المخبر</p>
+                          <p className="text-[10px] text-secondary">إدارة الجرد والتقارير اليومية</p>
+                        </div>
+                      </div>
+                      {currentRole === 'lab_manager' && <span className="text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-full font-bold">نشط</span>}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setRole('economist');
+                        setIsRoleMenuOpen(false);
+                        navigate(ROUTES.ECONOMIST_PORTAL);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between p-2.5 rounded-xl text-xs transition-colors text-start",
+                        currentRole === 'economist' ? "bg-purple-100 text-purple-950 font-black dark:bg-purple-950/80 dark:text-purple-200" : "hover:bg-surface-container text-foreground"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-600">
+                          <Wallet size={16} />
+                        </div>
+                        <div>
+                          <p className="font-bold leading-tight">فضاء المقتصد والمسير المالي</p>
+                          <p className="text-[10px] text-secondary">الميزانية، طلبيات المستهلكات، والتكهين</p>
+                        </div>
+                      </div>
+                      {currentRole === 'economist' && <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold">نشط</span>}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             <div className="flex items-center gap-3 relative" ref={profileMenuRef}>
               <NotificationCenter />
               <button 
@@ -700,17 +895,29 @@ export default function Layout() {
                     className="absolute end-0 top-full mt-2 w-64 max-w-[calc(100vw-2rem)] bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/40 p-2 z-50 text-start"
                   >
                     <div className="px-4 py-3 border-b border-outline-variant/50 mb-2">
-                      <p className="text-sm font-bold text-primary truncate">{auth.currentUser?.displayName || 'مستخدم'}</p>
-                      <p className="text-[10px] text-secondary truncate mb-2">{auth.currentUser?.email || auth.currentUser?.phoneNumber}</p>
-                      {userRole && (
-                        <div className="flex flex-wrap gap-1">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-black border border-primary/5 shadow-sm">
-                            {userRole}
-                          </span>
-                        </div>
-                      )}
+                      <p className="text-sm font-bold text-primary truncate">
+                        {teacherProfile ? teacherProfile.name : (auth.currentUser?.displayName || roleConfig.label)}
+                      </p>
+                      <p className="text-[10px] text-secondary truncate mb-2">
+                        {teacherProfile ? `الرمز: ${teacherProfile.functionalCode}` : (auth.currentUser?.email || auth.currentUser?.phoneNumber || 'حساب محلي')}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        <span className={cn("inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black border shadow-xs", roleConfig.badgeClass)}>
+                          {roleConfig.label}
+                        </span>
+                      </div>
                     </div>
                     
+                    {/* Direct Portal Link */}
+                    <Link
+                      to={roleConfig.defaultPath}
+                      onClick={() => setIsProfileMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2 text-sm text-primary font-bold hover:bg-primary/5 rounded-xl transition-colors mb-1"
+                    >
+                      <Award size={18} className="text-primary" />
+                      <span>{roleConfig.label}</span>
+                    </Link>
+
                     {isAdmin && (
                       <Link 
                         to={ROUTES.ADMIN} 
@@ -756,7 +963,9 @@ export default function Layout() {
                 </div>
               </div>
             }>
-              <Outlet />
+              <RoleProtectedRoute>
+                <Outlet />
+              </RoleProtectedRoute>
             </Suspense>
           </ErrorBoundary>
         </main>

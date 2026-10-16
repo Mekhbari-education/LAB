@@ -65,7 +65,7 @@ const INITIAL_GLASSWARE: Partial<GlasswareItem>[] = [
 ];
 
 export default function GlasswareBreakage({ isNested = false }: { isNested?: boolean }) {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
   const { data: items, loading, invalidate } = 
     useSqlCollection<GlasswareItem>('glassware_inventory', '/api/db/glassware');
@@ -233,7 +233,7 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
             <p className="font-bold text-sm">وزارة التربية الوطنية</p>
           </div>
           <div className="text-left text-sm font-bold">
-            <p>السنة الدراسية: 2025 - 2026</p>
+            <p>السنة الدراسية: {academicYear || '2025/2026'}</p>
           </div>
         </div>
         <h2 className="text-center text-2xl font-black underline mt-6">جرد مخزون الزجاجيات — مخبر الوسائل التعليمية</h2>

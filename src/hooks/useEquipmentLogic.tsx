@@ -14,7 +14,7 @@ import { Equipment, MaintenanceLog } from '../types/equipment';
 import { formatSchoolWithCommune } from '../lib/utils';
 
 export function useEquipmentLogic(isNested = false) {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [equipment, setEquipment] = useState<Equipment[]>([]);

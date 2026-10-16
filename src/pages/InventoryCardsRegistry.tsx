@@ -61,7 +61,7 @@ type PrintScope = 'single' | 'all' | 'table';
 
 export default function InventoryCardsRegistry() {
   const { t, i18n } = useTranslation();
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -226,6 +226,7 @@ export default function InventoryCardsRegistry() {
         directorate,
         schoolName,
         commune,
+        academicYear,
         includeOfficialHeader,
         includeQrCode,
         includeStampBox,
@@ -442,7 +443,7 @@ export default function InventoryCardsRegistry() {
                   <div className="text-base font-black mt-1 underline decoration-double">سجل بطاقات الجرد العام للوسائل التعليمية</div>
                 </div>
                 <div className="text-left text-xs font-bold">
-                  السنة الدراسية: 2025 / 2026<br />
+                  السنة الدراسية: {academicYear || '2025/2026'}<br />
                   تاريخ الطباعة: {new Date().toLocaleDateString('ar-DZ')}<br />
                   عدد التجهيزات: {filteredItems.length}
                 </div>
@@ -519,7 +520,7 @@ export default function InventoryCardsRegistry() {
                           <div className="text-center">
                             <div className="font-black text-[8pt]">الجمهورية الجزائرية الديمقراطية الشعبية</div>
                             <div className="font-bold text-[7.5pt]">وزارة التربية الوطنية</div>
-                            <div className="font-bold text-[7pt] text-gray-700">السنة الدراسية: 2025 / 2026</div>
+                            <div className="font-bold text-[7pt] text-gray-700">السنة الدراسية: {academicYear || '2025/2026'}</div>
                           </div>
                           <div className="text-left text-[7pt]">
                             بطاقة الجرد رقم:<br />
@@ -820,7 +821,7 @@ export default function InventoryCardsRegistry() {
 
             <div className="space-y-2 text-start md:text-end">
               <p className="bg-primary/5 px-4 py-1.5 rounded-full inline-block">
-                {t('inventory_cards.academic_year', 'السنة الدراسية:')} <span className="font-black">2025 - 2026</span>
+                {t('inventory_cards.academic_year', 'السنة الدراسية:')} <span className="font-black">{academicYear || '2025/2026'}</span>
               </p>
             </div>
           </div>
@@ -1367,7 +1368,7 @@ export default function InventoryCardsRegistry() {
                               <div className="text-center">
                                 <div className="font-black text-[9pt]">الجمهورية الجزائرية الديمقراطية الشعبية</div>
                                 <div className="font-bold text-[8pt]">وزارة التربية الوطنية</div>
-                                <div className="font-bold text-[7.5pt] text-gray-600">السنة الدراسية: 2025 / 2026</div>
+                                <div className="font-bold text-[7.5pt] text-gray-600">السنة الدراسية: {academicYear || '2025/2026'}</div>
                               </div>
                               <div className="text-left text-[8pt]">
                                 بطاقة الجرد رقم:<br />
