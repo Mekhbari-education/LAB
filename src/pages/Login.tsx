@@ -379,13 +379,19 @@ export default function Login({ onRoleLogin }: LoginProps) {
       const userRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userRef);
       const isAdmin = await checkIsAdmin(user);
+      const isDirectorEmail = user.email === 'cemguettaftaher@gmail.com' || user.email?.toLowerCase().includes('director');
+      const defaultRole = (isAdmin || isDirectorEmail) ? 'director' : 'lab_manager';
+
       if (!userDoc.exists()) {
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
-          role: isAdmin ? 'director' : 'lab_manager',
-          displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
+          role: defaultRole,
+          institution: isDirectorEmail ? 'متوسطة قطاف الطاهر' : 'ثانوية عامة',
+          wilaya: isDirectorEmail ? '07 - بسكرة' : '16 - الجزائر',
+          displayName: user.displayName || user.email?.split('@')[0] || (isDirectorEmail ? 'مدير المؤسسة' : 'مستخدم جديد'),
           photoURL: user.photoURL || null,
+          hasCompletedSchoolSetup: isDirectorEmail ? false : true,
           createdAt: new Date().toISOString()
         }, { merge: true });
       } else {

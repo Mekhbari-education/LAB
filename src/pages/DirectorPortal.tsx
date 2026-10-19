@@ -21,18 +21,20 @@ import {
   MessageSquare, 
   ChevronRight, 
   X, 
-  FileText, 
-  ExternalLink 
+  ExternalLink,
+  School 
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
+import DirectorOnboardingModal from '../components/DirectorOnboardingModal';
 
 export default function DirectorPortal() {
-  const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { schoolId, schoolName, directorate, commune, hasCompletedSchoolSetup } = useSchool();
   const { setRole } = useUserRole();
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'visas' | 'safety' | 'inventory' | 'summary'>('visas');
   const [dailyReports, setDailyReports] = useState<any[]>([]);
@@ -45,6 +47,12 @@ export default function DirectorPortal() {
   const [directorRemarks, setDirectorRemarks] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (!hasCompletedSchoolSetup) {
+      setIsOnboardingOpen(true);
+    }
+  }, [hasCompletedSchoolSetup]);
 
   useEffect(() => {
     try {
@@ -165,7 +173,15 @@ export default function DirectorPortal() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+            <button
+              onClick={() => setIsOnboardingOpen(true)}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 shadow-sm"
+              title="تهيئة وتأسيس وتحديث قاعدة بيانات المؤسسة التعليمية"
+            >
+              <School size={16} />
+              <span>تهيئة بيانات المؤسسة</span>
+            </button>
             <button
               onClick={() => setRole('lab_manager')}
               className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-all flex items-center gap-2"
@@ -564,6 +580,12 @@ export default function DirectorPortal() {
           </motion.div>
         </div>
       )}
+
+      {/* Director School Database Setup & Foundation Wizard */}
+      <DirectorOnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
     </div>
   );
 }

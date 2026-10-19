@@ -11,6 +11,7 @@ import {
   Bell,
   Globe,
   LogOut,
+  Check,
   CheckCircle2,
   Map as MapIcon,
   Users,
@@ -57,6 +58,7 @@ import { ROUTES } from '../config/routes';
 import * as XLSX from 'xlsx';
 import { cn } from '../lib/utils';
 import LocationCard, { InstitutionSuggestion } from '../components/LocationCard';
+import { OFFICIAL_GRADES, OFFICIAL_PERSONNEL_CATEGORIES, cleanGradeName } from '../constants/grades';
 
 export default function SettingsPage() {
   const { 
@@ -781,7 +783,7 @@ export default function SettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setJobTitle(data.jobTitle || 'ملحق بالمخابر');
+          setJobTitle(cleanGradeName(data.jobTitle || 'ملحق بالمخابر'));
           setGrade(data.grade || '');
           setSpecialty(data.specialty || '');
           setSchoolAddress(data.address || '');
@@ -928,10 +930,27 @@ export default function SettingsPage() {
           timeSlots,
           schoolLogo: customLogoUrl || null,
           institutionLogo: customLogoUrl || null,
-          profilePhoto: auth.currentUser?.photoURL || null,
           'printSettings.institution.academicYear': cleanAcademicYear,
           updatedAt: new Date().toISOString()
         }, { merge: true });
+
+        // Also update shared school document if active
+        if (schoolId && schoolId !== auth.currentUser.uid) {
+          try {
+            await setDoc(doc(db, 'settings', schoolId), {
+              schoolId,
+              schoolName: resolvedSchoolName,
+              directorateName: dirName,
+              commune: selectedCommune,
+              communeName: comName,
+              academicYear: cleanAcademicYear,
+              schoolLogo: customLogoUrl || null,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (sErr) {
+            console.warn('Shared school doc update warning:', sErr);
+          }
+        }
 
         if (newPassword) {
           if (newPassword !== confirmPassword) {
@@ -1316,25 +1335,40 @@ export default function SettingsPage() {
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-sm font-black text-secondary mr-2">الرتبة المهنية</label>
+                      <div className="flex items-center justify-between mr-2">
+                        <label className="text-sm font-black text-secondary">الرتبة / الصفة الوظيفية الرسمية</label>
+                        <span className="text-[11px] font-bold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                          المرسوم التنفيذي رقم 25-54
+                        </span>
+                      </div>
                       <select 
-                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all text-on-surface font-bold appearance-none"
-                        value={jobTitle}
-                        onChange={(e) => setJobTitle(e.target.value)}
+                        className="w-full bg-background border-2 border-transparent rounded-[20px] px-6 py-4 focus:ring-0 focus:border-primary transition-all text-on-surface font-bold appearance-none cursor-pointer"
+                        value={cleanGradeName(jobTitle)}
+                        onChange={(e) => setJobTitle(cleanGradeName(e.target.value))}
                       >
-                        <optgroup label="سلك الأعوان التقنيين للمخابر">
-                          <option value="عون تقني للمخابر">عون تقني للمخابر</option>
-                        </optgroup>
-                        <optgroup label="سلك المعاونين التقنيين للمخابر">
-                          <option value="معاون تقني للمخابر">معاون تقني للمخابر</option>
-                        </optgroup>
-                        <optgroup label="سلك الملحقين بالمخابر">
-                          <option value="ملحق بالمخابر">ملحق بالمخابر</option>
-                          <option value="ملحق رئيسي بالمخابر">ملحق رئيسي بالمخابر</option>
-                          <option value="ملحق رئيس بالمخابر">ملحق رئيس بالمخابر</option>
-                          <option value="ملحق مشرف بالمخابر">ملحق مشرف بالمخابر</option>
-                        </optgroup>
+                        <option value="">اختر الرتبة / الصفة الوظيفية الرسمية...</option>
+                        {OFFICIAL_PERSONNEL_CATEGORIES.map((cat) => {
+                          const catGrades = OFFICIAL_GRADES.filter(g => g.categoryGroup === cat.title);
+                          return (
+                            <optgroup key={cat.id} label={`── ${cat.title} ──`}>
+                              {catGrades.map((g) => {
+                                const pureName = cleanGradeName(g.name);
+                                return (
+                                  <option key={g.code} value={pureName}>
+                                    {pureName}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          );
+                        })}
                       </select>
+                      {jobTitle && (
+                        <p className="text-xs font-bold text-primary flex items-center gap-1.5 mt-1 mr-2">
+                          <Check size={13} className="text-emerald-500" />
+                          <span>الصفة المعتمدة: <strong>{cleanGradeName(jobTitle)}</strong></span>
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-3">
                       <label className="text-sm font-black text-secondary mr-2">الدرجة / السلم</label>

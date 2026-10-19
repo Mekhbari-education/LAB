@@ -14,9 +14,13 @@ export interface UserProfileData {
   nationalId: string;       // رقم التعريف الوطني أو الوظيفي
   institution: string;      // المؤسسة التعليمية (ثانوية / متوسطة)
   wilaya?: string;          // الولاية
+  commune?: string;         // البلدية
+  directorate?: string;     // مديرية التربية
+  educationLevel?: string;  // الطور التعليمي
   phone?: string;           // رقم الهاتف
   subject?: string;         // مادة التدريس (للأستاذ)
   grade?: string;           // الدرجة أو الرتبة
+  gradeCode?: string;       // رمز الرتبة الوزاري الرسمي
   levels?: string[];        // الأطوار والمستويات
   createdAt?: any;
   status: 'active';

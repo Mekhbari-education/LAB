@@ -11,87 +11,62 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && request.auth.token.admin == true;
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'faycalassoul@gmail.com'
+      );
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    // --- Entity Validations ---
-
-    function isValidChemical(data) {
-      return data.keys().hasAll(['name', 'quantity', 'unit']) &&
-             data.name is string && data.name.size() <= 200 &&
-             data.quantity is number &&
-             data.unit is string && data.unit.size() <= 20;
-    }
-
-    function isValidEquipment(data) {
-      return data.keys().hasAll(['name', 'type', 'status', 'totalQuantity']) &&
-             data.name is string && data.name.size() <= 200 &&
-             data.type in ['glassware', 'tech', 'other'] &&
-             data.status in ['functional', 'maintenance', 'broken'] &&
-             data.totalQuantity is number;
-    }
-
-    function isValidTeacher(data) {
-      return data.keys().hasAll(['name']) &&
-             data.name is string && data.name.size() <= 100;
-    }
-
-    function isValidLog(data) {
-      return data.keys().hasAll(['userId', 'action', 'module', 'details', 'timestamp']) &&
-             data.userId == request.auth.uid &&
-             data.action is string &&
-             data.module is string &&
-             data.details is string &&
-             data.timestamp == request.time;
-    }
-
-    function isValidSettings(data) {
-      return data.keys().hasAll(['school', 'directorate']) &&
-             data.school is string && data.school.size() <= 200 &&
-             data.directorate is string && data.directorate.size() <= 200;
-    }
-
-    // --- Collection Matches ---
-
-    // User Documents
+    // --- User Documents ---
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isSignedIn();
       allow write: if isOwner(userId) || isAdmin();
     }
     match /users {
-      allow list: if isAdmin();
+      allow list: if isSignedIn();
     }
 
-    // Isolated School/User Data (all subcollections and documents)
+    // --- Registered Schools Directory (Multi-Tenant Linking) ---
+    match /registered_schools/{schoolId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /registered_schools {
+      allow list: if true;
+    }
+
+    // --- Shared School Data (all subcollections and documents) ---
     match /schools/{schoolId}/{allPaths=**} {
-      allow read, write: if isSignedIn() && (request.auth.uid == schoolId || schoolId == 'school_001' || isAdmin());
+      allow read, write: if isSignedIn();
     }
-
-    // Schools Database
     match /schools/{id} {
-      allow read: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
     
-    match /school_metadata/directorates {
-      allow read: if isSignedIn();
+    match /school_metadata/{allPaths=**} {
+      allow read: if true;
+    }
+
+    // --- Settings Profile & Shared School Settings ---
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    match /settings {
+      allow list: if true;
+    }
+
+    // --- Teachers Directory ---
+    match /teachers/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /teachers {
+      allow list: if isSignedIn();
     }
 
     // Public National Legislation (Shared official decrees, circulars and laws across all schools)
     match /public_legislation/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn();
     }
     match /public_legislation {
       allow list: if isSignedIn();
@@ -137,23 +112,11 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Settings Profile
-    match /settings/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId) || isAdmin();
-    }
-    match /settings {
-      allow list: if isAdmin();
-    }
-
     // Root level data collections fallback for backward compatibility
     match /chemicals/{id} {
       allow read, write: if isSignedIn();
     }
     match /equipment/{id} {
-      allow read, write: if isSignedIn();
-    }
-    match /teachers/{id} {
       allow read, write: if isSignedIn();
     }
     match /reports/{id} {
