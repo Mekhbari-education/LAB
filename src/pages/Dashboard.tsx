@@ -179,9 +179,9 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Strict role enforcement: If role is specialized (teacher, censor, economist), redirect to their dedicated portal
+  // Strict role enforcement: If role is not lab_manager, redirect to their dedicated portal
   useEffect(() => {
-    if (currentRole && currentRole !== 'lab_manager' && currentRole !== 'director') {
+    if (currentRole && currentRole !== 'lab_manager') {
       const target = roleConfig?.defaultPath;
       if (target && target !== ROUTES.HOME) {
         navigate(target, { replace: true });
@@ -237,9 +237,11 @@ export default function Dashboard() {
 
   // Firestore Subscriptions
   useEffect(() => {
-    if (auth.currentUser) {
-      checkIsAdmin(auth.currentUser).then(setIsAdmin);
+    if (!auth.currentUser) {
+      return;
     }
+
+    checkIsAdmin(auth.currentUser).then(setIsAdmin);
 
     const unsubReports = onSnapshot(getUserCollection(schoolId, 'reports'), (snap) => {
       setCounts(prev => ({ ...prev, reports: snap.size }));
@@ -248,7 +250,7 @@ export default function Dashboard() {
         .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
         .slice(0, 4);
       setRecentReports(reports);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'reports'));
+    }, (err) => logger.warn('Dashboard: Failed to load reports', err));
 
     const unsubExps = onSnapshot(getUserCollection(schoolId, 'experiment_logs'), (snap) => {
       setCounts(prev => ({ ...prev, experiments: snap.size }));
@@ -266,7 +268,7 @@ export default function Dashboard() {
         }
       });
       setGraphData(stats);
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'experiment_logs'));
+    }, (err) => logger.warn('Dashboard: Failed to load experiment logs', err));
 
     const unsubEquip = onSnapshot(getUserCollection(schoolId, 'equipment'), (snap) => {
       const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as EquipmentItem));
@@ -276,11 +278,11 @@ export default function Dashboard() {
       setCounts(prev => ({ 
         ...prev, 
         equipment: snap.size, 
-        brokenEquip: broken.length,
+        brokenEquip: broken.length, 
         functionalEquip: functional.length || (snap.size - broken.length)
       }));
       setBrokenItems(broken.slice(0, 6));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'equipment'));
+    }, (err) => logger.warn('Dashboard: Failed to load equipment', err));
 
     const unsubChem = onSnapshot(getUserCollection(schoolId, 'chemicals'), (snap) => {
       const today = new Date();
@@ -304,11 +306,11 @@ export default function Dashboard() {
       }));
       setLowStockItems(low.slice(0, 6));
       setExpiringItems(expiring.slice(0, 6));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'chemicals'));
+    }, (err) => logger.warn('Dashboard: Failed to load chemicals', err));
 
     const unsubTeachers = onSnapshot(getUserCollection(schoolId, 'teachers'), (snap) => {
       setCounts(prev => ({ ...prev, teachers: snap.size }));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'teachers'));
+    }, (err) => logger.warn('Dashboard: Failed to load teachers', err));
 
     const unsubIncidents = onSnapshot(getUserCollection(schoolId, 'safety_incidents'), (snap) => {
       setCounts(prev => ({ ...prev, incidents: snap.size }));
@@ -326,7 +328,7 @@ export default function Dashboard() {
       unsubTeachers();
       unsubIncidents();
     };
-  }, [schoolId]);
+  }, [schoolId, auth.currentUser]);
 
   // Readiness Calculation
   const labReadinessPercent = useMemo(() => {
@@ -837,6 +839,45 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* ── Statutory Rank & Institutional Collaboration Banner ── */}
+      <section aria-label="بيانات الرتبة والربط المؤسساتي" className="p-4 rounded-2xl bg-gradient-to-r from-primary/10 via-surface-container to-emerald-500/10 border border-primary/20 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
+              <FlaskConical size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base font-black text-primary">
+                  {userProfile?.grade || 'مسؤول المخبر'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  فضاء مسؤول المخبر (معتمد رسمياً)
+                </span>
+                <span className="text-[10px] text-on-surface/60 font-bold">
+                  {userProfile?.corps || 'سلك موظفي المخابر (المرسوم التنفيذي 25-54)'}
+                </span>
+              </div>
+              <p className="text-xs text-on-surface/80 font-medium mt-0.5">
+                المؤسسة: <strong className="text-primary font-bold">{userProfile?.institution || localStorage.getItem('algeria_lab_school_name') || 'المؤسسة التعليمية'}</strong>
+                {userProfile?.directorate && ` · ${userProfile.directorate}`}
+                {userProfile?.commune && ` · بلدية ${userProfile.commune}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-on-surface/70 bg-surface/80 p-2.5 rounded-xl border border-outline/10 self-start md:self-center">
+            <Database size={16} className="text-primary shrink-0" />
+            <div className="text-start">
+              <span className="block font-black text-primary text-[11px]">قاعدة البيانات المشتركة للمؤسسة</span>
+              <span className="block text-[10px] text-on-surface/60">
+                مرتبطة تلقائياً مع: الأساتذة · ناظر الدروس · المدير · المقتصد
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── 2. Quick Command Bar ────────────────────────────────────────── */}
       <section aria-label="الإجراءات السريعة" className="space-y-3">

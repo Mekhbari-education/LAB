@@ -255,7 +255,7 @@ export function useDailyReport() {
   }, [schoolId]);
 
   useEffect(() => {
-    if (activeTab === 'history' && auth.currentUser && schoolId) {
+    if (auth.currentUser && schoolId) {
       setIsLoadingHistory(true);
       const q = query(
         getUserCollection(schoolId, 'daily_reports'),
@@ -277,7 +277,7 @@ export function useDailyReport() {
 
       return () => unsubscribe();
     }
-  }, [activeTab, schoolId]);
+  }, [schoolId]);
 
   const generateNextReportNumber = async () => {
     if (!auth.currentUser) return '01';
@@ -638,28 +638,37 @@ export function useDailyReport() {
   }, [rows, noActivities]);
 
   // Save report
-  const handleSave = async () => {
+  const handleSave = async (options?: { overrideNoActivities?: boolean }) => {
     if (!auth.currentUser) return;
     setIsSaving(true);
     try {
+      const isNoAct = options?.overrideNoActivities !== undefined ? options.overrideNoActivities : noActivities;
+      let activeNum = reportNumber;
+      if (!activeNum) {
+        activeNum = await generateNextReportNumber();
+        setReportNumber(activeNum);
+      }
       const reportId = `${auth.currentUser.uid}_${date}`;
+      const defaultReason = 'لا توجد أنشطة تطبيقية مبرمجة لهذا اليوم بالمخبر';
+      const reasonToSave = isNoAct ? (noActivitiesReason?.trim() || defaultReason) : '';
+
       await setDoc(doc(getUserCollection(schoolId, 'daily_reports'), reportId), {
         date,
-        reportNumber,
+        reportNumber: activeNum,
         dayName: getDayName(date),
         routing: docRouting,
         department: docDepartment,
         academicYear: docAcademicYear,
         location: docLocation,
-        sender: docSender,
+        sender: formatOfficialRankTitle(docSender),
         recipient: docRecipient,
         signers: docSigners,
-        noActivities,
-        noActivitiesReason,
-        rows: noActivities ? [] : rows,
-        labNotes,
-        supervisorNotes,
-        directorNotes,
+        noActivities: isNoAct,
+        noActivitiesReason: reasonToSave,
+        rows: isNoAct ? [] : rows,
+        labNotes: labNotes?.trim() || '',
+        supervisorNotes: supervisorNotes?.trim() || '',
+        directorNotes: directorNotes?.trim() || '',
         createdBy: auth.currentUser.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -1384,14 +1393,44 @@ export function useDailyReport() {
 
   const printNoActivitiesReport = async () => {
     const printTab = window.open('', '_blank');
+    if (printTab) {
+      printTab.document.write(`
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="utf-8">
+            <title>جاري تحضير استمارة التقرير اليومي (نموذج خاص)...</title>
+            <style>
+              body { font-family: 'Amiri', 'Segoe UI', Tahoma, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; direction: rtl; }
+              .box { text-align: center; }
+              .spinner { width: 36px; height: 36px; border: 4px solid #cbd5e1; border-top-color: #d97706; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <div class="spinner"></div>
+              <div style="font-weight: 900; font-size: 16px;">جاري تجهيز استمارة التقرير اليومي للمخبر (نموذج خاص: يوم بدون أنشطة) وحفظه في الأرشيف...</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 6px;">يُرجى الانتظار ثوانٍ معدودة...</div>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
+    setNoActivities(true);
+    await handleSave({ overrideNoActivities: true });
+
     const html = generateDailyReportHtml({ overrideNoActivities: true });
     await PrintService.printInNewTab(html, {
-      title: 'التقرير اليومي للمخبر (نموذج خاص: يوم بدون أنشطة تطبيقية)',
+      title: `التقرير اليومي للمخبر (نموذج خاص: يوم بدون أنشطة تطبيقية) - ${date}`,
       existingWindow: printTab
     });
   };
 
   const downloadNoActivitiesPDF = async () => {
+    setNoActivities(true);
+    await handleSave({ overrideNoActivities: true });
     await PDFService.generateDailyReportPDF({
       date,
       reportNumber,
@@ -1403,7 +1442,7 @@ export function useDailyReport() {
       sender: formatOfficialRankTitle(docSender),
       signers: [formatOfficialRankTitle(docSigners[0] || docSender), 'الناظر', 'مدير المؤسسة'],
       noActivities: true,
-      noActivitiesReason,
+      noActivitiesReason: noActivitiesReason?.trim() || 'لا توجد أنشطة تطبيقية مبرمجة لهذا اليوم بالمخبر',
       schoolInfo: {
         school: institution?.school,
         commune: institution?.commune || docLocation,
@@ -1419,7 +1458,9 @@ export function useDailyReport() {
     });
   };
 
-  const downloadNoActivitiesWord = () => {
+  const downloadNoActivitiesWord = async () => {
+    setNoActivities(true);
+    await handleSave({ overrideNoActivities: true });
     PDFService.generateDailyReportWord({
       date,
       reportNumber,
@@ -1428,10 +1469,10 @@ export function useDailyReport() {
       location: docLocation,
       routing: docRouting,
       recipient: docRecipient,
-      sender: docSender,
-      signers: ['الملحق الرئيس بالمخابر', 'الناظر', 'المدير'],
+      sender: formatOfficialRankTitle(docSender),
+      signers: [formatOfficialRankTitle(docSigners[0] || docSender), 'الناظر', 'مدير المؤسسة'],
       noActivities: true,
-      noActivitiesReason,
+      noActivitiesReason: noActivitiesReason?.trim() || 'لا توجد أنشطة تطبيقية مبرمجة لهذا اليوم بالمخبر',
       schoolInfo: {
         school: institution?.school,
         commune: institution?.commune || docLocation,
@@ -1439,7 +1480,7 @@ export function useDailyReport() {
         laboratory: docDepartment
       },
       observations: {
-        labNotes: labNotes || 'تم استغلال اليوم في أعمال الصيانة الدورية وتنظيم وتصنيف عتاد المخبر وتحضير المحاليل والتجارب في ظروف عادية.',
+        labNotes: labNotes?.trim() || 'تم استغلال اليوم في أعمال الصيانة الدورية وتنظيم وتصنيف عتاد المخبر وتحضير المحاليل والتجارب في ظروف عادية.',
         supervisorNotes,
         directorNotes
       },

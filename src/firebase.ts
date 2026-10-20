@@ -156,15 +156,14 @@ export async function testFirestoreConnection(retries = 3) {
  * Gets a user-scoped collection reference.
  * Path: schools/{schoolId}/{collectionName}
  */
-export const getUserCollection = (schoolId: string, collectionName: string) => {
-  if (!auth.currentUser) {
-    fbError("DEBUG: getUserCollection called without auth.currentUser. Collection:", collectionName);
-    throw new Error("User must be authenticated to access personal data");
-  }
-  const effectiveSchoolId = (schoolId && schoolId !== 'school_001') ? schoolId : auth.currentUser.uid;
-  const path = `schools/${effectiveSchoolId}/${collectionName}`;
+export const getUserCollection = (schoolId?: string | null, collectionName: string = 'reports') => {
+  const safeCollectionName = collectionName || 'reports';
+  const effectiveSchoolId = (schoolId && schoolId !== 'school_001' && schoolId.trim() !== '')
+    ? schoolId.trim()
+    : (auth.currentUser ? auth.currentUser.uid : (typeof localStorage !== 'undefined' ? localStorage.getItem('algeria_lab_school_id') || 'default_school' : 'default_school'));
+  const path = `schools/${effectiveSchoolId}/${safeCollectionName}`;
   fbLog(`DEBUG: Getting collection at path: ${path}`);
-  return collection(db, 'schools', effectiveSchoolId, collectionName);
+  return collection(db, 'schools', effectiveSchoolId, safeCollectionName);
 };
 
 

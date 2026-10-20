@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../context/SchoolContext';
+import { useUserRole } from '../context/UserRoleContext';
 import { onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { handleFirestoreError, OperationType, getUserCollection } from '../firebase';
 import { 
@@ -74,7 +75,31 @@ interface ChemicalCatalogItem {
 
 export default function ActivityRequest() {
   const { schoolId, schoolName, directorate, commune, jobTitle, academicYear } = useSchool();
-  const officialLabOfficerTitle = formatOfficialRankTitle(jobTitle) || 'الملحق الرئيس بالمخابر';
+  const { userProfile } = useUserRole();
+
+  // Resolve official laboratory officer rank chosen in settings / statutory profile
+  // The activity request is submitted to the lab officer, never to the director.
+  const resolvedLabOfficerRank = (() => {
+    // 1. Check userProfile grade if not director and not teacher
+    if (userProfile?.grade && !userProfile.grade.includes('مدير') && !userProfile.grade.includes('أستاذ')) {
+      return userProfile.grade;
+    }
+    // 2. Check localStorage saved lab rank
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade');
+      if (stored && !stored.includes('مدير') && !stored.includes('أستاذ')) {
+        return stored;
+      }
+    }
+    // 3. Check schoolContext jobTitle if not director and not teacher
+    if (jobTitle && !jobTitle.includes('مدير') && !jobTitle.includes('أستاذ')) {
+      return jobTitle;
+    }
+    // 4. Fallback default official rank
+    return 'ملحق رئيس بالمخابر';
+  })();
+
+  const officialLabOfficerTitle = formatOfficialRankTitle(resolvedLabOfficerRank);
   const { openPdfPreview } = usePdfPreview();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipmentList, setEquipmentList] = useState<EquipmentCatalogItem[]>([]);
@@ -779,14 +804,14 @@ export default function ActivityRequest() {
                   />
                 </div>
                 <div className="h-32 w-64 border-2 border-dashed border-primary/20 rounded-2xl flex flex-col items-center justify-center bg-surface-container-low/20 gap-2 p-3 text-center">
-                  <p className="text-[11px] font-black text-primary">توقيع أستاذ(ة) المادة</p>
-                  <p className="text-[10px] text-on-surface/40">(الاسم والتوقيع)</p>
+                  <p className="text-[12px] font-black text-primary">أستاذ(ة) المادة</p>
+                  <p className="text-[10px] text-on-surface/50 font-medium">(الاسم والتوقيع)</p>
                 </div>
               </div>
               
               <div className="h-32 w-64 border-2 border-dashed border-primary/20 rounded-2xl flex flex-col items-center justify-center bg-surface-container-low/20 gap-2 p-3 text-center">
-                <p className="text-[11px] font-black text-primary">توقيع {officialLabOfficerTitle}</p>
-                <p className="text-[10px] text-on-surface/40">(التأشيرة والختم)</p>
+                <p className="text-[12px] font-black text-primary">{officialLabOfficerTitle}</p>
+                <p className="text-[10px] text-on-surface/50 font-medium">(التوقيع والختم)</p>
               </div>
             </div>
           </div>

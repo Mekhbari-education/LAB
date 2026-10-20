@@ -182,14 +182,6 @@ export default function DirectorPortal() {
               <School size={16} />
               <span>تهيئة بيانات المؤسسة</span>
             </button>
-            <button
-              onClick={() => setRole('lab_manager')}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl border border-white/20 transition-all flex items-center gap-2"
-              title="التبديل إلى واجهة مسؤول المخبر"
-            >
-              <span>تبديل الواجهة</span>
-              <ChevronRight size={14} className="rotate-180" />
-            </button>
           </div>
         </div>
 

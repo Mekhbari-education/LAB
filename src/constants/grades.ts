@@ -175,6 +175,15 @@ export const OFFICIAL_GRADES: OfficialGrade[] = [
     cycle: 'ثانوي',
     roles: ['teacher']
   },
+  {
+    code: '09010505',
+    name: 'أستاذ مبرز في التعليم الثانوي',
+    categoryGroup: 'موظفو التعليم',
+    corps: 'سلك أساتذة التعليم الثانوي',
+    category: 'enseignant',
+    cycle: 'ثانوي',
+    roles: ['teacher']
+  },
 
   // ──────────────────────────────────────────────────────────────────────────
   // 2. موظفو التربية
@@ -217,6 +226,15 @@ export const OFFICIAL_GRADES: OfficialGrade[] = [
     cycle: 'متوسط',
     roles: ['censor'],
     isExtinction: true
+  },
+  {
+    code: '09020202',
+    name: 'مستشار رئيسي للتربية',
+    categoryGroup: 'موظفو التربية',
+    corps: 'سلك مستشاري التربية',
+    category: 'administratif',
+    cycle: 'مشترك',
+    roles: ['censor']
   },
   // سلك مساعدي التربية
   {
@@ -671,25 +689,25 @@ export const OFFICIAL_PERSONNEL_CATEGORIES: PersonnelCategoryMeta[] = [
     id: 'teaching',
     title: 'موظفو التعليم',
     shortTitle: 'التعليم والتدريس',
-    badge: '5 أسلاك • 14 رتبة',
+    badge: '5 أسلاك • 15 رتبة',
     colorClass: 'text-sky-600 bg-sky-50 dark:bg-sky-950/40 dark:text-sky-300',
     activeBorder: 'border-sky-600 ring-2 ring-sky-500/20 bg-sky-50/40 dark:bg-sky-950/40',
     description: 'أساتذة ومعلمو المراحل التعليمية الثلاث (ابتدائي، متوسط، ثانوي)، حجز الحصص وطلبات الوسائل.',
     defaultRole: 'teacher',
     corpsCount: 5,
-    gradesCount: 14
+    gradesCount: 15
   },
   {
     id: 'education_supervision',
     title: 'موظفو التربية',
     shortTitle: 'التأطير التربوي والنظار',
-    badge: '5 أسلاك • 14 رتبة',
+    badge: '5 أسلاك • 15 رتبة',
     colorClass: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300',
     activeBorder: 'border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/40 dark:bg-emerald-950/40',
     description: 'النظار، مستشارو ومشرفو ومساعدو التربية، ومربو الدعم التربوي، التنسيق البيداغوجي وتأشير الحصص.',
     defaultRole: 'censor',
     corpsCount: 5,
-    gradesCount: 14
+    gradesCount: 15
   },
   {
     id: 'orientation',
@@ -830,3 +848,26 @@ export function findGradeByCodeOrName(identifier: string): OfficialGrade | undef
     cleanGradeName(g.name) === normalizedClean
   );
 }
+
+/**
+ * تحديد الفضاء الوظيفي المعتمد حصرياً بناءً على الرتبة طبقاً للمرسوم التنفيذي 25-54
+ */
+export function getWorkspaceRoleForGrade(grade: OfficialGrade): 'teacher' | 'censor' | 'director' | 'lab_manager' | 'economist' {
+  if (grade.roles && grade.roles.length > 0) {
+    return grade.roles[0];
+  }
+  if (grade.categoryGroup === 'موظفو إدارة مؤسسات التربية والتعليم') {
+    return 'director';
+  }
+  if (grade.categoryGroup === 'موظفو التعليم') {
+    return 'teacher';
+  }
+  if (grade.categoryGroup === 'موظفو المصالح الاقتصادية' || grade.categoryGroup === 'موظفو التغذية المدرسية') {
+    return 'economist';
+  }
+  if (grade.categoryGroup === 'موظفو المخابر') {
+    return 'lab_manager';
+  }
+  return 'censor';
+}
+

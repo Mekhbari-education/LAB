@@ -57,7 +57,8 @@ import {
   PersonnelCategoryMeta,
   findGradeByCodeOrName, 
   getGradesByPersonnelCategory,
-  getCorpsByCategory
+  getCorpsByCategory,
+  getWorkspaceRoleForGrade
 } from '../constants/grades';
 
 export default function Signup() {
@@ -65,13 +66,13 @@ export default function Signup() {
   const { setRole } = useUserRole();
   const { isDarkMode } = useTheme();
 
-  // Selected Decree 25-54 Category
-  const [selectedCategoryTitle, setSelectedCategoryTitle] = useState<PersonnelCategoryType>('موظفو المخابر');
+  // Selected Decree 25-54 Category - starts null, user chooses
+  const [selectedCategoryTitle, setSelectedCategoryTitle] = useState<PersonnelCategoryType | null>(null);
   const [selectedCorps, setSelectedCorps] = useState<string>('all');
   const [gradeSearchQuery, setGradeSearchQuery] = useState('');
 
-  // Selected Role (operational applet role)
-  const [selectedRole, setSelectedRole] = useState<UserRole>('lab_manager');
+  // Selected Role (operational applet role) - Determined solely by selected grade
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
   // Form Fields - Personal Identification
   const [fullName, setFullName] = useState('');
@@ -155,8 +156,8 @@ export default function Signup() {
     ? customSchoolName.trim()
     : (schoolsList.find((s: any) => s.code === selectedSchool)?.name || (selectedSchool && selectedSchool !== '__custom__' ? selectedSchool : ''));
 
-  // Professional Grade State
-  const [selectedGradeCode, setSelectedGradeCode] = useState('09040302'); // Default: ملحق رئيسي بالمخابر
+  // Professional Grade State - No default rank!
+  const [selectedGradeCode, setSelectedGradeCode] = useState<string>('');
 
   // Role Specific Fields
   const [teacherSubject, setTeacherSubject] = useState('العلوم الفيزيائية والتكنولوجيا');
@@ -165,11 +166,13 @@ export default function Signup() {
 
   // Currently selected grade object
   const currentGradeObj = useMemo(() => {
-    return findGradeByCodeOrName(selectedGradeCode) || OFFICIAL_GRADES[0];
+    if (!selectedGradeCode) return null;
+    return findGradeByCodeOrName(selectedGradeCode) || null;
   }, [selectedGradeCode]);
 
   // Available corps for the current category
   const availableCorps = useMemo(() => {
+    if (!selectedCategoryTitle) return [];
     return getCorpsByCategory(selectedCategoryTitle);
   }, [selectedCategoryTitle]);
 
@@ -185,32 +188,25 @@ export default function Signup() {
       );
     }
 
-    let list = getGradesByPersonnelCategory(selectedCategoryTitle);
-    if (selectedCorps !== 'all') {
-      list = list.filter(g => g.corps === selectedCorps);
+    if (selectedCategoryTitle) {
+      let list = getGradesByPersonnelCategory(selectedCategoryTitle);
+      if (selectedCorps !== 'all') {
+        list = list.filter(g => g.corps === selectedCorps);
+      }
+      return list;
     }
-    return list;
+    return OFFICIAL_GRADES;
   }, [selectedCategoryTitle, selectedCorps, gradeSearchQuery]);
 
-  // When a grade is selected, automatically update default applet role
+  // When creating a new account: the workspace is determined ONLY by choosing the rank!
   const handleSelectGrade = (grade: OfficialGrade) => {
     setSelectedGradeCode(grade.code);
     setSelectedCategoryTitle(grade.categoryGroup);
     
-    // Auto-map to best applet operational role
-    if (grade.roles && grade.roles.length > 0) {
-      setSelectedRole(grade.roles[0]);
-    } else if (grade.categoryGroup === 'موظفو إدارة مؤسسات التربية والتعليم') {
-      setSelectedRole('director');
-    } else if (grade.categoryGroup === 'موظفو المخابر') {
-      setSelectedRole('lab_manager');
-    } else if (grade.categoryGroup === 'موظفو التعليم') {
-      setSelectedRole('teacher');
-    } else if (grade.categoryGroup === 'موظفو المصالح الاقتصادية' || grade.categoryGroup === 'موظفو التغذية المدرسية') {
-      setSelectedRole('economist');
-    } else {
-      setSelectedRole('censor');
-    }
+    // Automatically determine and assign the workspace solely according to the chosen rank
+    const roleForGrade = getWorkspaceRoleForGrade(grade);
+    setSelectedRole(roleForGrade);
+    setError(null);
   };
 
   // Switch Category handler
@@ -218,13 +214,6 @@ export default function Signup() {
     setSelectedCategoryTitle(catMeta.title);
     setSelectedCorps('all');
     setGradeSearchQuery('');
-    
-    // Pick the first grade in that category
-    const catGrades = getGradesByPersonnelCategory(catMeta.title);
-    if (catGrades.length > 0) {
-      const preferred = catGrades.find(g => !g.isExtinction) || catGrades[0];
-      handleSelectGrade(preferred);
-    }
   };
 
   // Status & UI State
@@ -292,6 +281,11 @@ export default function Signup() {
       return;
     }
 
+    if (!selectedGradeCode || !currentGradeObj || !selectedRole) {
+      setError('يرجى تحديد واختيار رتبتك الرسمية لتحديد فضاء العمل الخاص بك قبل إنشاء الحساب.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -329,10 +323,10 @@ export default function Signup() {
       const communeName = currentCommune?.name || selectedCommune || 'المركز';
       const eduLevel: 'CEM' | 'Lycée' | 'Autre' = selectedCycle === 'متوسط' ? 'CEM' : (selectedCycle === 'ثانوي' ? 'Lycée' : 'Autre');
 
-      const finalGradeName = currentGradeObj ? currentGradeObj.name : 'ملحق رئيسي بالمخابر';
-      const finalGradeCode = currentGradeObj ? currentGradeObj.code : selectedGradeCode;
-      const finalCorps = currentGradeObj?.corps || 'سلك الملحقين بالمخابر';
-      const finalCategoryGroup = currentGradeObj?.categoryGroup || selectedCategoryTitle;
+      const finalGradeName = currentGradeObj.name;
+      const finalGradeCode = currentGradeObj.code;
+      const finalCorps = currentGradeObj.corps;
+      const finalCategoryGroup = currentGradeObj.categoryGroup;
 
       let assignedSchoolId: string;
       if (selectedRole === 'director') {
@@ -698,7 +692,7 @@ export default function Signup() {
               </div>
 
               {/* Selected Grade Confirmation Banner */}
-              {currentGradeObj && (
+              {currentGradeObj && selectedRole ? (
                 <div className="p-3.5 bg-gradient-to-r from-emerald-50 via-primary/5 to-emerald-50 dark:from-emerald-950/30 dark:via-primary/10 dark:to-emerald-950/30 rounded-2xl border border-emerald-300/60 dark:border-emerald-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
@@ -725,11 +719,16 @@ export default function Signup() {
 
                   {/* Applet Workspace Badge */}
                   <div className="shrink-0 flex items-center gap-2 bg-surface px-3 py-1.5 rounded-xl border border-outline/15 text-[11px]">
-                    <span className="text-on-surface/60 font-medium">فضاء العمل المخصص:</span>
+                    <span className="text-on-surface/60 font-medium">فضاء العمل المحدد بالرتبة:</span>
                     <span className="font-bold text-primary flex items-center gap-1">
                       {ROLE_CONFIGS[selectedRole].label}
                     </span>
                   </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-primary/5 rounded-2xl border border-primary/20 flex items-center gap-3 text-xs text-primary font-bold">
+                  <ShieldCheck size={20} className="shrink-0 text-secondary" />
+                  <span>يرجى النقر واختيار رتبتك الرسمية أعلاه لتحديد فضاء العمل الخاص بك تلقائياً (فضاء المدير، فضاء الناظر، فضاء الأستاذ، فضاء مسؤول المخبر، فضاء المقتصد).</span>
                 </div>
               )}
             </div>

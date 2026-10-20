@@ -62,7 +62,13 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [address, setAddress] = useState('');
-  const [jobTitle, setJobTitle] = useState('مدير المؤسسة');
+  const [jobTitle, setJobTitle] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade');
+      if (stored && !stored.includes('مدير')) return stored;
+    }
+    return 'ملحق بالمخابر';
+  });
   const [educationLevel, setEducationLevel] = useState<'CEM' | 'Lycée' | 'Autre'>('CEM');
   const [hasCompletedSchoolSetup, setHasCompletedSchoolSetup] = useState<boolean>(true);
 
@@ -100,8 +106,13 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     setSchoolName(sName);
     setDirectorate(dName);
     setCommune(cName);
-    setAddress(data.address || '');
-    if (data.jobTitle) setJobTitle(data.jobTitle);
+    const jTitle = data.jobTitle || data.grade;
+    if (jTitle && !jTitle.includes('مدير المؤسسة')) {
+      setJobTitle(jTitle);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('algeria_lab_job_title', jTitle);
+      }
+    }
     setAcademicYearState(aYear);
     setSchoolLogoState(logoUrl);
     setEducationLevel(edLevel);

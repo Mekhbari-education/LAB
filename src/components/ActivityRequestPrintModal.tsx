@@ -111,7 +111,19 @@ export default function ActivityRequestPrintModal({
   };
 
   const formattedSchool = formatSchoolWithCommune(schoolInfo.school, schoolInfo.commune);
-  const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+  const rawJobTitle = (() => {
+    if (data.jobTitle && !data.jobTitle.includes('مدير') && !data.jobTitle.includes('أستاذ')) {
+      return data.jobTitle;
+    }
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade');
+      if (stored && !stored.includes('مدير') && !stored.includes('أستاذ')) {
+        return stored;
+      }
+    }
+    return (data.jobTitle && !data.jobTitle.includes('مدير')) ? data.jobTitle : 'ملحق رئيس بالمخابر';
+  })();
+  const labOfficerTitle = formatOfficialRankTitle(rawJobTitle);
 
   const docTitle = 'طلب تحضير نشاط تجريبي / تطبيقي';
 
@@ -492,7 +504,7 @@ export default function ActivityRequestPrintModal({
             effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'
           }`}>
             <div className="font-bold text-[11px] text-[#2b3d22] font-sans">
-              توقيع أستاذ(ة) المادة
+              أستاذ(ة) المادة
             </div>
             <div className="text-[#828c7d] text-[9px] font-serif">
               (الاسم والتوقيع)
@@ -503,10 +515,10 @@ export default function ActivityRequestPrintModal({
             effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'
           }`}>
             <div className="font-bold text-[11px] text-[#2b3d22] font-sans">
-              توقيع {labOfficerTitle}
+              {labOfficerTitle}
             </div>
             <div className="text-[#828c7d] text-[9px] font-serif">
-              (التأشيرة والختم)
+              (التوقيع والختم)
             </div>
           </div>
         </div>

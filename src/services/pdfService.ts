@@ -363,7 +363,8 @@ export class PDFService {
       doc.setFont(fontName, 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(130, 130, 130);
-      doc.text(processArabic('(الاسم، التوقيع والختم)'), rightBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
+      const rightSubText = labManagerTitle.includes('أستاذ') ? '(الاسم والتوقيع)' : '(الاسم، التوقيع والختم)';
+      doc.text(processArabic(rightSubText), rightBoxX + boxWidth / 2, finalY + 9, { align: 'center' });
 
       // Middle box: الناظر (if provided)
       if (middleTitle) {
@@ -684,7 +685,10 @@ export class PDFService {
     save?: boolean;
   }): Promise<jsPDF> {
     const isBlank = Boolean(data.isBlank);
-    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+    const rawJob = (data.jobTitle && !data.jobTitle.includes('مدير') && !data.jobTitle.includes('أستاذ'))
+      ? data.jobTitle
+      : (typeof window !== 'undefined' ? (localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade')) : null) || 'ملحق رئيس بالمخابر';
+    const labOfficerTitle = formatOfficialRankTitle(rawJob);
     const headers = ['#', 'النوع / التصنيف', 'البيان (الوسيلة أو المادة الكيميائية)', 'الكمية المطلوبة', 'الصيغة / الملاحظات'];
 
     let rows: (string | number)[][] = [];
@@ -785,8 +789,8 @@ export class PDFService {
       releaseLocation: communeLoc,
       releaseDate: releaseD,
       showSignatures: true,
-      labManagerTitle: 'توقيع أستاذ(ة) المادة',
-      principalTitle: `توقيع ${labOfficerTitle}`,
+      labManagerTitle: 'أستاذ(ة) المادة',
+      principalTitle: labOfficerTitle,
       disclaimer: '',
       showFooter: false,
       save: data.save !== undefined ? data.save : true
@@ -1501,7 +1505,7 @@ export class PDFService {
               <tr>
                 <td>
                   <div class="sig-title">${labManagerTitle}</div>
-                  <div class="sig-space">(الاسم، التوقيع والختم)</div>
+                  <div class="sig-space">${labManagerTitle.includes('أستاذ') ? '(الاسم والتوقيع)' : '(الاسم، التوقيع والختم)'}</div>
                   <div style="font-size: 7.5pt; color: #777;">حرر بتاريخ: ....................</div>
                 </td>
                 <td>
@@ -1792,7 +1796,10 @@ export class PDFService {
     isBlank?: boolean;
   }): void {
     const isBlank = Boolean(data.isBlank);
-    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+    const rawJob = (data.jobTitle && !data.jobTitle.includes('مدير') && !data.jobTitle.includes('أستاذ'))
+      ? data.jobTitle
+      : (typeof window !== 'undefined' ? (localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade')) : null) || 'ملحق رئيس بالمخابر';
+    const labOfficerTitle = formatOfficialRankTitle(rawJob);
     const headers = ['#', 'النوع / التصنيف', 'البيان (الوسيلة أو المادة الكيميائية)', 'الكمية المطلوبة', 'الصيغة / الملاحظات'];
 
     let rows: (string | number)[][] = [];
@@ -1887,8 +1894,8 @@ export class PDFService {
       summaryCards,
       notes: 'تقدم هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل للعتاد والمحاليل.',
       showSignatures: true,
-      labManagerTitle: 'توقيع أستاذ(ة) المادة',
-      principalTitle: `توقيع ${labOfficerTitle}`,
+      labManagerTitle: 'أستاذ(ة) المادة',
+      principalTitle: labOfficerTitle,
       showFooter: false
     });
   }
@@ -1953,7 +1960,10 @@ export class PDFService {
     const laboratory = data.lab || data.schoolInfo?.laboratory || 'مخبر العلوم الطبيعية والفيزيائية';
     const academicYear = resolveAcademicYear(data.schoolInfo?.academicYear);
     const signDate = data.signDate || data.requestDate || new Date().toISOString().split('T')[0];
-    const labOfficerTitle = formatOfficialRankTitle(data.jobTitle) || 'الملحق الرئيس بالمخابر';
+    const rawJob = (data.jobTitle && !data.jobTitle.includes('مدير') && !data.jobTitle.includes('أستاذ'))
+      ? data.jobTitle
+      : (typeof window !== 'undefined' ? (localStorage.getItem('algeria_lab_job_title') || localStorage.getItem('algeria_lab_statutory_grade')) : null) || 'ملحق رئيس بالمخابر';
+    const labOfficerTitle = formatOfficialRankTitle(rawJob);
 
     const title = 'طلب تحضير نشاط تجريبي / تطبيقي';
 
@@ -2398,12 +2408,12 @@ export class PDFService {
               <!-- Signatures -->
               <div class="signatures-grid">
                 <div class="sig-box">
-                  <div class="sig-title">توقيع أستاذ(ة) المادة</div>
+                  <div class="sig-title">أستاذ(ة) المادة</div>
                   <div class="sig-placeholder">(الاسم والتوقيع)</div>
                 </div>
                 <div class="sig-box">
-                  <div class="sig-title">توقيع ${labOfficerTitle}</div>
-                  <div class="sig-placeholder">(التأشيرة والختم)</div>
+                  <div class="sig-title">${labOfficerTitle}</div>
+                  <div class="sig-placeholder">(التوقيع والختم)</div>
                 </div>
               </div>
             </div>

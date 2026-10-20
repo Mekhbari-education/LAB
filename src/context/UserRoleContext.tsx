@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Teacher } from '../types/teachers';
 import { auth, db } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { findGradeByCodeOrName, cleanGradeName, OFFICIAL_GRADES, getWorkspaceRoleForGrade } from '../constants/grades';
 
 export type UserRole = 'director' | 'censor' | 'teacher' | 'lab_manager' | 'economist';
 
@@ -21,6 +22,8 @@ export interface UserProfileData {
   subject?: string;         // مادة التدريس (للأستاذ)
   grade?: string;           // الدرجة أو الرتبة
   gradeCode?: string;       // رمز الرتبة الوزاري الرسمي
+  corps?: string;           // السلك الوظيفي
+  categoryGroup?: string;   // الشعبة الوظيفية
   levels?: string[];        // الأطوار والمستويات
   createdAt?: any;
   status: 'active';
@@ -78,6 +81,23 @@ export const ROLE_CONFIGS: Record<UserRole, RoleInfo> = {
   }
 };
 
+export interface StatutoryProfileInput {
+  fullName: string;
+  nationalId: string;
+  phone: string;
+  gradeCode: string;
+  gradeName: string;
+  corps: string;
+  categoryGroup: string;
+  directorate: string;
+  commune: string;
+  cycle: string;
+  institution: string;
+  subject?: string;
+  levels?: string[];
+  labSpecialty?: string;
+}
+
 interface UserRoleContextType {
   currentRole: UserRole;
   userProfile: UserProfileData | null;
@@ -88,6 +108,11 @@ interface UserRoleContextType {
   setTeacherLogin: (teacher: Teacher) => void;
   syncUserRoleFromAuth: (uid: string, userEmail?: string | null) => Promise<UserRole>;
   logoutRole: () => void;
+  needsStatutorySetup: boolean;
+  setNeedsStatutorySetup: (needed: boolean) => void;
+  isStatutoryModalOpen: boolean;
+  setIsStatutoryModalOpen: (open: boolean) => void;
+  completeStatutoryProfile: (input: StatutoryProfileInput) => Promise<UserRole>;
   isDirector: boolean;
   isCensor: boolean;
   isTeacher: boolean;
@@ -203,6 +228,129 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
+  const [needsStatutorySetup, setNeedsStatutorySetup] = useState(false);
+  const [isStatutoryModalOpen, setIsStatutoryModalOpen] = useState(false);
+
+  const completeStatutoryProfile = async (input: StatutoryProfileInput): Promise<UserRole> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('يجب تسجيل الدخول أولاً');
+    const uid = currentUser.uid;
+
+    const officialGrade = findGradeByCodeOrName(input.gradeCode) || findGradeByCodeOrName(input.gradeName);
+    const resolvedRole: UserRole = officialGrade ? getWorkspaceRoleForGrade(officialGrade) : 'lab_manager';
+
+    const cleanWilaya = input.directorate.replace('مديرية التربية لولاية ', '').trim();
+    const wilayaNum = input.directorate.slice(0, 2) || '16';
+    const formattedWilaya = `${wilayaNum} - ${cleanWilaya}`;
+    const eduLevel = input.cycle === 'متوسط' ? 'CEM' : (input.cycle === 'ثانوي' ? 'Lycée' : 'Autre');
+
+    let assignedSchoolId: string;
+    if (resolvedRole === 'director') {
+      const { saveOrUpdateRegisteredSchool } = await import('../services/schoolLinkingService');
+      const regSchool = await saveOrUpdateRegisteredSchool({
+        name: input.institution,
+        wilaya: formattedWilaya,
+        commune: input.commune,
+        directorate: input.directorate,
+        educationLevel: eduLevel,
+        academicYear: '2025/2026',
+        directorUid: uid,
+        directorName: input.fullName,
+        directorEmail: currentUser.email || '',
+        phone: input.phone
+      });
+      assignedSchoolId = regSchool.id;
+    } else {
+      const { linkStaffMemberToSchool } = await import('../services/schoolLinkingService');
+      assignedSchoolId = await linkStaffMemberToSchool(
+        uid,
+        input.institution,
+        formattedWilaya,
+        resolvedRole
+      );
+    }
+
+    const updatedProfile: UserProfileData = {
+      uid,
+      name: input.fullName,
+      email: currentUser.email || '',
+      role: resolvedRole,
+      nationalId: input.nationalId,
+      institution: input.institution,
+      wilaya: formattedWilaya,
+      commune: input.commune,
+      directorate: input.directorate,
+      educationLevel: eduLevel,
+      phone: input.phone,
+      subject: resolvedRole === 'teacher' ? input.subject : undefined,
+      grade: officialGrade?.name || input.gradeName,
+      gradeCode: officialGrade?.code || input.gradeCode,
+      corps: officialGrade?.corps || input.corps,
+      categoryGroup: officialGrade?.categoryGroup || input.categoryGroup,
+      levels: resolvedRole === 'teacher' ? input.levels : undefined,
+      status: 'active'
+    };
+
+    const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+    await setDoc(doc(db, 'users', uid), {
+      ...updatedProfile,
+      schoolId: assignedSchoolId,
+      roleTitle: ROLE_CONFIGS[resolvedRole].label,
+      statutoryCategory: officialGrade?.categoryGroup || input.categoryGroup,
+      corps: officialGrade?.corps || input.corps,
+      decreeNumber: '25-54',
+      isExtinction: Boolean(officialGrade?.isExtinction),
+      hasCompletedSchoolSetup: true,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    let teacherObject: Teacher | null = null;
+    if (resolvedRole === 'teacher') {
+      teacherObject = {
+        id: uid,
+        name: input.fullName,
+        email: currentUser.email || '',
+        phone: input.phone,
+        subject: input.subject || 'العلوم الفيزيائية والتكنولوجيا',
+        levels: input.levels || [],
+        grade: officialGrade?.name || input.gradeName,
+        functionalCode: input.nationalId || uid,
+        status: 'active'
+      };
+      try {
+        await setDoc(doc(db, 'schools', assignedSchoolId, 'teachers', uid), {
+          ...teacherObject,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+        await setDoc(doc(db, 'teachers', uid), {
+          ...teacherObject,
+          schoolId: assignedSchoolId,
+          institution: input.institution,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Teacher write warning:', err);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('algeria_lab_school_id', assignedSchoolId);
+      localStorage.setItem('algeria_lab_school_name', input.institution);
+      localStorage.setItem('algeria_lab_directorate', input.directorate);
+      localStorage.setItem('algeria_lab_commune', input.commune);
+      localStorage.setItem('algeria_lab_grade_code', officialGrade?.code || input.gradeCode);
+      localStorage.setItem('algeria_lab_grade_name', officialGrade?.name || input.gradeName);
+      localStorage.setItem('algeria_lab_corps', officialGrade?.corps || input.corps);
+      localStorage.setItem('algeria_lab_category', officialGrade?.categoryGroup || input.categoryGroup);
+      window.dispatchEvent(new Event('school_changed'));
+    }
+
+    setRole(resolvedRole, teacherObject, updatedProfile);
+    setIsStatutoryModalOpen(false);
+    setNeedsStatutorySetup(false);
+    return resolvedRole;
+  };
+
   const syncUserRoleFromAuth = async (uid: string, userEmail?: string | null): Promise<UserRole> => {
     try {
       const email = (userEmail || auth.currentUser?.email || '').trim().toLowerCase();
@@ -247,9 +395,15 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         console.warn('Teacher lookup error:', e);
       }
 
-      // Determine role
+      // Extract official grade from document data
+      const gradeIdentifier = data?.gradeCode || data?.grade || teacherDocData?.rank;
+      const officialGrade = gradeIdentifier ? findGradeByCodeOrName(gradeIdentifier) : undefined;
+
+      // Determine role strictly according to statutory grade & official role
       let role: UserRole = 'lab_manager';
-      if (data?.role) {
+      if (officialGrade) {
+        role = getWorkspaceRoleForGrade(officialGrade);
+      } else if (data?.role) {
         const rawRole = (data.role || '').toLowerCase();
         if (['director', 'censor', 'teacher', 'lab_manager', 'economist'].includes(rawRole)) {
           role = rawRole as UserRole;
@@ -258,8 +412,19 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         }
       } else if (isTeacher) {
         role = 'teacher';
-      } else if (email && (email === 'faycalassoul@gmail.com' || email.toLowerCase().includes('admin'))) {
-        role = 'director';
+      }
+
+      // Check if existing user has all required statutory information to determine workspace
+      const hasAllRequiredInfo = Boolean(
+        (officialGrade || data?.grade) && 
+        (data?.institution || data?.schoolId || teacherDocData?.institution)
+      );
+
+      if (!hasAllRequiredInfo) {
+        setNeedsStatutorySetup(true);
+        setIsStatutoryModalOpen(true);
+      } else {
+        setNeedsStatutorySetup(false);
       }
 
       const profile: UserProfileData = {
@@ -268,11 +433,17 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         email: email || data?.email || '',
         role: role,
         nationalId: data?.nationalId || teacherDocData?.functionalCode || '',
-        institution: data?.institution || data?.schoolName || '',
+        institution: data?.institution || data?.schoolName || teacherDocData?.institution || '',
         wilaya: data?.wilaya || '',
+        commune: data?.commune || '',
+        directorate: data?.directorate || '',
+        educationLevel: data?.educationLevel || '',
         phone: data?.phone || '',
         subject: data?.subject || teacherDocData?.subject || '',
-        grade: data?.grade || teacherDocData?.rank || '',
+        grade: officialGrade?.name || data?.grade || teacherDocData?.rank || '',
+        gradeCode: officialGrade?.code || data?.gradeCode || '',
+        corps: officialGrade?.corps || data?.corps || '',
+        categoryGroup: officialGrade?.categoryGroup || data?.statutoryCategory || '',
         levels: data?.levels || teacherDocData?.levels || [],
         status: 'active'
       };
@@ -316,6 +487,8 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
     setCurrentRole('lab_manager');
     setTeacherProfile(null);
     setUserProfile(null);
+    setNeedsStatutorySetup(false);
+    setIsStatutoryModalOpen(false);
     try {
       localStorage.removeItem('current_app_role');
       localStorage.removeItem('current_teacher_profile');
@@ -340,6 +513,11 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         setTeacherLogin,
         syncUserRoleFromAuth,
         logoutRole,
+        needsStatutorySetup,
+        setNeedsStatutorySetup,
+        isStatutoryModalOpen,
+        setIsStatutoryModalOpen,
+        completeStatutoryProfile,
         isDirector: currentRole === 'director',
         isCensor: currentRole === 'censor',
         isTeacher: currentRole === 'teacher',

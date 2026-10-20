@@ -618,7 +618,7 @@ export default function DailyReport() {
 
                 {/* Save Button */}
                 <button 
-                  onClick={handleSave}
+                  onClick={() => handleSave()}
                   disabled={isSaving}
                   className={cn(
                     "px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-black transition-all shadow-sm active:scale-95 disabled:opacity-50",
@@ -1548,6 +1548,11 @@ export default function DailyReport() {
                             <FileCheck size={22} />
                           </div>
                           <div className="flex items-center gap-1.5">
+                            {report.noActivities && (
+                              <span className="text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-xl">
+                                يوم بدون أنشطة
+                              </span>
+                            )}
                             {report.reportNumber && (
                               <span className="text-[11px] font-black bg-primary/10 text-primary px-2.5 py-1 rounded-xl">
                                 رقم {report.reportNumber}
@@ -1576,32 +1581,52 @@ export default function DailyReport() {
                         )}
 
                         {/* Summary Badges */}
-                        <div className="bg-surface-container-low/50 rounded-2xl p-3.5 space-y-2 mb-4 border border-outline/5 text-xs">
-                          <div className="flex justify-between items-center">
-                            <span className="text-secondary font-bold">الحصص المسجلة:</span>
-                            <span className="font-black text-primary bg-surface px-2 py-0.5 rounded-md border border-outline/10">
-                              {report.rows?.length || 0} حصة
-                            </span>
+                        {report.noActivities ? (
+                          <div className="bg-amber-500/10 rounded-2xl p-3.5 space-y-2 mb-4 border border-amber-500/20 text-xs">
+                            <div className="flex justify-between items-center">
+                              <span className="text-amber-800 dark:text-amber-200 font-bold flex items-center gap-1">
+                                <AlertCircle size={14} className="text-amber-600 dark:text-amber-400" />
+                                نموذج خاص مفعّل:
+                              </span>
+                              <span className="font-black text-amber-700 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md border border-amber-500/30">
+                                يوم بدون أنشطة
+                              </span>
+                            </div>
+                            {report.noActivitiesReason && (
+                              <div className="text-[11px] text-amber-900/90 dark:text-amber-100 font-medium pt-1 border-t border-amber-500/15">
+                                <span className="font-bold">السبب: </span>
+                                {report.noActivitiesReason}
+                              </div>
+                            )}
                           </div>
-
-                          {teachersInReport.length > 0 && (
+                        ) : (
+                          <div className="bg-surface-container-low/50 rounded-2xl p-3.5 space-y-2 mb-4 border border-outline/5 text-xs">
                             <div className="flex justify-between items-center">
-                              <span className="text-secondary font-bold">الأساتذة:</span>
-                              <span className="font-bold text-primary/80 truncate max-w-[150px]">
-                                {teachersInReport.join('، ')}
+                              <span className="text-secondary font-bold">الحصص المسجلة:</span>
+                              <span className="font-black text-primary bg-surface px-2 py-0.5 rounded-md border border-outline/10">
+                                {report.rows?.length || 0} حصة
                               </span>
                             </div>
-                          )}
 
-                          {classesInReport.length > 0 && (
-                            <div className="flex justify-between items-center">
-                              <span className="text-secondary font-bold">الأقسام:</span>
-                              <span className="font-bold text-primary/80 truncate max-w-[150px]">
-                                {classesInReport.join('، ')}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                            {teachersInReport.length > 0 && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-secondary font-bold">الأساتذة:</span>
+                                <span className="font-bold text-primary/80 truncate max-w-[150px]">
+                                  {teachersInReport.join('، ')}
+                                </span>
+                              </div>
+                            )}
+
+                            {classesInReport.length > 0 && (
+                              <div className="flex justify-between items-center">
+                                <span className="text-secondary font-bold">الأقسام:</span>
+                                <span className="font-bold text-primary/80 truncate max-w-[150px]">
+                                  {classesInReport.join('، ')}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Notes Preview if available */}
                         {report.labNotes && (

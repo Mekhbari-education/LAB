@@ -107,28 +107,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [setupComplete, setSetupComplete] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [hasRoleSession, setHasRoleSession] = useState<boolean>(() => {
-    try {
-      return Boolean(localStorage.getItem('current_app_role') || localStorage.getItem('current_teacher_profile'));
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    const handleRoleChanged = () => {
-      try {
-        const hasSession = Boolean(localStorage.getItem('current_app_role') || localStorage.getItem('current_teacher_profile'));
-        setHasRoleSession(hasSession);
-      } catch {}
-    };
-    window.addEventListener('storage', handleRoleChanged);
-    window.addEventListener('role_changed', handleRoleChanged);
-    return () => {
-      window.removeEventListener('storage', handleRoleChanged);
-      window.removeEventListener('role_changed', handleRoleChanged);
-    };
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -200,10 +178,10 @@ export default function App() {
             }>
               {(!user || setupComplete) ? (
                 (() => {
-                  const isAuthenticated = Boolean(user || hasRoleSession);
+                  const isAuthenticated = Boolean(user);
                   return (
                     <Routes>
-                    <Route path={ROUTES.LOGIN} element={isAuthenticated ? <RoleBasedRedirect /> : <Login onRoleLogin={() => setHasRoleSession(true)} />} />
+                    <Route path={ROUTES.LOGIN} element={isAuthenticated ? <RoleBasedRedirect /> : <Login />} />
                     <Route path={ROUTES.SIGNUP} element={isAuthenticated ? <RoleBasedRedirect /> : <Signup />} />
                     <Route path="/admin-setup" element={<Navigate to={ROUTES.ADMIN} replace />} />
                     <Route path={ROUTES.PRIVACY_POLICY} element={<PrivacyPolicy />} />
@@ -211,7 +189,7 @@ export default function App() {
                     <Route path={ROUTES.TERMS_OF_SERVICE} element={<TermsOfService />} />
                     <Route
                       path={ROUTES.HOME}
-                      element={isAuthenticated ? <Layout /> : <Navigate to={ROUTES.LOGIN} />}
+                      element={isAuthenticated ? <Layout /> : <Navigate to={ROUTES.LOGIN} replace />}
                     >
                   <Route index element={<Dashboard />} />
                   {/* Role Portals */}

@@ -58,7 +58,7 @@ import { ROUTES } from '../config/routes';
 import * as XLSX from 'xlsx';
 import { cn } from '../lib/utils';
 import LocationCard, { InstitutionSuggestion } from '../components/LocationCard';
-import { OFFICIAL_GRADES, OFFICIAL_PERSONNEL_CATEGORIES, cleanGradeName } from '../constants/grades';
+import { OFFICIAL_GRADES, OFFICIAL_PERSONNEL_CATEGORIES, cleanGradeName, findGradeByCodeOrName, getWorkspaceRoleForGrade } from '../constants/grades';
 
 export default function SettingsPage() {
   const { 
@@ -783,7 +783,11 @@ export default function SettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setJobTitle(cleanGradeName(data.jobTitle || 'ملحق بالمخابر'));
+          const resolvedJob = cleanGradeName(data.jobTitle || 'ملحق بالمخابر');
+          setJobTitle(resolvedJob);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('algeria_lab_job_title', resolvedJob);
+          }
           setGrade(data.grade || '');
           setSpecialty(data.specialty || '');
           setSchoolAddress(data.address || '');
@@ -898,6 +902,10 @@ export default function SettingsPage() {
           }
         } catch (e) {}
 
+        // Store selected rank in localStorage for immediate sync across document sheets
+        localStorage.setItem('algeria_lab_job_title', jobTitle);
+        localStorage.setItem('algeria_lab_statutory_grade', jobTitle);
+
         // Broadcast change to all listening components, pages, and tabs
         window.dispatchEvent(new CustomEvent('academic_year_changed', { detail: cleanAcademicYear }));
         window.dispatchEvent(new Event('storage'));
@@ -933,6 +941,27 @@ export default function SettingsPage() {
           'printSettings.institution.academicYear': cleanAcademicYear,
           updatedAt: new Date().toISOString()
         }, { merge: true });
+
+        // Synchronize users/{uid} collection with official statutory grade & role
+        try {
+          const officialGrade = findGradeByCodeOrName(jobTitle);
+          const resolvedRole = officialGrade ? getWorkspaceRoleForGrade(officialGrade) : 'director';
+          await setDoc(doc(db, 'users', auth.currentUser.uid), {
+            displayName,
+            grade: jobTitle,
+            gradeCode: officialGrade?.code || null,
+            corps: officialGrade?.corps || null,
+            statutoryCategory: officialGrade?.categoryGroup || null,
+            institution: resolvedSchoolName,
+            directorate: dirName,
+            commune: comName,
+            educationLevel: selectedCycle,
+            role: resolvedRole,
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+        } catch (uErr) {
+          console.warn('Could not sync users doc in settings:', uErr);
+        }
 
         // Also update shared school document if active
         if (schoolId && schoolId !== auth.currentUser.uid) {

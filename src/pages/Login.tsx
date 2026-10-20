@@ -378,20 +378,13 @@ export default function Login({ onRoleLogin }: LoginProps) {
     try {
       const userRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userRef);
-      const isAdmin = await checkIsAdmin(user);
-      const isDirectorEmail = user.email === 'cemguettaftaher@gmail.com' || user.email?.toLowerCase().includes('director');
-      const defaultRole = (isAdmin || isDirectorEmail) ? 'director' : 'lab_manager';
 
       if (!userDoc.exists()) {
         await setDoc(userRef, {
           uid: user.uid,
           email: user.email,
-          role: defaultRole,
-          institution: isDirectorEmail ? 'متوسطة قطاف الطاهر' : 'ثانوية عامة',
-          wilaya: isDirectorEmail ? '07 - بسكرة' : '16 - الجزائر',
-          displayName: user.displayName || user.email?.split('@')[0] || (isDirectorEmail ? 'مدير المؤسسة' : 'مستخدم جديد'),
+          displayName: user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
           photoURL: user.photoURL || null,
-          hasCompletedSchoolSetup: isDirectorEmail ? false : true,
           createdAt: new Date().toISOString()
         }, { merge: true });
       } else {
@@ -893,14 +886,14 @@ export default function Login({ onRoleLogin }: LoginProps) {
                     <ArrowLeft size={16} />
                   </button>
 
-                  <div className="text-center pt-1 flex flex-col gap-1 items-center">
-                    <button 
-                      type="button"
-                      onClick={() => { setIsLogin(!isLogin); setError(''); setSuccessInfo(null); }}
-                      className="text-xs font-bold text-on-surface/70 hover:text-primary transition-colors"
+                  <div className="text-center pt-1.5 flex flex-col gap-1 items-center">
+                    <Link 
+                      to={ROUTES.SIGNUP}
+                      className="text-xs font-black text-primary hover:underline transition-colors flex items-center gap-1.5 py-1"
                     >
-                      {isLogin ? 'ليس لديك حساب؟ إنشاء حساب سريع' : 'لديك حساب بالفعل؟ تسجيل الدخول'}
-                    </button>
+                      <UserPlus size={14} />
+                      <span>ليس لديك حساب؟ إنشاء حساب جديد (إدخال البيانات والرتبة والمؤسسة)</span>
+                    </Link>
                   </div>
 
                   <div className="relative flex items-center justify-center py-1">
