@@ -9,12 +9,14 @@ import * as XLSX from 'xlsx';
 import { getEquipmentIntelligence, EquipmentIntelligence, ensureApiKey } from '../services/geminiService';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { Equipment, MaintenanceLog } from '../types/equipment';
 import { formatSchoolWithCommune } from '../lib/utils';
 
 export function useEquipmentLogic(isNested = false) {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
+  const { openPrintPreview, directPrint } = usePrintSettings();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
@@ -876,7 +878,40 @@ export function useEquipmentLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: 'سجل الجرد العام للمؤسسة' });
+
+    const headers = ['#', 'رقم التسجيل', 'تاريخ التسجيل', 'تعيين العتاد والأجهزة', 'العدد', 'المصدر / المورد', 'سعر الوحدة', 'مكان الحفظ', 'الحالة', 'تاريخ الخروج', 'ملاحظات'];
+    const rows = filteredEquipment.map((e, index) => [
+      (index + 1).toString().padStart(2, '0'),
+      e.serialNumber || '-',
+      e.registrationDate || e.foundationalInventory || '-',
+      e.smartNameAr || e.name,
+      e.totalQuantity,
+      e.source || e.supplier || '-',
+      e.price ? `${e.price} د.ج` : '-',
+      e.location || '-',
+      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      e.exitDate || '-',
+      e.notes || '-'
+    ]);
+
+    const totalQuantity = filteredEquipment.reduce((acc, curr) => acc + (Number(curr.totalQuantity) || 0), 0);
+    const functionalCount = filteredEquipment.filter(e => e.status === 'functional').length;
+
+    openPrintPreview({
+      title: 'سجل جرد العتاد العام للمؤسسة',
+      subtitle: `المؤسسة: ${schoolName} · عدد البنود: ${filteredEquipment.length} · التاريخ: ${formattedDate}`,
+      type: 'table',
+      suggestedOrientation: 'landscape',
+      headers,
+      rows,
+      summaryCards: [
+        { label: 'إجمالي البنود المسجلة', value: filteredEquipment.length },
+        { label: 'إجمالي القطع والتجهيزات', value: totalQuantity },
+        { label: 'الأجهزة السليمة والجاهزة', value: functionalCount },
+        { label: 'تحت الصيانة أو الإسقاط', value: filteredEquipment.length - functionalCount }
+      ],
+      customHtml: html
+    });
   };
 
   const handlePrintInventoryCards = () => {
@@ -974,7 +1009,12 @@ export function useEquipmentLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: 'بطاقات جرد العتاد' });
+    openPrintPreview({
+      title: 'بطاقات جرد العتاد للمؤسسة',
+      subtitle: `عدد البطاقات: ${filteredEquipment.length} · المؤسسة: ${schoolName}`,
+      type: 'custom',
+      customHtml: html
+    });
   };
 
   const handleExportPDF = async () => {
@@ -1148,7 +1188,26 @@ export function useEquipmentLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: `بطاقة تقنية - ${e.name}` });
+    openPrintPreview({
+      title: `بطاقة تقنية - ${e.smartNameAr || e.name}`,
+      subtitle: `رقم التسجيل: ${e.serialNumber || '—'} · المؤسسة: ${schoolName}`,
+      type: 'cards',
+      cards: [{
+        title: e.smartNameAr || e.name,
+        code: e.serialNumber,
+        details: [
+          { label: 'النوع والتصنيف', value: e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة ومعدات تقنية' : 'أخرى' },
+          { label: 'الرقم التسلسلي', value: e.serialNumber || '—' },
+          { label: 'الحالة الحالية', value: e.status === 'functional' ? 'سليم وجاهز' : e.status === 'maintenance' ? 'صيانة' : 'تالف' },
+          { label: 'الكمية الإجمالية', value: e.totalQuantity },
+          { label: 'الكمية المتوفرة', value: e.availableQuantity },
+          { label: 'الكمية التالفة', value: e.brokenQuantity },
+          { label: 'مكان الحفظ', value: e.location || '—' },
+          { label: 'المصدر / المورد', value: e.source || e.supplier || '—' }
+        ]
+      }],
+      customHtml: html
+    });
   };
 
   const handleSort = (field: keyof Equipment) => {

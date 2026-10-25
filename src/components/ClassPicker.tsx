@@ -88,7 +88,7 @@ export default function ClassPicker({ isOpen, onClose, onSelect, initialValue }:
                 <Search className="absolute start-4 top-1/2 -translate-y-1/2 text-on-surface/40" size={18} />
                 <input 
                   type="text" 
-                  placeholder="بحث سريع عن قسم..."
+                  placeholder="بحث سريع عن قسم أو كتابة اسم مخصص..."
                   className="w-full bg-surface-container-low border-none rounded-2xl ps-12 pe-6 py-4 font-bold focus:ring-2 focus:ring-primary/20 transition-all text-start"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -108,6 +108,30 @@ export default function ClassPicker({ isOpen, onClose, onSelect, initialValue }:
                 </select>
               </div>
             </div>
+
+            {/* Quick Adoption for Custom Class Name */}
+            {searchTerm.trim() && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-primary/10 border-2 border-primary/25 rounded-2xl animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-start">
+                  <Users size={18} className="text-primary flex-shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-secondary">إدخال قسم مخصص غير مسجل: </span>
+                    <strong className="text-xs font-black text-primary px-2 py-0.5 bg-surface rounded-lg border border-primary/20">{searchTerm.trim()}</strong>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelect(searchTerm.trim());
+                    onClose();
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 bg-primary text-on-primary text-xs font-black rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <Check size={14} />
+                  اعتماد هذا القسم
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Body - Chips */}
@@ -123,8 +147,20 @@ export default function ClassPicker({ isOpen, onClose, onSelect, initialValue }:
                   <Search size={48} />
                 </div>
                 <div>
-                  <p className="font-black text-on-surface/60 text-lg">لم يتم العثور على نتائج</p>
-                  <p className="text-on-surface/40 font-bold">جرب تغيير معايير البحث أو إضافة أقسام في الإعدادات</p>
+                  <p className="font-black text-on-surface/60 text-lg">لم يتم العثور على أقسام مطابقة</p>
+                  <p className="text-on-surface/40 font-bold">يمكنك اعتماد ما كتبته في شريط البحث مباشرة بالضغط على الزر أعلاه</p>
+                  {searchTerm.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelect(searchTerm.trim());
+                        onClose();
+                      }}
+                      className="mt-4 px-6 py-2.5 bg-primary text-on-primary text-xs font-black rounded-xl shadow hover:bg-primary/90 transition-all"
+                    >
+                      استخدام «{searchTerm.trim()}» كقسم مخصص
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (

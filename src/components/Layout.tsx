@@ -72,6 +72,7 @@ import { ROUTES } from '../config/routes';
 import { isRouteAllowedForRole } from '../config/permissions';
 import { useTheme } from '../context/ThemeContext';
 import { useUserRole, ROLE_CONFIGS, UserRole } from '../context/UserRoleContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import RoleProtectedRoute from './RoleProtectedRoute';
 import StatutoryProfileModal from './StatutoryProfileModal';
 
@@ -88,6 +89,7 @@ export default function Layout() {
     isStatutoryModalOpen,
     setIsStatutoryModalOpen
   } = useUserRole();
+  const { openPrintSettingsModal } = usePrintSettings();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -734,6 +736,13 @@ export default function Layout() {
               title={t('header.scan_qr')}
             >
               <QrCode size={20} />
+            </button>
+            <button 
+              onClick={openPrintSettingsModal}
+              className="p-2 hover:bg-secondary-container/50 rounded-full text-primary transition-all hidden sm:block"
+              title="لوحة إعدادات وخيارات الطباعة"
+            >
+              <Printer size={20} />
             </button>
             <div className="relative hidden md:block">
               <button 

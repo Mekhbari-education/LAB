@@ -9,6 +9,7 @@ import { PrintService } from '../services/printService';
 import { ReportRow, Teacher, InstitutionSettings, SavedReport, DaySummaryStats, RoutingType } from '../types/reports';
 import { cleanSchoolName, formatSchoolWithCommune, formatOfficialRankTitle, getNextWorkingDay } from '../lib/utils';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { ExperimentPreset } from '../data/labExperimentPresets';
 import * as XLSX from 'xlsx';
 
@@ -16,6 +17,7 @@ export function useDailyReport() {
   const { schoolId, academicYear } = useSchool();
   const navigate = useNavigate();
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
   const { timeSlots, loading: loadingTimeSlots } = useTimeSlots();
   const [isTimeManagerOpen, setIsTimeManagerOpen] = useState(false);
   const [pickerState, setPickerState] = useState<{ isOpen: boolean; rowId: number | null }>({
@@ -899,18 +901,6 @@ export function useDailyReport() {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .no-print-toolbar {
-            background: #0f172a;
-            color: #fff;
-            padding: 10px 18px;
-            margin: -4px -4px 14px -4px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            font-family: 'Cairo', sans-serif;
-          }
           .republic-header {
             text-align: center;
             font-size: 14.5px;
@@ -1078,9 +1068,6 @@ export function useDailyReport() {
             font-family: 'Amiri', serif;
           }
           @media print {
-            .no-print-toolbar {
-              display: none !important;
-            }
             body {
               padding: 0;
             }
@@ -1088,22 +1075,6 @@ export function useDailyReport() {
         </style>
       </head>
       <body>
-        <!-- Top Toolbar for Tab Preview -->
-        <div class="no-print-toolbar">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="background: #2b3d22; border: 1px solid #4a6738; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 800;">نموذج رسمي مطابق لـ PDF</span>
-            <span style="font-weight: 700; font-size: 13.5px;">التقرير اليومي للمخبر — معاينة وطباعة الوثيقة</span>
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button onclick="window.print()" style="background: #2b3d22; color: #fff; border: 1px solid #4a6738; padding: 7px 18px; border-radius: 6px; font-weight: 800; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-              <span>🖨️</span> طباعة الآن (Ctrl+P)
-            </button>
-            <button onclick="window.close()" style="background: #334155; color: #f1f5f9; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer;">
-              ✕ إغلاق التبويب
-            </button>
-          </div>
-        </div>
-
         <!-- Official Header (Algerian Institution Standard) -->
         <div class="republic-header">${country}</div>
         <div class="ministry-header">${ministry}</div>
@@ -1202,40 +1173,16 @@ export function useDailyReport() {
     `;
   };
 
-  // Printing & Exporting handlers - opening in a New Tab
+  // Printing & Exporting handlers - opening in the Unified In-App Preview Modal
   const handlePrint = async () => {
-    // Open new tab synchronously on user click to prevent popup blockers
-    const printTab = window.open('', '_blank');
-    if (printTab) {
-      printTab.document.write(`
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-          <head>
-            <meta charset="utf-8">
-            <title>جاري تحضير استمارة التقرير اليومي...</title>
-            <style>
-              body { font-family: 'Amiri', 'Segoe UI', Tahoma, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; direction: rtl; }
-              .box { text-align: center; }
-              .spinner { width: 36px; height: 36px; border: 4px solid #cbd5e1; border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="box">
-              <div class="spinner"></div>
-              <div style="font-weight: 900; font-size: 16px;">جاري تجهيز استمارة التقرير اليومي للمخبر للطباعة...</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 6px;">يُرجى الانتظار ثوانٍ معدودة...</div>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
     await handleSave();
     const html = generateDailyReportHtml();
-    await PrintService.printInNewTab(html, {
+    openPrintPreview({
       title: `التقرير اليومي للمخبر - ${date}`,
-      existingWindow: printTab
+      subtitle: `السنة الدراسية: ${docAcademicYear} · رقم التقرير: ${reportNumber || '—'}`,
+      type: 'custom',
+      suggestedOrientation: 'portrait',
+      customHtml: html
     });
   };
 
@@ -1383,48 +1330,27 @@ export function useDailyReport() {
   };
 
   const printBlankReport = async () => {
-    const printTab = window.open('', '_blank');
     const html = generateDailyReportHtml({ isBlank: true });
-    await PrintService.printInNewTab(html, {
+    openPrintPreview({
       title: 'استمارة التقرير اليومي للمخبر (نموذج رسمي فارغ)',
-      existingWindow: printTab
+      subtitle: `وزارة التربية الوطنية · ${docAcademicYear}`,
+      type: 'custom',
+      suggestedOrientation: 'portrait',
+      customHtml: html
     });
   };
 
   const printNoActivitiesReport = async () => {
-    const printTab = window.open('', '_blank');
-    if (printTab) {
-      printTab.document.write(`
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-          <head>
-            <meta charset="utf-8">
-            <title>جاري تحضير استمارة التقرير اليومي (نموذج خاص)...</title>
-            <style>
-              body { font-family: 'Amiri', 'Segoe UI', Tahoma, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; direction: rtl; }
-              .box { text-align: center; }
-              .spinner { width: 36px; height: 36px; border: 4px solid #cbd5e1; border-top-color: #d97706; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="box">
-              <div class="spinner"></div>
-              <div style="font-weight: 900; font-size: 16px;">جاري تجهيز استمارة التقرير اليومي للمخبر (نموذج خاص: يوم بدون أنشطة) وحفظه في الأرشيف...</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 6px;">يُرجى الانتظار ثوانٍ معدودة...</div>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
     setNoActivities(true);
     await handleSave({ overrideNoActivities: true });
 
     const html = generateDailyReportHtml({ overrideNoActivities: true });
-    await PrintService.printInNewTab(html, {
-      title: `التقرير اليومي للمخبر (نموذج خاص: يوم بدون أنشطة تطبيقية) - ${date}`,
-      existingWindow: printTab
+    openPrintPreview({
+      title: `التقرير اليومي للمخبر (يوم بدون أنشطة تطبيقية) - ${date}`,
+      subtitle: `السنة الدراسية: ${docAcademicYear}`,
+      type: 'custom',
+      suggestedOrientation: 'portrait',
+      customHtml: html
     });
   };
 
@@ -1599,36 +1525,13 @@ export function useDailyReport() {
   };
 
   const printHistoryReport = async (report: SavedReport) => {
-    const printTab = window.open('', '_blank');
-    if (printTab) {
-      printTab.document.write(`
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-          <head>
-            <meta charset="utf-8">
-            <title>جاري تحضير استمارة التقرير اليومي...</title>
-            <style>
-              body { font-family: 'Amiri', 'Segoe UI', Tahoma, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #f8fafc; color: #1e293b; direction: rtl; }
-              .box { text-align: center; }
-              .spinner { width: 36px; height: 36px; border: 4px solid #cbd5e1; border-top-color: #2b3d22; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="box">
-              <div class="spinner"></div>
-              <div style="font-weight: 900; font-size: 16px;">جاري تجهيز استمارة التقرير اليومي للمخبر للطباعة...</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 6px;">يُرجى الانتظار ثوانٍ معدودة...</div>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
     const html = generateDailyReportHtml({ reportData: report });
-    await PrintService.printInNewTab(html, {
+    openPrintPreview({
       title: `التقرير اليومي للمخبر - ${report.date}`,
-      existingWindow: printTab
+      subtitle: `رقم التقرير: ${report.reportNumber || '—'} · المصلحة: ${report.department || docDepartment}`,
+      type: 'custom',
+      suggestedOrientation: 'portrait',
+      customHtml: html
     });
   };
 

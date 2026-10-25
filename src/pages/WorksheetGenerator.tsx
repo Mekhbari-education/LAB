@@ -4,6 +4,7 @@ import { ArrowLeft, FileSpreadsheet, Download, FileDown, Settings, RefreshCw, Pr
 import { useSchool } from '../context/SchoolContext';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { PDFService } from '../services/pdfService';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 const EASY_EQUATIONS = [
   { eq: "H2 + O2 -> H2O", ans: "2,1,2" },
@@ -22,6 +23,7 @@ const MEDIUM_EQUATIONS = [
 export default function WorksheetGenerator() {
   const navigate = useNavigate();
   const { schoolName, commune } = useSchool();
+  const { openPrintPreview } = usePrintSettings();
   const [difficulty, setDifficulty] = useState('easy');
   const [count, setCount] = useState(5);
   const [worksheet, setWorksheet] = useState<any[]>([]);
@@ -191,12 +193,32 @@ export default function WorksheetGenerator() {
               </button>
 
               <button 
-                onClick={() => window.print()}
+                onClick={() => {
+                  if (worksheet.length === 0) return;
+                  openPrintPreview({
+                    title: 'ورقة عمل وتطبيقات مخبرية: موازنة المعادلات الكيميائية',
+                    subtitle: `المؤسسة: ${schoolName} · مستوى الصعوبة: ${difficulty === 'easy' ? 'أساسي' : 'متقدم'}`,
+                    type: 'table',
+                    suggestedOrientation: 'portrait',
+                    headers: ['#', 'المعادلة الكيميائية المراد موازنتها', 'الحالة الفيزيائية والملاحظات', 'الحل / المعاملات التناسبية'],
+                    rows: worksheet.map((item, idx) => [
+                      idx + 1,
+                      item.eq,
+                      'تطبيق بيداغوجي ومخبري',
+                      item.ans
+                    ]),
+                    summaryCards: [
+                      { label: 'عدد المعادلات', value: worksheet.length },
+                      { label: 'مستوى الصعوبة', value: difficulty === 'easy' ? 'أساسي' : 'متقدم' }
+                    ],
+                    notes: 'يُطلب من التلميذ موازنة المعادلات الكيميائية مع كتابة الأعداد الستوكيومترية وتحديد الحالة الفيزيائية لكل مركب.'
+                  });
+                }}
                 disabled={worksheet.length === 0}
                 className="w-full py-3.5 bg-surface-container text-on-surface rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-surface-container-high transition-all disabled:opacity-50"
               >
                 <Printer size={20} />
-                طباعة الورقة
+                معاينة وطباعة الورقة
               </button>
             </div>
          </div>

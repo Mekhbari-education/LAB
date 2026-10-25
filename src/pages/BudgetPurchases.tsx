@@ -22,6 +22,7 @@ import {
   PurchaseOrderPrintService, 
   PrintablePurchaseOrder 
 } from '../services/purchaseOrderPrintService';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { formatSchoolWithCommune } from '../lib/utils';
 
 interface Supplier {
@@ -65,6 +66,7 @@ interface BudgetConfig {
 export default function BudgetPurchases() {
   const { schoolId, schoolName, directorate, commune, schoolLogo } = useSchool();
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
   const [activeTab, setActiveTab] = useState<'orders' | 'templates' | 'suppliers' | 'budget'>('orders');
   const [loading, setLoading] = useState(true);
   
@@ -461,30 +463,70 @@ export default function BudgetPurchases() {
     }
   };
 
-  // Print official Purchase Order
+  // Print official Purchase Order via in-app print preview modal
   const handlePrintOrder = async (order: Partial<PurchaseOrder>) => {
     try {
-      setIsPrinting(true);
       const printable = buildPrintableOrder(order);
-      await PurchaseOrderPrintService.printOrder(printable, getSchoolPrintInfo());
+      const schoolInfo = getSchoolPrintInfo();
+      const html = PurchaseOrderPrintService.generateOrderHtml(printable, schoolInfo);
+      openPrintPreview({
+        title: `سند طلب تموين المخبر - ${printable.orderNumber}`,
+        subtitle: `المؤسسة: ${schoolInfo.schoolName || ''} · المورد: ${printable.supplierName || '—'} · التاريخ: ${printable.date || ''}`,
+        type: 'custom',
+        suggestedOrientation: 'portrait',
+        headers: ['#', 'البيان وتعيين المادة أو الوسيلة', 'المواصفات التقنية', 'الوحدة', 'الكمية', 'سعر الوحدة المقدر', 'المبلغ الإجمالي'],
+        rows: printable.items.map((it, idx) => [
+          idx + 1,
+          it.name,
+          it.description || it.referenceCode || '—',
+          it.unit || '—',
+          it.quantity,
+          it.unitPrice ? `${it.unitPrice} د.ج` : '—',
+          `${it.quantity * (it.unitPrice || 0)} د.ج`
+        ]),
+        summaryCards: [
+          { label: 'رقم السند', value: printable.orderNumber },
+          { label: 'إجمالي البنود', value: printable.items.length },
+          { label: 'المبلغ الإجمالي', value: `${printable.total.toLocaleString()} د.ج` },
+          { label: 'الحالة', value: printable.status === 'approved' ? 'مصادق عليه' : printable.status === 'ordered' ? 'قيد الطلب' : 'مسودة' }
+        ],
+        notes: printable.notes || '',
+        customHtml: html
+      });
     } catch (err) {
       console.error("Print error:", err);
-      alert('حدث خطأ أثناء إعداد وثيقة الطباعة');
-    } finally {
-      setIsPrinting(false);
     }
   };
 
-  // Print direct from template preview
+  // Print direct from template preview via in-app print preview modal
   const handlePrintTemplateDirectly = async (template: PurchaseOrderTemplate) => {
     try {
-      setIsPrinting(true);
       const printable = buildPrintableFromTemplate(template);
-      await PurchaseOrderPrintService.printOrder(printable, getSchoolPrintInfo());
+      const schoolInfo = getSchoolPrintInfo();
+      const html = PurchaseOrderPrintService.generateOrderHtml(printable, schoolInfo);
+      openPrintPreview({
+        title: `نموذج طلبية: ${template.title}`,
+        subtitle: `المؤسسة: ${schoolInfo.schoolName || ''} · عدد البنود: ${printable.items.length}`,
+        type: 'custom',
+        suggestedOrientation: 'portrait',
+        headers: ['#', 'البيان', 'المواصفات', 'الوحدة', 'الكمية', 'سعر تقديري', 'الإجمالي'],
+        rows: printable.items.map((it, idx) => [
+          idx + 1,
+          it.name,
+          it.description || it.referenceCode || '—',
+          it.unit || '—',
+          it.quantity,
+          it.unitPrice ? `${it.unitPrice} د.ج` : '—',
+          `${it.quantity * (it.unitPrice || 0)} د.ج`
+        ]),
+        summaryCards: [
+          { label: 'إجمالي البنود', value: printable.items.length },
+          { label: 'المبلغ الإجمالي المقدر', value: `${printable.total.toLocaleString()} د.ج` }
+        ],
+        customHtml: html
+      });
     } catch (err) {
       console.error("Print error:", err);
-    } finally {
-      setIsPrinting(false);
     }
   };
 

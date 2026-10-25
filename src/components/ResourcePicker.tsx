@@ -58,6 +58,20 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
     });
   };
 
+  const addCustomItem = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const customId = `custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const newItem: ResourceItem = {
+      id: customId,
+      name: trimmed,
+      type: selectedType === 'chemical' ? 'chemical' : 'equipment',
+      category: selectedType === 'glassware' ? 'glassware' : (selectedType === 'chemical' ? 'مادة كيميائية' : 'عتاد وأجهزة')
+    };
+    setSelectedItems(prev => [...prev, newItem]);
+    setSearchTerm('');
+  };
+
   const handleConfirm = () => {
     const resourceString = selectedItems.map(i => i.name).join('، ');
     onSelect(resourceString);
@@ -146,6 +160,27 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
                 </button>
               </div>
             </div>
+
+            {/* Quick Adoption for Custom Resource Name */}
+            {searchTerm.trim() && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-primary/10 border-2 border-primary/25 rounded-2xl animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-start">
+                  <Package size={18} className="text-primary flex-shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-secondary">إضافة وسيلة أو مادة مخصصة غير مسجلة: </span>
+                    <strong className="text-xs font-black text-primary px-2 py-0.5 bg-surface rounded-lg border border-primary/20">{searchTerm.trim()}</strong>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addCustomItem(searchTerm)}
+                  className="w-full sm:w-auto px-4 py-2 bg-primary text-on-primary text-xs font-black rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <Plus size={14} />
+                  إضافة كعنصر مخصص
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Content */}
@@ -159,7 +194,19 @@ export default function ResourcePicker({ isOpen, onClose, onSelect, initialValue
                     <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                   </div>
                 ) : filteredResources.length === 0 ? (
-                  <div className="text-center py-12 text-on-surface/40 font-bold">لا توجد نتائج</div>
+                  <div className="text-center py-12 space-y-3">
+                    <div className="text-on-surface/40 font-bold">لم يتم العثور على نتائج في قائمة الجرد</div>
+                    {searchTerm.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => addCustomItem(searchTerm)}
+                        className="px-5 py-2.5 bg-primary text-on-primary rounded-xl text-xs font-black shadow hover:bg-primary/90 transition-all inline-flex items-center gap-1.5 active:scale-95"
+                      >
+                        <Plus size={14} />
+                        إضافة «{searchTerm.trim()}» كعنصر مخصص
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   filteredResources.map(item => {
                     const isSelected = selectedItems.find(i => i.id === item.id);

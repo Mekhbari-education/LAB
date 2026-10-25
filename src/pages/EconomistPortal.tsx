@@ -30,9 +30,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 export default function EconomistPortal() {
   const { schoolId, schoolName, directorate, commune } = useSchool();
+  const { openPrintPreview } = usePrintSettings();
   const { setRole } = useUserRole();
   const navigate = useNavigate();
 
@@ -182,11 +184,33 @@ export default function EconomistPortal() {
           </button>
 
           <button
-            onClick={() => window.print()}
+            onClick={() => {
+              openPrintPreview({
+                title: 'الموقف المالي لمشتريات وسندات المخبر — فضاء المقتصد',
+                subtitle: `المؤسسة: ${schoolName} · الولاية: ${directorate} · البلدية: ${commune}`,
+                type: 'table',
+                suggestedOrientation: 'landscape',
+                summaryCards: [
+                  { label: 'إجمالي النفقات المسجلة', value: `${totalBudgetSpent.toLocaleString()} د.ج` },
+                  { label: 'سندات الطلبيات', value: purchases.length },
+                  { label: 'تعداد العتاد الدائم', value: totalEquipCount },
+                  { label: 'ملفات الإسقاط العالقة', value: totalPendingScraps }
+                ],
+                headers: ['#', 'البيان وتعيين الطلبية', 'المورد / الجهة', 'التصنيف', 'المبلغ (د.ج)', 'الحالة / الملاحظات'],
+                rows: purchases.map((p, idx) => [
+                  idx + 1,
+                  p.title || 'طلب تموين',
+                  p.supplier || '—',
+                  p.category || 'كواشف ومستهلكات',
+                  `${(Number(p.amount) || 0).toLocaleString()} د.ج`,
+                  p.notes || 'معتمد رسمياً'
+                ])
+              });
+            }}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface-container-low text-primary text-xs font-bold border border-outline/10 hover:bg-surface-container transition-colors"
           >
             <Printer size={16} />
-            <span>طباعة الموقف المالي</span>
+            <span>معاينة وطباعة الموقف المالي</span>
           </button>
         </div>
       </header>

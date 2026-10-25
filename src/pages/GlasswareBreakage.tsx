@@ -27,6 +27,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PDFService } from '../services/pdfService';
 import { 
   GlasswareItem, 
@@ -67,6 +68,7 @@ const INITIAL_GLASSWARE: Partial<GlasswareItem>[] = [
 export default function GlasswareBreakage({ isNested = false }: { isNested?: boolean }) {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
   const { data: items, loading, invalidate } = 
     useSqlCollection<GlasswareItem>('glassware_inventory', '/api/db/glassware');
 
@@ -123,7 +125,21 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
   };
 
   const handlePrint = () => {
-    window.print();
+    const reportData = getGlasswareReportData();
+    openPrintPreview({
+      title: reportData.title,
+      subtitle: `${reportData.subtitle} · ${schoolName}`,
+      type: 'table',
+      suggestedOrientation: 'landscape',
+      headers: reportData.headers,
+      rows: reportData.rows,
+      summaryCards: [
+        { label: 'إجمالي البنود', value: items.length },
+        { label: 'إجمالي القطع', value: items.reduce((acc, c) => acc + (Number(c.quantity) || 0), 0) },
+        { label: 'القطع بحالة جيدة', value: items.filter(c => c.status === 'جيدة').length },
+        { label: 'القطع المتضررة / التالفة', value: items.filter(c => c.status !== 'جيدة').length }
+      ]
+    });
   };
 
   const getGlasswareReportData = () => {

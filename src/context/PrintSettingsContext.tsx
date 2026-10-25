@@ -15,11 +15,15 @@ interface PrintSettingsContextType {
   isSaving: boolean;
   printTestPage: () => Promise<void>;
   printReport: (data: PrintPreviewData, overrideSettings?: Partial<PrintSettings>) => Promise<void>;
+  directPrint: (data: PrintPreviewData, overrideSettings?: Partial<PrintSettings>) => Promise<void>;
   printHtml: (html: string, options?: { title?: string }) => Promise<void>;
   openPrintPreview: (data: PrintPreviewData) => void;
   closePrintPreview: () => void;
   isPreviewOpen: boolean;
   previewData: PrintPreviewData | null;
+  isPrintSettingsModalOpen: boolean;
+  openPrintSettingsModal: () => void;
+  closePrintSettingsModal: () => void;
 }
 
 const PrintSettingsContext = createContext<PrintSettingsContextType | undefined>(undefined);
@@ -29,6 +33,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [previewData, setPreviewData] = useState<PrintPreviewData | null>(null);
+  const [isPrintSettingsModalOpen, setIsPrintSettingsModalOpen] = useState(false);
 
   // Initialize settings from localStorage or defaults
   const [settings, setSettings] = useState<PrintSettings>(() => {
@@ -284,6 +289,10 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
     await PrintService.printHtml(html, { title: data.title });
   }, [settings]);
 
+  const directPrint = useCallback(async (data: PrintPreviewData, overrideSettings?: Partial<PrintSettings>) => {
+    await printReport(data, overrideSettings);
+  }, [printReport]);
+
   const openPrintPreview = useCallback((data: PrintPreviewData) => {
     setPreviewData(data);
     setIsPreviewOpen(true);
@@ -294,6 +303,14 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
     setPreviewData(null);
   }, []);
 
+  const openPrintSettingsModal = useCallback(() => {
+    setIsPrintSettingsModalOpen(true);
+  }, []);
+
+  const closePrintSettingsModal = useCallback(() => {
+    setIsPrintSettingsModalOpen(false);
+  }, []);
+
   const contextValue = useMemo(() => ({
     settings,
     updateSettings,
@@ -302,11 +319,15 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
     isSaving,
     printTestPage,
     printReport,
+    directPrint,
     printHtml,
     openPrintPreview,
     closePrintPreview,
     isPreviewOpen,
-    previewData
+    previewData,
+    isPrintSettingsModalOpen,
+    openPrintSettingsModal,
+    closePrintSettingsModal
   }), [
     settings,
     updateSettings,
@@ -315,11 +336,15 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
     isSaving,
     printTestPage,
     printReport,
+    directPrint,
     printHtml,
     openPrintPreview,
     closePrintPreview,
     isPreviewOpen,
-    previewData
+    previewData,
+    isPrintSettingsModalOpen,
+    openPrintSettingsModal,
+    closePrintSettingsModal
   ]);
 
   return (

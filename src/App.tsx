@@ -71,6 +71,7 @@ import { SchoolProvider } from './context/SchoolContext';
 import { UserRoleProvider, useUserRole } from './context/UserRoleContext';
 import { PrintSettingsProvider } from './context/PrintSettingsContext';
 import PrintPreviewModal from './components/PrintPreviewModal';
+import PrintSettingsModal from './components/PrintSettingsModal';
 import { PdfPreviewProvider } from './context/PdfPreviewContext';
 import PdfReviewModal from './components/PdfReviewModal';
 const Diagnostic = React.lazy(() => import('./pages/Diagnostic'));
@@ -152,6 +153,7 @@ export default function App() {
                   <Router>
                   <OfflineBanner />
                   <PrintPreviewModal />
+                  <PrintSettingsModal />
                   <PdfReviewModal />
             {user && connectionError && (
               <div className="fixed bottom-4 end-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm w-[calc(100vw-2rem)]">

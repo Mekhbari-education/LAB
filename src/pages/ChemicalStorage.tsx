@@ -6,9 +6,11 @@ import { analyzeChemicalStorage, StorageAnalysisResult } from '../services/gemin
 import { ShieldCheck, ShieldAlert, Sparkles, Printer, AlertTriangle, Info, MapPin } from 'lucide-react';
 
 import StorageMap from '../components/StorageMap';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 export default function ChemicalStorageMatrix() {
-  const { schoolId } = useSchool();
+  const { schoolId, schoolName } = useSchool();
+  const { openPrintPreview } = usePrintSettings();
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [chemicals, setChemicals] = useState<any[]>([]);
@@ -198,8 +200,31 @@ export default function ChemicalStorageMatrix() {
                    <h3 className="text-2xl font-bold text-primary">مناطق التخزين الموصى بها</h3>
                    <p className="text-secondary text-sm mt-1">المصفوفة المثالية لترتيب المواد حسب العائلات المتوافقة.</p>
                  </div>
-                 <button onClick={() => window.print()} className="bg-surface-container-high hover:bg-surface-container-highest px-4 py-2 rounded-xl text-primary font-bold flex items-center gap-2 transition-colors">
-                   <Printer size={18} /> طباعة ملصقات الرفوف
+                 <button 
+                   onClick={() => {
+                     if (!analysisResult) return;
+                     openPrintPreview({
+                       title: "ملصقات ومخطط مناطق تخزين المواد الكيميائية",
+                       subtitle: `المؤسسة: ${schoolName} · مصفوفة التوافق الكيميائي والتخزين الآمن`,
+                       type: "cards",
+                       cards: analysisResult.storageZones.map(zone => ({
+                         title: zone.zoneName,
+                         code: zone.colorCode,
+                         details: [
+                           { label: "رمز التوافق والتصنيف", value: zone.colorCode },
+                           { label: "الإرشادات الوقائية", value: zone.description }
+                         ]
+                       })),
+                       summaryCards: [
+                         { label: "مناطق التخزين", value: analysisResult.storageZones.length },
+                         { label: "المواد المفحوصة", value: chemicals.length },
+                         { label: "تنبيهات التنافر", value: analysisResult.hazards.length }
+                       ]
+                     });
+                   }}
+                   className="bg-surface-container-high hover:bg-surface-container-highest px-4 py-2 rounded-xl text-primary font-bold flex items-center gap-2 transition-colors"
+                 >
+                   <Printer size={18} /> معاينة وطباعة ملصقات الرفوف
                  </button>
                </div>
                

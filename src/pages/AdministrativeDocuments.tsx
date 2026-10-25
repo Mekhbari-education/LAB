@@ -35,6 +35,7 @@ import { useSchool } from '../context/SchoolContext';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { PrintService } from '../services/printService';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PDFService } from '../services/pdfService';
 import { db, getUserCollection } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -449,6 +450,7 @@ export default function AdministrativeDocuments() {
   const country = 'الجمهورية الجزائرية الديمقراطية الشعبية';
   const ministry = 'وزارة التربية الوطنية';
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
 
   const [activeTab, setActiveTab] = useState<DocCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -889,15 +891,17 @@ export default function AdministrativeDocuments() {
     `;
   };
 
-  // Direct print
+  // Open in-app print preview modal
   const handlePrint = async () => {
     const html = generateOfficialHtml();
     if (!html) return;
-    try {
-      await PrintService.printHtml(html, { title: selectedTemplate?.title });
-    } catch (err) {
-      console.error('Print error:', err);
-    }
+    openPrintPreview({
+      title: selectedTemplate?.title || 'وثيقة إدارية رسمية',
+      subtitle: `${selectedTemplate?.subTitle || ''} · ${schoolName}`,
+      type: 'custom',
+      suggestedOrientation: 'portrait',
+      customHtml: html
+    });
   };
 
   // Preview as PDF in PdfReviewModal

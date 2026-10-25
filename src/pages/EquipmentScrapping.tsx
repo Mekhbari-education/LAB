@@ -39,6 +39,7 @@ import { useSqlCollection } from '../hooks/useSqlCollection';
 import { Equipment } from '../types/equipment';
 import { createEquipmentScrapping, EquipmentScrappingRecord } from '../lib/api/equipmentScrapping';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 
@@ -74,6 +75,7 @@ type Tab = 'list' | 'pv' | 'proposal' | 'attachments';
 export default function EquipmentScrapping() {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
   const [activeTab, setActiveTab] = useState<Tab>('list');
   const [isSaving, setIsSaving] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -395,7 +397,17 @@ export default function EquipmentScrapping() {
   const handlePrintDocument = async (mode: Tab) => {
     const data = getDocumentData(mode);
     const html = PDFService.generateLabReportWordHtml(data);
-    await PrintService.printHtml(html, { title: data.title });
+    openPrintPreview({
+      title: data.title,
+      subtitle: data.subtitle,
+      type: 'table',
+      suggestedOrientation: 'landscape',
+      headers: data.headers,
+      rows: data.rows,
+      summaryCards: data.summaryCards,
+      notes: data.notes,
+      customHtml: html
+    });
   };
 
   return (

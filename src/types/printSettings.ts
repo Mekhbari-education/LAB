@@ -138,7 +138,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
 export interface PrintPreviewData {
   title: string;
   subtitle?: string;
-  type: 'table' | 'cards' | 'stickers' | 'custom';
+  type?: 'table' | 'cards' | 'stickers' | 'custom';
   headers?: string[];
   rows?: (string | number | null | undefined)[][];
   cards?: Array<{

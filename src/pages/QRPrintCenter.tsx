@@ -42,7 +42,7 @@ type TabType = 'equipment' | 'chemicals';
 
 export default function QRPrintCenter() {
   const { schoolId, schoolName, commune } = useSchool();
-  const { settings, updateSettings } = usePrintSettings();
+  const { settings, updateSettings, openPrintPreview } = usePrintSettings();
   const [activeTab, setActiveTab] = useState<TabType>('equipment');
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [chemicalList, setChemicalList] = useState<Chemical[]>([]);
@@ -170,15 +170,21 @@ export default function QRPrintCenter() {
 
   const handlePrintStickers = async () => {
     if (selectedItems.length === 0) return;
-    setIsPrinting(true);
-    try {
-      const html = PrintService.generateStickersHtml(selectedItems, settings);
-      await PrintService.printHtml(html, { title: 'ملصقات وقصاصات المخبر' });
-    } catch (e) {
-      console.error('Error printing stickers:', e);
-    } finally {
-      setIsPrinting(false);
-    }
+    const html = PrintService.generateStickersHtml(selectedItems, settings);
+    openPrintPreview({
+      title: 'ملصقات وقصاصات المخبر (QR)',
+      subtitle: `عدد الملصقات المحددة: ${selectedItems.length} · المؤسسة: ${schoolName}`,
+      type: 'stickers',
+      stickers: selectedItems.map(i => ({
+        id: i.id,
+        name: i.name,
+        qrValue: i.qrValue,
+        category: i.category,
+        location: i.location,
+        code: i.id
+      })),
+      customHtml: html
+    });
   };
 
   const handlePresetChange = (preset: QRStickerPreset) => {

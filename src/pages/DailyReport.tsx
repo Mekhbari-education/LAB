@@ -47,6 +47,7 @@ import ClassPicker from '../components/ClassPicker';
 import ResourcePicker from '../components/ResourcePicker';
 import ExperimentPresetModal from '../components/ExperimentPresetModal';
 import { useDailyReport } from '../hooks/useDailyReport';
+import { useEducationalMap } from '../hooks/useEducationalMap';
 import { LAB_OBSERVATION_PRESETS, ExperimentPreset } from '../data/labExperimentPresets';
 import { SavedReport, RoutingType } from '../types/reports';
 
@@ -185,6 +186,37 @@ export default function DailyReport() {
     });
     return Array.from(months).sort().reverse();
   }, [history]);
+
+  // Educational map classes for autocomplete datalist
+  const { levels: educationalLevels } = useEducationalMap();
+  const allClasses = useMemo(() => {
+    const mapClasses = educationalLevels.flatMap(l => l.groups);
+    const commonClasses = [
+      '1 ج م ع ت 1', '1 ج م ع ت 2', '1 ج م ع ت 3', '1 ج م ع ت 4',
+      '1 ج م آ 1', '1 ج م آ 2',
+      '2 ع ت 1', '2 ع ت 2', '2 ع ت 3',
+      '2 ر 1', '2 ت ر (هـ م)', '2 ت ر (هـ ك)', '2 ت ر (هـ ط)', '2 ت ر (هـ مد)',
+      '3 ع ت 1', '3 ع ت 2', '3 ع ت 3', '3 ع ت 4',
+      '3 ر 1', '3 ت ر (هـ م)', '3 ت ر (هـ ك)', '3 ت ر (هـ ط)', '3 ت ر (هـ مد)',
+      '1 م 1', '1 م 2', '1 م 3', '2 م 1', '2 م 2', '2 م 3', '3 م 1', '3 م 2', '3 م 3', '4 م 1', '4 م 2', '4 م 3'
+    ];
+    return Array.from(new Set([...mapClasses, ...commonClasses]));
+  }, [educationalLevels]);
+
+  const COMMON_SUBJECTS = useMemo(() => [
+    'علوم الطبيعة والحياة',
+    'العلوم الفيزيائية والتكنولوجيا',
+    'العلوم الفيزيائية',
+    'الكيمياء',
+    'الفيزياء',
+    'الرياضيات',
+    'التكنولوجيا',
+    'هندسة الطرائق',
+    'الهندسة الميكانيكية',
+    'الهندسة الكهربائية',
+    'الهندسة المدنية',
+    'الإعلام الآلي / المعلوماتية'
+  ], []);
 
   return (
     <div className="min-h-screen bg-surface-container-low/30 p-4 md:p-10 rtl pb-24 font-sans" dir="rtl">
@@ -1053,17 +1085,30 @@ export default function DailyReport() {
             ) : (
               /* Main Daily Report Table */
               <>
+                {/* User Guidance Banner */}
+                <div className="mb-3 px-4 py-3 bg-primary/5 border border-primary/20 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-xs">
+                  <div className="flex items-center gap-2.5 text-primary font-bold">
+                    <span className="p-1.5 bg-primary/10 rounded-xl text-primary text-sm flex-shrink-0">✍️</span>
+                    <span>
+                      <strong>إمكانية الكتابة والتعبئة المباشرة:</strong> يمكنك الكتابة الحرة مباشرة في كافة خانات الجدول (الأستاذ، المادة، التوقيت، القسم، نوع النشاط، والأدوات) إذا لم تجد الخيار المطلوب في القوائم المنسدلة.
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-primary/80 font-black bg-surface px-3 py-1 rounded-xl border border-primary/15 shadow-xs whitespace-nowrap">
+                    ✓ حرية الاختيار والكتابة
+                  </span>
+                </div>
+
                 <div className="relative z-10 overflow-x-auto">
               <table className="w-full border-collapse border-2 border-primary/30">
                 <thead className="bg-primary/5">
                   <tr className="text-primary text-sm font-black uppercase tracking-wider">
                     <th className="border-2 border-primary/30 p-3 w-14 text-center">ترتيب</th>
                     <th className="border-2 border-primary/30 p-3 w-12 text-center">#</th>
-                    <th className="border-2 border-primary/30 p-3 w-44 text-center">الأستاذ(ة) والمادة</th>
+                    <th className="border-2 border-primary/30 p-3 w-48 text-center">الأستاذ(ة) والمادة</th>
                     <th className="border-2 border-primary/30 p-3 w-32 text-center">التوقيت</th>
-                    <th className="border-2 border-primary/30 p-3 w-28 text-center">القسم</th>
+                    <th className="border-2 border-primary/30 p-3 w-36 text-center">القسم</th>
                     <th className="border-2 border-primary/30 p-3 text-center">النشاط التطبيقي</th>
-                    <th className="border-2 border-primary/30 p-3 w-56 text-center">الأدوات والمواد المستعملة</th>
+                    <th className="border-2 border-primary/30 p-3 w-64 text-center">الأدوات والمواد المستعملة</th>
                     <th className="border-2 border-primary/30 p-3 w-36 text-center">ملاحظات</th>
                     <th className="border-2 border-primary/30 p-3 w-20 text-center">إجراء</th>
                   </tr>
@@ -1098,86 +1143,98 @@ export default function DailyReport() {
                         {index + 1}
                       </td>
 
-                      {/* Teacher and Subject */}
+                      {/* Teacher and Subject (Direct typing + datalist dropdown + editable subject) */}
                       <td className="border-2 border-primary/30 p-2 relative group/teacher">
-                        <div className="flex flex-col items-center gap-1">
-                          <select 
-                            className="w-full border-none bg-transparent text-center text-sm font-black outline-none focus:bg-surface-container-low rounded-lg py-1 transition-all" 
-                            value={row.teacher}
-                            onChange={(e) => {
-                              const selectedTeacher = teachers.find(t => t.name === e.target.value);
-                              setRows(rows.map(r => r.id === row.id ? { 
-                                ...r, 
-                                teacher: e.target.value,
-                                teacherSubject: selectedTeacher?.subject || r.teacherSubject
-                              } : r));
-                            }}
-                          >
-                            <option value="">اختر الأستاذ...</option>
-                            {teachers
-                              .filter(t => {
-                                const isTeacher = t.subject && t.subject !== 'غير محدد' && t.subject.trim() !== '';
-                                const isNotStaff = !t.rank || (!t.rank.includes('مخبري') && !t.rank.includes('عامل'));
-                                return isTeacher && isNotStaff;
-                              })
-                              .map(t => (
-                                <option key={t.id} value={t.name}>{t.name}</option>
-                              ))}
-                          </select>
-                          {row.teacherSubject && (
-                            <span className="text-[11px] font-black text-primary/60 bg-primary/10 px-2 py-0.5 rounded-full">
-                              {row.teacherSubject}
-                            </span>
-                          )}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <div className="w-full relative">
+                            <input 
+                              type="text"
+                              list="teachers-datalist"
+                              className="w-full border border-transparent focus:border-primary/30 bg-surface-container-low/40 focus:bg-surface-container-low text-center text-sm font-black outline-none rounded-lg py-1.5 px-2 transition-all placeholder:text-secondary/40 text-primary"
+                              placeholder="اختر أو اكتب الأستاذ..."
+                              value={row.teacher}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const matchedTeacher = teachers.find(t => t.name.trim() === val.trim());
+                                setRows(rows.map(r => r.id === row.id ? { 
+                                  ...r, 
+                                  teacher: val,
+                                  teacherSubject: matchedTeacher?.subject || r.teacherSubject
+                                } : r));
+                              }}
+                              title="اختر أستاذاً من القائمة أو اكتب اسماً مخصصاً مباشرة"
+                            />
+                          </div>
+                          
+                          {/* Editable Subject with Datalist */}
+                          <div className="w-full flex items-center justify-center">
+                            <input
+                              type="text"
+                              list="subjects-datalist"
+                              className="w-full text-center text-[11px] font-black text-primary/80 bg-primary/10 hover:bg-primary/15 focus:bg-primary/20 px-2 py-0.5 rounded-full border border-primary/20 outline-none placeholder:text-primary/40 transition-all"
+                              placeholder="المادة (اكتب أو اختر)..."
+                              value={row.teacherSubject || ''}
+                              onChange={(e) => updateRow(row.id, 'teacherSubject', e.target.value)}
+                              title="انقر لتعديل مادة التدريس أو كتابة مادة مخصصة"
+                            />
+                          </div>
                         </div>
                       </td>
 
-                      {/* Time Slot */}
+                      {/* Time Slot (Direct typing + presets datalist) */}
                       <td className="border-2 border-primary/30 p-2 relative group/time">
                         <input 
-                          className="w-full border-none bg-transparent text-center text-sm font-bold outline-none focus:bg-surface-container-low rounded-lg py-1.5 transition-all" 
+                          className="w-full border border-transparent focus:border-primary/30 bg-transparent text-center text-sm font-bold outline-none focus:bg-surface-container-low rounded-lg py-1.5 transition-all text-primary placeholder:text-secondary/40" 
                           type="text" 
                           list="time-slots"
                           value={row.time}
                           placeholder="08:00 - 09:00"
                           onChange={(e) => updateRow(row.id, 'time', e.target.value)}
+                          title="اختر التوقيت أو اكتب توقيتاً مخصصاً مباشرة"
                         />
-                        <datalist id="time-slots">
-                          {timeSlots.map(slot => (
-                            <option key={slot} value={slot} />
-                          ))}
-                        </datalist>
                       </td>
 
-                      {/* Class */}
+                      {/* Class (Direct typing + datalist dropdown + picker modal button) */}
                       <td className="border-2 border-primary/30 p-2 relative group/class">
-                        <input 
-                          className="w-full border-none bg-transparent text-center text-sm font-bold outline-none focus:bg-surface-container-low rounded-lg py-1.5 transition-all cursor-pointer" 
-                          type="text" 
-                          readOnly
-                          placeholder="اختر القسم..."
-                          value={row.class}
-                          onClick={() => setPickerState({ isOpen: true, rowId: row.id })}
-                        />
+                        <div className="flex items-center gap-1 bg-surface-container-low/30 hover:bg-surface-container-low/50 focus-within:bg-surface-container-low rounded-lg p-0.5 border border-transparent focus-within:border-primary/30 transition-all">
+                          <input 
+                            className="flex-1 border-none bg-transparent text-center text-sm font-bold outline-none py-1 px-1 transition-all text-primary placeholder:text-secondary/40" 
+                            type="text" 
+                            list="classes-datalist"
+                            placeholder="اختر أو اكتب..."
+                            value={row.class}
+                            onChange={(e) => updateRow(row.id, 'class', e.target.value)}
+                            title="اكتب اسم القسم أو الفوج مباشرة أو انقر على الأيقونة للاختيار من الخريطة"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPickerState({ isOpen: true, rowId: row.id })}
+                            className="p-1.5 text-primary/50 hover:text-primary hover:bg-primary/15 rounded-md transition-all flex-shrink-0"
+                            title="فتح نافذة اختيار الأقسام من الخريطة التربوية"
+                          >
+                            <Users size={14} />
+                          </button>
+                        </div>
                       </td>
 
-                      {/* Activity Title and Type */}
+                      {/* Activity Title and Type (Direct typing + activity datalist) */}
                       <td className="border-2 border-primary/30 p-2 relative group/activity">
                         <div className="flex flex-col gap-1.5">
-                          <div className="flex items-center gap-1">
-                            <select 
-                              className="border-none bg-surface-container-low/40 text-xs font-black outline-none focus:bg-surface-container-low rounded-lg py-1 px-2 transition-all"
-                              value={row.activityType}
-                              onChange={(e) => updateRow(row.id, 'activityType', e.target.value)}
-                            >
-                              <option value="عملي">عملي</option>
-                              <option value="محاكاة">محاكاة</option>
-                              <option value="EXAO">EXAO</option>
-                              <option value="افتراضي">افتراضي</option>
-                            </select>
+                          <div className="flex items-center gap-1.5">
+                            <div className="relative flex-shrink-0">
+                              <input 
+                                type="text"
+                                list="activity-types-datalist"
+                                className="w-24 border border-primary/15 bg-surface-container-low/60 focus:bg-surface-container-low text-xs font-black outline-none rounded-lg py-1 px-2 text-center text-primary transition-all placeholder:text-secondary/40"
+                                value={row.activityType}
+                                placeholder="نوع النشاط"
+                                onChange={(e) => updateRow(row.id, 'activityType', e.target.value)}
+                                title="اختر نوع النشاط أو اكتب نوعاً مخصصاً (مثل: عملي، محاكاة، EXAO، عرض تجريبي، ورشة...)"
+                              />
+                            </div>
                             <input 
                               type="text"
-                              className="flex-1 border-none bg-transparent text-start text-sm font-bold outline-none focus:bg-surface-container-low rounded-lg py-1 px-2 transition-all"
+                              className="flex-1 border border-transparent focus:border-primary/30 bg-transparent text-start text-sm font-bold outline-none focus:bg-surface-container-low rounded-lg py-1 px-2 transition-all placeholder:text-secondary/40 text-primary"
                               placeholder="عنوان التجربة أو النشاط..."
                               value={row.activityTitle}
                               onChange={(e) => updateRow(row.id, 'activityTitle', e.target.value)}
@@ -1200,20 +1257,31 @@ export default function DailyReport() {
                         </div>
                       </td>
 
-                      {/* Equipment and Materials */}
-                      <td className="border-2 border-primary/30 p-2">
-                        <div className="relative group/resources">
-                          <div 
-                            onClick={() => setResourcePickerState({ isOpen: true, rowId: row.id })}
-                            className={cn(
-                              "w-full min-h-[50px] bg-surface-container-low/30 rounded-xl p-2.5 text-start text-xs font-bold cursor-pointer hover:bg-surface-container-low/50 transition-all border border-transparent",
-                              !row.equipment && "flex items-center justify-center italic text-secondary/50"
-                            )}
-                          >
-                            {row.equipment ? (
-                              <span className="text-primary leading-relaxed">{row.equipment}</span>
-                            ) : (
-                              "اختر الوسائل والمواد..."
+                      {/* Equipment and Materials (Direct typing in textarea + ResourcePicker modal button) */}
+                      <td className="border-2 border-primary/30 p-2 relative group/resources">
+                        <div className="flex flex-col gap-1">
+                          <textarea 
+                            rows={2}
+                            className="w-full bg-surface-container-low/30 hover:bg-surface-container-low/50 focus:bg-surface-container-low rounded-xl p-2 text-start text-xs font-bold border border-transparent focus:border-primary/30 outline-none transition-all resize-none leading-relaxed text-primary placeholder:text-secondary/40 placeholder:font-normal"
+                            placeholder="اكتب الأدوات والمواد هنا مباشرة أو انقر لاختيارها..."
+                            value={row.equipment || ''}
+                            onChange={(e) => updateRow(row.id, 'equipment', e.target.value)}
+                            title="اكتب الوسائل والمواد مباشرة مفصولة بفواصل أو استخدم زر الاختيار من القائمة"
+                          />
+                          <div className="flex items-center justify-between pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setResourcePickerState({ isOpen: true, rowId: row.id })}
+                              className="text-[10px] font-bold text-primary/70 hover:text-primary hover:bg-primary/10 px-2 py-0.5 rounded-md flex items-center gap-1 transition-all"
+                              title="فتح قائمة العتاد والمواد الكيميائية للاختيار"
+                            >
+                              <Boxes size={12} />
+                              اختيار من القائمة...
+                            </button>
+                            {row.equipment && (
+                              <span className="text-[9.5px] text-secondary/60 font-bold">
+                                {row.equipment.split(/[،,]/).filter(Boolean).length} أداة / مادة
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1222,7 +1290,7 @@ export default function DailyReport() {
                       {/* Row Notes */}
                       <td className="border-2 border-primary/30 p-2">
                         <input 
-                          className="w-full border-none bg-transparent text-center text-xs font-bold outline-none focus:bg-surface-container-low rounded-lg py-1.5 transition-all" 
+                          className="w-full border border-transparent focus:border-primary/30 bg-transparent text-center text-xs font-bold outline-none focus:bg-surface-container-low rounded-lg py-1.5 transition-all text-primary placeholder:text-secondary/40" 
                           type="text" 
                           placeholder="ملاحظات..."
                           value={row.notes}
@@ -1253,6 +1321,43 @@ export default function DailyReport() {
                   ))}
                 </tbody>
               </table>
+
+              {/* Datalists for Direct Typing and Searchable Autocomplete */}
+              <datalist id="teachers-datalist">
+                {teachers
+                  .filter(t => {
+                    const isTeacher = t.subject && t.subject !== 'غير محدد' && t.subject.trim() !== '';
+                    const isNotStaff = !t.rank || (!t.rank.includes('مخبري') && !t.rank.includes('عامل'));
+                    return isTeacher && isNotStaff;
+                  })
+                  .map(t => (
+                    <option key={t.id} value={t.name}>{t.subject ? `${t.name} (${t.subject})` : t.name}</option>
+                  ))}
+              </datalist>
+
+              <datalist id="subjects-datalist">
+                {COMMON_SUBJECTS.map(subj => (
+                  <option key={subj} value={subj} />
+                ))}
+              </datalist>
+
+              <datalist id="classes-datalist">
+                {allClasses.map(c => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+
+              <datalist id="activity-types-datalist">
+                <option value="عملي">عملي (تجارب مخبرية)</option>
+                <option value="محاكاة">محاكاة حاسوبية</option>
+                <option value="EXAO">EXAO (تجريب مدعم بالحاسوب)</option>
+                <option value="افتراضي">افتراضي (Virtual Lab)</option>
+                <option value="عرض تجريبي">عرض تجريبي</option>
+                <option value="ورشة علمية">ورشة علمية تطبيقية</option>
+                <option value="تقويم تجريبي">تقويم تجريبي / فرض مخبري</option>
+                <option value="مشروع تطبيقي">مشروع تطبيقي بيداغوجي</option>
+                <option value="فحص مجهري">فحص مجهري وملاحظة</option>
+              </datalist>
             </div>
 
             {/* Table Bottom Action Buttons */}

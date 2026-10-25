@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { usePdfPreview } from '../context/PdfPreviewContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 
@@ -52,6 +53,7 @@ interface Equipment {
 export default function LoanRequest() {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPdfPreview } = usePdfPreview();
+  const { openPrintPreview } = usePrintSettings();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -228,7 +230,17 @@ export default function LoanRequest() {
   const handlePrint = async () => {
     const data = getDocumentData();
     const html = PDFService.generateLabReportWordHtml(data);
-    await PrintService.printHtml(html, { title: data.title });
+    openPrintPreview({
+      title: data.title,
+      subtitle: data.subtitle,
+      type: 'table',
+      suggestedOrientation: 'portrait',
+      headers: data.headers,
+      rows: data.rows,
+      summaryCards: data.summaryCards,
+      notes: data.notes,
+      customHtml: html
+    });
   };
 
   return (

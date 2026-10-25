@@ -21,6 +21,7 @@ import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { findSmartForm, ensureApiKey } from '../services/geminiService';
 import { PDFService } from '../services/pdfService';
 import { useSchool } from '../context/SchoolContext';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 interface FormTemplate {
   id: string;
@@ -39,6 +40,7 @@ const TEMPLATES: FormTemplate[] = [
 
 export default function SmartForms() {
   const { schoolName, directorate, commune } = useSchool();
+  const { openPrintPreview } = usePrintSettings();
   const navigate = useNavigate();
   const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
   const [aiQuery, setAiQuery] = useState('');
@@ -240,7 +242,32 @@ export default function SmartForms() {
                       <Download size={18} />
                       تصدير PDF
                     </button>
-                    <button onClick={() => window.print()} className="p-3 bg-surface border border-outline/10 rounded-full hover:bg-surface-container transition-all">
+                    <button 
+                      onClick={() => {
+                        if (!selectedTemplate) return;
+                        openPrintPreview({
+                          title: selectedTemplate.title,
+                          subtitle: `${selectedTemplate.description} · ${formData.establishment || schoolName}`,
+                          type: 'table',
+                          suggestedOrientation: 'portrait',
+                          summaryCards: [
+                            { label: 'المؤسسة', value: formData.establishment || schoolName },
+                            { label: 'التاريخ', value: formData.date || new Date().toLocaleDateString('ar-DZ') }
+                          ],
+                          notes: formData.content || '',
+                          headers: ['البيان الإداري', 'القيمة المدونة'],
+                          rows: [
+                            ['المؤسسة التربوية', formData.establishment || schoolName],
+                            ['تاريخ التحرير', formData.date || new Date().toLocaleDateString('ar-DZ')],
+                            ['الرقم المرجعي', formData.reference || '—'],
+                            ['المصلحة / المخبر', 'مخبر العلوم والتكنولوجيا'],
+                            ['محتوى وموضوع الاستمارة', formData.content || 'نموذج رسمي مصادق عليه']
+                          ]
+                        });
+                      }} 
+                      title="معاينة وطباعة النموذج"
+                      className="p-3 bg-surface border border-outline/10 rounded-full hover:bg-surface-container transition-all"
+                    >
                       <Printer size={20} />
                     </button>
                   </div>

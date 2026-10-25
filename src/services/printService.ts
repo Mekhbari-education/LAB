@@ -163,6 +163,10 @@ export class PrintService {
    * incorporating the active PrintSettings.
    */
   static generateReportHtml(data: PrintPreviewData, settings: PrintSettings = DEFAULT_PRINT_SETTINGS): string {
+    if (data.customHtml && (data.customHtml.includes('<html') || data.customHtml.includes('<!DOCTYPE'))) {
+      return data.customHtml;
+    }
+
     const {
       title,
       subtitle,
@@ -170,7 +174,8 @@ export class PrintService {
       rows = [],
       summaryCards = [],
       notes,
-      suggestedOrientation
+      suggestedOrientation,
+      customHtml
     } = data;
 
     const orientation = suggestedOrientation || (settings.layout.orientation === 'auto' ? 'portrait' : settings.layout.orientation);
@@ -527,6 +532,12 @@ export class PrintService {
     </table>
     ` : ''}
 
+    ${customHtml ? `
+    <div class="custom-report-content" dir="rtl">
+      ${customHtml}
+    </div>
+    ` : ''}
+
     ${notes ? `
     <div class="notes-box">
       <strong>ملاحظات وإرشادات إدارية:</strong>
@@ -780,7 +791,8 @@ export class PrintService {
       rows = [],
       summaryCards = [],
       notes,
-      suggestedOrientation
+      suggestedOrientation,
+      customHtml
     } = data;
 
     const orientation = suggestedOrientation || (settings.layout.orientation === 'auto' ? 'portrait' : settings.layout.orientation);
@@ -1020,6 +1032,11 @@ export class PrintService {
             </table>
           ` : ''}
 
+          ${customHtml && headers.length === 0 ? `
+            <div class="custom-content" dir="rtl">
+              ${customHtml}
+            </div>
+          ` : `
           <table class="data-table" dir="rtl">
             <thead>
               <tr>
@@ -1036,6 +1053,7 @@ export class PrintService {
               `).join('')}
             </tbody>
           </table>
+          `}
 
           ${notes ? `
             <table class="notes-table" dir="rtl">

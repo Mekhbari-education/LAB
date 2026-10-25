@@ -30,10 +30,12 @@ import { cn } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import DirectorOnboardingModal from '../components/DirectorOnboardingModal';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 export default function DirectorPortal() {
   const { schoolId, schoolName, directorate, commune, hasCompletedSchoolSetup } = useSchool();
   const { setRole } = useUserRole();
+  const { openPrintPreview } = usePrintSettings();
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'visas' | 'safety' | 'inventory' | 'summary'>('visas');
@@ -510,11 +512,33 @@ export default function DirectorPortal() {
 
           <div className="flex items-center justify-end gap-3">
             <button
-              onClick={() => window.print()}
+              onClick={() => {
+                const pendingCount = dailyReports.filter(r => !r.directorVisa).length;
+                openPrintPreview({
+                  title: 'الحصيلة الإدارية للمؤسسة — فضاء مدير المؤسسة',
+                  subtitle: `المؤسسة: ${schoolName} · الولاية: ${directorate} · البلدية: ${commune}`,
+                  type: 'table',
+                  suggestedOrientation: 'landscape',
+                  summaryCards: [
+                    { label: 'تقارير تنتظر التأشيرة', value: pendingCount },
+                    { label: 'تجهيزات مسجلة', value: equipmentList.length },
+                    { label: 'مواد كيميائية', value: chemicalsList.length },
+                    { label: 'بلاغات السلامة', value: incidents.length }
+                  ],
+                  headers: ['البيان والمحور الإداري', 'الحصيلة الرقمية', 'الوضعية والملاحظات'],
+                  rows: [
+                    ['تقارير أنشطة المخابر اليومية', `${dailyReports.length} تقرير مسجل (${pendingCount} قيد التأشيرة)`, pendingCount === 0 ? 'كافة التقارير مؤشرة ومصادق عليها' : 'بانتظار المصادقة والتأشيرة'],
+                    ['سجل جرد العتاد والأجهزة المخبرية', `${equipmentList.length} صنف مسجل في السجل العام`, 'مطابق للمخطط البيداغوجي المعتمد'],
+                    ['سجل المواد الكيميائية والمستهلكات', `${chemicalsList.length} صنف مسجل في المستودع`, 'تخضع لمعايير السلامة والتخزين النظامي'],
+                    ['سجل حوادث السلامة والتدخلات', `${incidents.length} بلاغ مسجل`, incidents.length === 0 ? 'لم تُسجل أي حوادث سلامة' : 'تم اتخاذ التدابير الوقائية المطلوبة'],
+                    ['السنة الدراسية والاعتماد', '2025 / 2026', 'الجمهورية الجزائرية الديمقراطية الشعبية — وزارة التربية الوطنية']
+                  ]
+                });
+              }}
               className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-md transition-all flex items-center gap-2"
             >
               <Printer size={16} />
-              <span>طباعة الحصيلة الإدارية للمؤسسة</span>
+              <span>معاينة وطباعة الحصيلة الإدارية للمؤسسة</span>
             </button>
           </div>
         </div>

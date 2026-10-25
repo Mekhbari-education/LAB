@@ -13,10 +13,12 @@ import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 import { Chemical, GHS_ICONS, GHS_LABELS } from '../types/chemicals';
 import { formatSchoolWithCommune } from '../lib/utils';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 export function useChemicalsLogic(isNested = false) {
   const { schoolId, schoolName, directorate: stateName, commune, academicYear: contextAcademicYear } = useSchool();
+  const { openPrintPreview } = usePrintSettings();
   const academicYear = contextAcademicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025/2026';
   const [searchParams] = useSearchParams();
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
@@ -562,7 +564,28 @@ export function useChemicalsLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: `سجل المواد الكيميائية — ${schoolName}` });
+    openPrintPreview({
+      title: `سجل المواد الكيميائية — ${schoolName}`,
+      subtitle: `مديرية التربية: ${stateName || '—'} · السنة الدراسية: ${academicYear}`,
+      type: 'custom',
+      customHtml: html,
+      headers: ['#', 'الاسم العربي', 'Désignation (En)', 'الصيغة', 'الوحدة', 'الكمية', 'الحالة', 'الرف'],
+      rows: sortedChemicals.map((c, index) => [
+        index + 1,
+        c.nameAr,
+        c.nameEn,
+        c.formula || '—',
+        c.unit,
+        c.quantity,
+        c.state === 'solid' ? 'صلب' : c.state === 'liquid' ? 'سائل' : 'غاز',
+        c.shelf || '—'
+      ]),
+      summaryCards: [
+        { label: 'إجمالي المواد', value: sortedChemicals.length },
+        { label: 'المواد الخطرة', value: hazardousCount }
+      ],
+      suggestedOrientation: 'landscape'
+    });
   };
 
 
@@ -1010,7 +1033,12 @@ export function useChemicalsLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: 'بطاقة مخزون' });
+    openPrintPreview({
+      title: `بطاقات جرد كيميائي (${items.length} عنصر)`,
+      type: 'custom',
+      customHtml: html,
+      suggestedOrientation: 'portrait'
+    });
   };
 
   const handlePrint = (c: Chemical) => {
@@ -1062,7 +1090,12 @@ export function useChemicalsLogic(isNested = false) {
         </body>
       </html>
     `;
-    PrintService.printHtml(html, { title: `بطاقة مادة - ${c.nameAr || c.nameEn}` });
+    openPrintPreview({
+      title: `بطاقة تعريف مادة — ${c.nameAr || c.nameEn}`,
+      type: 'custom',
+      customHtml: html,
+      suggestedOrientation: 'portrait'
+    });
   };
 
   const handleSort = (key: keyof Chemical) => {

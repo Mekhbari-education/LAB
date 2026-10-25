@@ -52,6 +52,7 @@ import QRScanner from '../components/QRScanner';
 
 import type { Equipment, MaintenanceLog } from '../types/equipment';
 import { useEquipmentLogic } from '../hooks/useEquipmentLogic';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 import { useTranslation } from 'react-i18next';
 
 export default function Equipment({ isNested = false }: { isNested?: boolean }) {
@@ -127,6 +128,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     totalEstimatedValue
   } = useEquipmentLogic(isNested);
 
+  const { openPrintPreview } = usePrintSettings();
   const [isInlineEditMode, setIsInlineEditMode] = useState<boolean>(true);
   const [saveIndicator, setSaveIndicator] = useState<{ [key: string]: boolean }>({});
   const [isOfficialRegistryModalOpen, setIsOfficialRegistryModalOpen] = useState<boolean>(false);
@@ -1398,11 +1400,27 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               
               <div className="w-full space-y-3">
                 <button 
-                  onClick={() => window.print()}
+                  onClick={() => {
+                    if (qrCodeItem) {
+                      openPrintPreview({
+                        title: `ملصق رمز الاستجابة السريعة (QR) - ${qrCodeItem.name}`,
+                        subtitle: `المؤسسة: ${schoolName} · النوع: عتاد ومعدات المخبر`,
+                        type: 'stickers',
+                        stickers: [{
+                          id: qrCodeItem.id,
+                          name: qrCodeItem.name,
+                          qrValue: JSON.stringify({ id: qrCodeItem.id, type: 'equipment', name: qrCodeItem.name }),
+                          category: qrCodeItem.type === 'glassware' ? 'زجاجيات' : 'عتاد وأجهزة تقنية',
+                          location: qrCodeItem.location || '—',
+                          code: qrCodeItem.serialNumber || qrCodeItem.id
+                        }]
+                      });
+                    }
+                  }}
                   className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
                 >
                   <Printer size={18} />
-                  طباعة الملصق
+                  معاينة وطباعة الملصق
                 </button>
                 <button 
                   onClick={() => setIsQRModalOpen(false)}
