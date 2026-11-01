@@ -28,6 +28,135 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/lib/firebase-admin.ts
+function ensureAdminInitialized() {
+  if (!(0, import_app.getApps)().length) {
+    let projectId = "education-dz-lab";
+    try {
+      const configPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+      if (import_fs.default.existsSync(configPath)) {
+        const config = JSON.parse(import_fs.default.readFileSync(configPath, "utf8"));
+        if (config.projectId) projectId = config.projectId;
+      }
+    } catch (e) {
+      console.warn("Could not read firebase-applet-config.json, using default projectId", e);
+    }
+    (0, import_app.initializeApp)({ projectId });
+  }
+}
+function getAdminAuth() {
+  if (!cachedAuth) {
+    ensureAdminInitialized();
+    cachedAuth = (0, import_auth.getAuth)();
+  }
+  return cachedAuth;
+}
+function getAdminFirestore() {
+  if (!cachedFirestore) {
+    ensureAdminInitialized();
+    let dbId;
+    try {
+      const configPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
+      if (import_fs.default.existsSync(configPath)) {
+        const config = JSON.parse(import_fs.default.readFileSync(configPath, "utf8"));
+        dbId = config.firestoreDatabaseId;
+      }
+    } catch (e) {
+      console.warn("Notice reading databaseId for admin firestore:", e);
+    }
+    cachedFirestore = dbId ? (0, import_firestore.getFirestore)((0, import_app.getApps)()[0], dbId) : (0, import_firestore.getFirestore)();
+  }
+  return cachedFirestore;
+}
+var import_app, import_auth, import_firestore, import_fs, import_path, cachedAuth, cachedFirestore, adminAuth;
+var init_firebase_admin = __esm({
+  "src/lib/firebase-admin.ts"() {
+    import_app = require("firebase-admin/app");
+    import_auth = require("firebase-admin/auth");
+    import_firestore = require("firebase-admin/firestore");
+    import_fs = __toESM(require("fs"), 1);
+    import_path = __toESM(require("path"), 1);
+    cachedAuth = null;
+    cachedFirestore = null;
+    adminAuth = {
+      verifyIdToken: async (token) => {
+        const auth = getAdminAuth();
+        return auth.verifyIdToken(token);
+      }
+    };
+  }
+});
+
+// src/middleware/auth.ts
+async function resolveVerifiedSchoolId(uid, headerSchoolId, isAdminUser) {
+  if (isAdminUser && headerSchoolId) {
+    return headerSchoolId;
+  }
+  const cached = schoolMembershipCache.get(uid);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    if (headerSchoolId && headerSchoolId !== cached.schoolId && !isAdminUser) {
+      throw new Error("School membership mismatch: User does not belong to the requested school.");
+    }
+    return cached.schoolId;
+  }
+  try {
+    const fs3 = getAdminFirestore();
+    const userDoc = await fs3.collection("users").doc(uid).get();
+    let resolvedId = uid;
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      if (data?.schoolId) {
+        resolvedId = data.schoolId;
+      }
+    }
+    schoolMembershipCache.set(uid, {
+      schoolId: resolvedId,
+      expiresAt: now + 5 * 60 * 1e3
+    });
+    if (headerSchoolId && headerSchoolId !== resolvedId && !isAdminUser) {
+      throw new Error("School membership mismatch: User does not belong to the requested school.");
+    }
+    return resolvedId;
+  } catch (err) {
+    if (err?.message?.includes("membership mismatch")) {
+      throw err;
+    }
+    return headerSchoolId || uid;
+  }
+}
+var schoolMembershipCache, requireAuth;
+var init_auth = __esm({
+  "src/middleware/auth.ts"() {
+    init_firebase_admin();
+    schoolMembershipCache = /* @__PURE__ */ new Map();
+    requireAuth = async (req, res, next) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ error: "Unauthorized: Missing or invalid authorization token." });
+      }
+      const token = authHeader.split("Bearer ")[1].trim();
+      try {
+        const decodedToken = await adminAuth.verifyIdToken(token);
+        req.user = decodedToken;
+        req.isAdmin = Boolean(
+          decodedToken.admin === true || decodedToken.email === "faycalassoul@gmail.com" && decodedToken.email_verified === true
+        );
+        const headerSchoolId = req.headers["x-school-id"] ? String(req.headers["x-school-id"]) : void 0;
+        try {
+          req.schoolId = await resolveVerifiedSchoolId(decodedToken.uid, headerSchoolId, req.isAdmin);
+        } catch (mismatchErr) {
+          return res.status(403).json({ error: mismatchErr.message || "Forbidden: Access to this school is denied." });
+        }
+        next();
+      } catch (error) {
+        console.error("Error verifying Firebase ID token in requireAuth:", error);
+        return res.status(401).json({ error: "Unauthorized: Invalid or expired token." });
+      }
+    };
+  }
+});
+
 // src/data/schools.ts
 var schools_exports = {};
 __export(schools_exports, {
@@ -132491,72 +132620,36 @@ var init_db = __esm({
   }
 });
 
-// src/lib/firebase-admin.ts
-function getAdminAuth() {
-  if (!cachedAuth) {
-    let projectId = "education-dz-lab";
-    try {
-      const configPath = import_path.default.join(process.cwd(), "firebase-applet-config.json");
-      if (import_fs.default.existsSync(configPath)) {
-        const config = JSON.parse(import_fs.default.readFileSync(configPath, "utf8"));
-        if (config.projectId) projectId = config.projectId;
-      }
-    } catch (e) {
-      console.warn("Could not read firebase-applet-config.json, using default projectId", e);
-    }
-    if (!(0, import_app.getApps)().length) {
-      (0, import_app.initializeApp)({ projectId });
-    }
-    cachedAuth = (0, import_auth.getAuth)();
-  }
-  return cachedAuth;
-}
-var import_app, import_auth, import_fs, import_path, cachedAuth, adminAuth;
-var init_firebase_admin = __esm({
-  "src/lib/firebase-admin.ts"() {
-    import_app = require("firebase-admin/app");
-    import_auth = require("firebase-admin/auth");
-    import_fs = __toESM(require("fs"), 1);
-    import_path = __toESM(require("path"), 1);
-    cachedAuth = null;
-    adminAuth = {
-      verifyIdToken: async (token) => {
-        const auth = getAdminAuth();
-        return auth.verifyIdToken(token);
-      }
-    };
-  }
-});
-
-// src/middleware/auth.ts
-var requireAuth;
-var init_auth = __esm({
-  "src/middleware/auth.ts"() {
-    init_firebase_admin();
-    requireAuth = async (req, res, next) => {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({ error: "Unauthorized: Missing token" });
-      }
-      const token = authHeader.split("Bearer ")[1];
-      try {
-        const decodedToken = await adminAuth.verifyIdToken(token);
-        req.user = decodedToken;
-        next();
-      } catch (error) {
-        console.error("Error verifying Firebase ID token:", error);
-        return res.status(401).json({ error: "Unauthorized: Invalid token" });
-      }
-    };
-  }
-});
-
 // src/routes/dbRoutes.ts
 var dbRoutes_exports = {};
 __export(dbRoutes_exports, {
   default: () => dbRoutes_default
 });
-var import_express, import_drizzle_orm, router, sanitizeEquipmentItem, dbRoutes_default;
+function generateId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 11);
+}
+function pickAllowed(obj, allowedKeys) {
+  const result = {};
+  if (!obj || typeof obj !== "object") return result;
+  for (const key of allowedKeys) {
+    if (obj[key] !== void 0) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+function getSchoolId(req, res) {
+  const schoolId = req.schoolId || req.user?.uid;
+  if (!schoolId) {
+    res.status(401).json({ error: "Unauthorized: School ID could not be identified" });
+    return null;
+  }
+  return schoolId;
+}
+var import_express, import_drizzle_orm, router, MAX_BULK_ITEMS, chemicalAllowedFields, equipmentAllowedFields, teacherAllowedFields, studentClassAllowedFields, labSessionAllowedFields, labScheduleAllowedFields, glasswareAllowedFields, equipmentScrappingAllowedFields, maintenanceLogsAllowedFields, labUsageLogsAllowedFields, dbRoutes_default;
 var init_dbRoutes = __esm({
   "src/routes/dbRoutes.ts"() {
     import_express = __toESM(require("express"), 1);
@@ -132566,10 +132659,140 @@ var init_dbRoutes = __esm({
     import_drizzle_orm = require("drizzle-orm");
     router = import_express.default.Router();
     router.use(requireAuth);
+    MAX_BULK_ITEMS = 250;
+    chemicalAllowedFields = [
+      "name",
+      "casNumber",
+      "formula",
+      "purity",
+      "quantity",
+      "unit",
+      "hazardClasses",
+      "storageLocation",
+      "expiryDate",
+      "supplier",
+      "notes",
+      "minimumThreshold",
+      "physicalState",
+      "safetyNotes"
+    ];
+    equipmentAllowedFields = [
+      "name",
+      "type",
+      "serialNumber",
+      "status",
+      "totalQuantity",
+      "availableQuantity",
+      "brokenQuantity",
+      "lastCalibration",
+      "nextCalibration",
+      "supplier",
+      "location",
+      "notes",
+      "source",
+      "price",
+      "registrationDate",
+      "exitDate",
+      "foundationalInventory",
+      "decennialReview",
+      "smartNameAr",
+      "smartDescriptionAr",
+      "imageKeyword",
+      "lastSmartUpdate"
+    ];
+    teacherAllowedFields = [
+      "name",
+      "subject",
+      "specialty",
+      "email",
+      "phone",
+      "classes",
+      "active"
+    ];
+    studentClassAllowedFields = [
+      "name",
+      "grade",
+      "specialty",
+      "studentCount",
+      "academicYear"
+    ];
+    labSessionAllowedFields = [
+      "sessionName",
+      "teacherId",
+      "classId",
+      "labNumber",
+      "date",
+      "startTime",
+      "endTime",
+      "experimentTitle",
+      "experimentDescription",
+      "chemicalsUsed",
+      "equipmentUsed",
+      "status",
+      "notes",
+      "observations"
+    ];
+    labScheduleAllowedFields = [
+      "labNumber",
+      "dayOfWeek",
+      "period",
+      "startTime",
+      "endTime",
+      "teacherId",
+      "classId",
+      "subject",
+      "academicYear",
+      "semester"
+    ];
+    glasswareAllowedFields = [
+      "name",
+      "type",
+      "capacity",
+      "quantity",
+      "brokenQuantity",
+      "location",
+      "minimumThreshold",
+      "notes"
+    ];
+    equipmentScrappingAllowedFields = [
+      "equipmentId",
+      "equipmentName",
+      "serialNumber",
+      "quantity",
+      "reason",
+      "decisionNumber",
+      "decisionDate",
+      "committeeMembers",
+      "status",
+      "notes",
+      "scrappedAt"
+    ];
+    maintenanceLogsAllowedFields = [
+      "equipmentId",
+      "equipmentName",
+      "issueDescription",
+      "maintenanceType",
+      "cost",
+      "performedBy",
+      "status",
+      "reportDate",
+      "completedDate",
+      "notes"
+    ];
+    labUsageLogsAllowedFields = [
+      "date",
+      "teacherName",
+      "subject",
+      "className",
+      "topic",
+      "usedMaterials",
+      "observations",
+      "period"
+    ];
     router.get("/chemicals", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(chemicals).where((0, import_drizzle_orm.eq)(chemicals.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132578,10 +132801,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/chemicals/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(chemicals).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(chemicals.id, id), (0, import_drizzle_orm.eq)(chemicals.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, chemicalAllowedFields);
+        const [updated] = await db.update(chemicals).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(chemicals.id, id), (0, import_drizzle_orm.eq)(chemicals.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update chemical" });
@@ -132589,8 +132813,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/chemicals/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(chemicals).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(chemicals.id, id), (0, import_drizzle_orm.eq)(chemicals.schoolId, schoolId)));
         res.json({ success: true });
@@ -132600,10 +132824,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/chemicals", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const newChemical = { ...req.body, id, schoolId };
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, chemicalAllowedFields);
+        const newChemical = { ...cleaned, id, schoolId };
         const [inserted] = await db.insert(chemicals).values(newChemical).returning();
         res.json(inserted);
       } catch (error) {
@@ -132612,13 +132837,16 @@ var init_dbRoutes = __esm({
     });
     router.post("/chemicals/bulk", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const items = Array.isArray(req.body) ? req.body : req.body.items;
         if (!items || !items.length) return res.status(400).json({ error: "No items provided" });
+        if (items.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
         const formatted = items.map((item) => ({
-          ...item,
-          id: item.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)),
+          ...pickAllowed(item, chemicalAllowedFields),
+          id: item.id || generateId(),
           schoolId
         }));
         const inserted = await db.insert(chemicals).values(formatted).returning();
@@ -132627,51 +132855,10 @@ var init_dbRoutes = __esm({
         res.status(500).json({ error: "Failed to bulk insert chemicals" });
       }
     });
-    sanitizeEquipmentItem = (item, schoolId) => {
-      const allowed = [
-        "id",
-        "schoolId",
-        "name",
-        "type",
-        "serialNumber",
-        "status",
-        "totalQuantity",
-        "availableQuantity",
-        "brokenQuantity",
-        "lastCalibration",
-        "nextCalibration",
-        "supplier",
-        "location",
-        "notes",
-        "source",
-        "price",
-        "registrationDate",
-        "exitDate",
-        "foundationalInventory",
-        "decennialReview",
-        "smartNameAr",
-        "smartDescriptionAr",
-        "imageKeyword",
-        "lastSmartUpdate"
-      ];
-      const cleaned = { schoolId };
-      for (const key of allowed) {
-        if (item[key] !== void 0) {
-          cleaned[key] = item[key];
-        }
-      }
-      if (!cleaned.id) {
-        cleaned.id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11);
-      }
-      if (!cleaned.name) cleaned.name = "\u0635\u0646\u0641 \u0628\u062F\u0648\u0646 \u0627\u0633\u0645";
-      if (!cleaned.type) cleaned.type = "other";
-      if (!cleaned.status) cleaned.status = "functional";
-      return cleaned;
-    };
     router.get("/equipment", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(equipment).where((0, import_drizzle_orm.eq)(equipment.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132680,12 +132867,10 @@ var init_dbRoutes = __esm({
     });
     router.put("/equipment/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const cleaned = sanitizeEquipmentItem(req.body, schoolId);
-        delete cleaned.id;
-        delete cleaned.schoolId;
+        const cleaned = pickAllowed(req.body, equipmentAllowedFields);
         const [updated] = await db.update(equipment).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipment.id, id), (0, import_drizzle_orm.eq)(equipment.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
@@ -132694,8 +132879,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/equipment/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(equipment).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipment.id, id), (0, import_drizzle_orm.eq)(equipment.schoolId, schoolId)));
         res.json({ success: true });
@@ -132705,9 +132890,18 @@ var init_dbRoutes = __esm({
     });
     router.post("/equipment", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const newEquipment = sanitizeEquipmentItem(req.body, schoolId);
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, equipmentAllowedFields);
+        const newEquipment = {
+          name: "\u0635\u0646\u0641 \u0628\u062F\u0648\u0646 \u0627\u0633\u0645",
+          type: "other",
+          status: "functional",
+          ...cleaned,
+          id,
+          schoolId
+        };
         const [inserted] = await db.insert(equipment).values(newEquipment).returning();
         res.json(inserted);
       } catch (error) {
@@ -132716,11 +132910,21 @@ var init_dbRoutes = __esm({
     });
     router.post("/equipment/bulk", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const items = Array.isArray(req.body) ? req.body : req.body.items;
         if (!items || !items.length) return res.status(400).json({ error: "No items provided" });
-        const formatted = items.map((item) => sanitizeEquipmentItem(item, schoolId));
+        if (items.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
+        const formatted = items.map((item) => ({
+          name: "\u0635\u0646\u0641 \u0628\u062F\u0648\u0646 \u0627\u0633\u0645",
+          type: "other",
+          status: "functional",
+          ...pickAllowed(item, equipmentAllowedFields),
+          id: item.id || generateId(),
+          schoolId
+        }));
         const inserted = await db.insert(equipment).values(formatted).returning();
         res.json(inserted);
       } catch (error) {
@@ -132729,8 +132933,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/teachers", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(teachers).where((0, import_drizzle_orm.eq)(teachers.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132739,10 +132943,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/teachers/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(teachers).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(teachers.id, id), (0, import_drizzle_orm.eq)(teachers.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, teacherAllowedFields);
+        const [updated] = await db.update(teachers).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(teachers.id, id), (0, import_drizzle_orm.eq)(teachers.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update teacher" });
@@ -132750,8 +132955,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/teachers/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(teachers).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(teachers.id, id), (0, import_drizzle_orm.eq)(teachers.schoolId, schoolId)));
         res.json({ success: true });
@@ -132761,10 +132966,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/teachers", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const newTeacher = { ...req.body, id, schoolId };
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, teacherAllowedFields);
+        const newTeacher = { ...cleaned, id, schoolId };
         const [inserted] = await db.insert(teachers).values(newTeacher).returning();
         res.json(inserted);
       } catch (error) {
@@ -132773,13 +132979,16 @@ var init_dbRoutes = __esm({
     });
     router.post("/teachers/bulk", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const items = Array.isArray(req.body) ? req.body : req.body.items;
         if (!items || !items.length) return res.status(400).json({ error: "No items provided" });
+        if (items.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
         const formatted = items.map((item) => ({
-          ...item,
-          id: item.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)),
+          ...pickAllowed(item, teacherAllowedFields),
+          id: item.id || generateId(),
           schoolId
         }));
         const inserted = await db.insert(teachers).values(formatted).returning();
@@ -132790,8 +132999,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/student-classes", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(studentClasses).where((0, import_drizzle_orm.eq)(studentClasses.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132800,10 +133009,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/student-classes", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(studentClasses).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, studentClassAllowedFields);
+        const [inserted] = await db.insert(studentClasses).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create student class" });
@@ -132811,10 +133021,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/student-classes/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(studentClasses).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(studentClasses.id, id), (0, import_drizzle_orm.eq)(studentClasses.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, studentClassAllowedFields);
+        const [updated] = await db.update(studentClasses).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(studentClasses.id, id), (0, import_drizzle_orm.eq)(studentClasses.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update student class" });
@@ -132822,8 +133033,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/student-classes/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(studentClasses).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(studentClasses.id, id), (0, import_drizzle_orm.eq)(studentClasses.schoolId, schoolId)));
         res.json({ success: true });
@@ -132833,8 +133044,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/lab-sessions", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(labSessions).where((0, import_drizzle_orm.eq)(labSessions.schoolId, schoolId)).orderBy((0, import_drizzle_orm.desc)(labSessions.createdAt));
         res.json(data);
       } catch (error) {
@@ -132843,10 +133054,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/lab-sessions", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(labSessions).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, labSessionAllowedFields);
+        const [inserted] = await db.insert(labSessions).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create lab session" });
@@ -132854,10 +133066,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/lab-sessions/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(labSessions).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSessions.id, id), (0, import_drizzle_orm.eq)(labSessions.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, labSessionAllowedFields);
+        const [updated] = await db.update(labSessions).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSessions.id, id), (0, import_drizzle_orm.eq)(labSessions.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update lab session" });
@@ -132865,8 +133078,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/lab-sessions/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(labSessions).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSessions.id, id), (0, import_drizzle_orm.eq)(labSessions.schoolId, schoolId)));
         res.json({ success: true });
@@ -132876,8 +133089,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/lab-schedule", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(labSchedule).where((0, import_drizzle_orm.eq)(labSchedule.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132886,10 +133099,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/lab-schedule", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(labSchedule).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, labScheduleAllowedFields);
+        const [inserted] = await db.insert(labSchedule).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create lab reservation" });
@@ -132897,10 +133111,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/lab-schedule/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(labSchedule).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSchedule.id, id), (0, import_drizzle_orm.eq)(labSchedule.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, labScheduleAllowedFields);
+        const [updated] = await db.update(labSchedule).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSchedule.id, id), (0, import_drizzle_orm.eq)(labSchedule.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update lab reservation" });
@@ -132908,8 +133123,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/lab-schedule/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(labSchedule).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labSchedule.id, id), (0, import_drizzle_orm.eq)(labSchedule.schoolId, schoolId)));
         res.json({ success: true });
@@ -132919,8 +133134,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/glassware", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(glasswareInventory).where((0, import_drizzle_orm.eq)(glasswareInventory.schoolId, schoolId));
         res.json(data);
       } catch (error) {
@@ -132929,10 +133144,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/glassware", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(glasswareInventory).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, glasswareAllowedFields);
+        const [inserted] = await db.insert(glasswareInventory).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create glassware item" });
@@ -132940,13 +133156,16 @@ var init_dbRoutes = __esm({
     });
     router.post("/glassware/bulk", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const items = Array.isArray(req.body) ? req.body : req.body.items;
         if (!items || !items.length) return res.status(400).json({ error: "No items provided" });
+        if (items.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
         const formatted = items.map((item) => ({
-          ...item,
-          id: item.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11)),
+          ...pickAllowed(item, glasswareAllowedFields),
+          id: item.id || generateId(),
           schoolId
         }));
         const inserted = await db.insert(glasswareInventory).values(formatted).returning();
@@ -132957,10 +133176,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/glassware/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(glasswareInventory).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(glasswareInventory.id, id), (0, import_drizzle_orm.eq)(glasswareInventory.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, glasswareAllowedFields);
+        const [updated] = await db.update(glasswareInventory).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(glasswareInventory.id, id), (0, import_drizzle_orm.eq)(glasswareInventory.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update glassware" });
@@ -132968,8 +133188,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/glassware/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(glasswareInventory).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(glasswareInventory.id, id), (0, import_drizzle_orm.eq)(glasswareInventory.schoolId, schoolId)));
         res.json({ success: true });
@@ -132979,8 +133199,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/equipment-scrapping", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(equipmentScrapping).where((0, import_drizzle_orm.eq)(equipmentScrapping.schoolId, schoolId)).orderBy((0, import_drizzle_orm.desc)(equipmentScrapping.createdAt));
         res.json(data);
       } catch (error) {
@@ -132989,10 +133209,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/equipment-scrapping", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(equipmentScrapping).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, equipmentScrappingAllowedFields);
+        const [inserted] = await db.insert(equipmentScrapping).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create scrapping record" });
@@ -133000,10 +133221,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/equipment-scrapping/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(equipmentScrapping).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipmentScrapping.id, id), (0, import_drizzle_orm.eq)(equipmentScrapping.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, equipmentScrappingAllowedFields);
+        const [updated] = await db.update(equipmentScrapping).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipmentScrapping.id, id), (0, import_drizzle_orm.eq)(equipmentScrapping.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update scrapping record" });
@@ -133011,8 +133233,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/equipment-scrapping/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(equipmentScrapping).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(equipmentScrapping.id, id), (0, import_drizzle_orm.eq)(equipmentScrapping.schoolId, schoolId)));
         res.json({ success: true });
@@ -133022,8 +133244,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/maintenance", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(maintenanceLogs).where((0, import_drizzle_orm.eq)(maintenanceLogs.schoolId, schoolId)).orderBy((0, import_drizzle_orm.desc)(maintenanceLogs.createdAt));
         res.json(data);
       } catch (error) {
@@ -133032,10 +133254,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/maintenance", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(maintenanceLogs).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, maintenanceLogsAllowedFields);
+        const [inserted] = await db.insert(maintenanceLogs).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create maintenance log" });
@@ -133043,10 +133266,11 @@ var init_dbRoutes = __esm({
     });
     router.put("/maintenance/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
-        const [updated] = await db.update(maintenanceLogs).set(req.body).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(maintenanceLogs.id, id), (0, import_drizzle_orm.eq)(maintenanceLogs.schoolId, schoolId))).returning();
+        const cleaned = pickAllowed(req.body, maintenanceLogsAllowedFields);
+        const [updated] = await db.update(maintenanceLogs).set(cleaned).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(maintenanceLogs.id, id), (0, import_drizzle_orm.eq)(maintenanceLogs.schoolId, schoolId))).returning();
         res.json(updated);
       } catch (error) {
         res.status(500).json({ error: "Failed to update maintenance log" });
@@ -133054,8 +133278,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/maintenance/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(maintenanceLogs).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(maintenanceLogs.id, id), (0, import_drizzle_orm.eq)(maintenanceLogs.schoolId, schoolId)));
         res.json({ success: true });
@@ -133065,8 +133289,8 @@ var init_dbRoutes = __esm({
     });
     router.get("/lab-usage-logs", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const data = await db.select().from(labUsageLogs).where((0, import_drizzle_orm.eq)(labUsageLogs.schoolId, schoolId)).orderBy((0, import_drizzle_orm.desc)(labUsageLogs.date));
         res.json(data);
       } catch (error) {
@@ -133075,10 +133299,11 @@ var init_dbRoutes = __esm({
     });
     router.post("/lab-usage-logs", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
-        const id = req.body.id || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11));
-        const [inserted] = await db.insert(labUsageLogs).values({ ...req.body, id, schoolId }).returning();
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const id = req.body.id || generateId();
+        const cleaned = pickAllowed(req.body, labUsageLogsAllowedFields);
+        const [inserted] = await db.insert(labUsageLogs).values({ ...cleaned, id, schoolId }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create lab usage log" });
@@ -133086,8 +133311,8 @@ var init_dbRoutes = __esm({
     });
     router.delete("/lab-usage-logs/:id", async (req, res) => {
       try {
-        const schoolId = req.user?.uid;
-        if (!schoolId) return res.status(401).json({ error: "Unauthorized" });
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
         const { id } = req.params;
         await db.delete(labUsageLogs).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.eq)(labUsageLogs.id, id), (0, import_drizzle_orm.eq)(labUsageLogs.schoolId, schoolId)));
         res.json({ success: true });
@@ -133106,6 +133331,7 @@ var import_path2 = __toESM(require("path"), 1);
 var import_firebase_admin2 = __toESM(require("firebase-admin"), 1);
 var import_fs2 = __toESM(require("fs"), 1);
 var import_genai = require("@google/genai");
+init_auth();
 var import_ioredis = __toESM(require("ioredis"), 1);
 var MemoryStore = class {
   constructor() {
@@ -133169,6 +133395,21 @@ function createRateLimiter(windowMs, maxRequests, store = activeRateLimitStore) 
 }
 var geminiLimiter = createRateLimiter(6e4, 30);
 var adminLimiter = createRateLimiter(6e4, 5);
+var userGeminiLimiter = async (req, res, next) => {
+  try {
+    const key = req.user?.uid || req.ip || "unknown";
+    const result = await activeRateLimitStore.increment(`gemini:${key}`, 6e4);
+    if (result.count > 30) {
+      return res.status(429).json({
+        error: "\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0645\u0646 \u0637\u0644\u0628\u0627\u062A \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A (30 \u0637\u0644\u0628/\u062F\u0642\u064A\u0642\u0629). \u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u062F\u0642\u064A\u0642\u0629 \u0648\u0627\u062D\u062F\u0629.",
+        retryAfter: Math.ceil((result.resetAt - Date.now()) / 1e3)
+      });
+    }
+    next();
+  } catch (error) {
+    next();
+  }
+};
 function requireLocalhost(req, res, next) {
   const socketIp = req.socket.remoteAddress ?? "";
   const isSocketLocal = socketIp === "127.0.0.1" || socketIp === "::1" || socketIp === "::ffff:127.0.0.1";
@@ -133191,7 +133432,7 @@ async function startServer() {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.status(200).send("fbvthxxtta2cr1lkxsr1x7syknal90");
   });
-  app.post("/api/gemini", geminiLimiter, async (req, res) => {
+  app.post("/api/gemini", requireAuth, userGeminiLimiter, async (req, res) => {
     try {
       const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -133201,15 +133442,12 @@ async function startServer() {
       if (!contents) {
         return res.status(400).json({ error: "Missing contents field." });
       }
-      const deprecatedModels = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-2.0-flash",
-        "gemini-2.0-pro",
-        "gemini-2.0-flash-thinking",
-        "gemini-pro"
-      ];
-      if (!model || deprecatedModels.includes(model)) {
+      const contentStr = typeof contents === "string" ? contents : JSON.stringify(contents);
+      if (contentStr.length > 25e3) {
+        return res.status(400).json({ error: "\u062D\u062C\u0645 \u0627\u0644\u0637\u0644\u0628 \u064A\u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0628\u0647 (25000 \u062D\u0631\u0641)." });
+      }
+      const ALLOWED_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      if (!model || !ALLOWED_MODELS.includes(model)) {
         model = "gemini-3.8-flash";
       }
       const ai = new import_genai.GoogleGenAI({ apiKey });
@@ -133279,8 +133517,8 @@ async function startServer() {
         const config = JSON.parse(import_fs2.default.readFileSync(appletConfigPath, "utf8"));
         dbId = config.firestoreDatabaseId;
       }
-      const { getFirestore } = await import("firebase-admin/firestore");
-      const db2 = getFirestore(adminApp, dbId);
+      const { getFirestore: getFirestore2 } = await import("firebase-admin/firestore");
+      const db2 = getFirestore2(adminApp, dbId);
       await db2.collection("audit_logs").add({
         action: "setup-admin",
         callerUid: decodedToken.uid,
@@ -133328,8 +133566,8 @@ async function startServer() {
         const config = JSON.parse(import_fs2.default.readFileSync(appletConfigPath, "utf8"));
         dbId = config.firestoreDatabaseId;
       }
-      const { getFirestore } = await import("firebase-admin/firestore");
-      const db2 = getFirestore(adminApp, dbId);
+      const { getFirestore: getFirestore2 } = await import("firebase-admin/firestore");
+      const db2 = getFirestore2(adminApp, dbId);
       await db2.collection("audit_logs").add({
         action: "migrate-schools",
         callerUid: decodedToken.uid,
@@ -133362,6 +133600,37 @@ async function startServer() {
     } catch (error) {
       if (process.env.NODE_ENV !== "production") console.error("migrate-schools error:", error);
       res.status(500).json({ error: error.message || "Failed to migrate schools db" });
+    }
+  });
+  app.get("/api/schools/wilayas", async (_req, res) => {
+    try {
+      const { SCHOOL_DB: SCHOOL_DB2 } = await Promise.resolve().then(() => (init_schools(), schools_exports));
+      const list = Object.entries(SCHOOL_DB2).map(([id, data]) => {
+        const wilayaNum = parseInt(id.slice(0, 2), 10) || 99;
+        return {
+          id,
+          name: data.name,
+          wilayaNum
+        };
+      }).sort((a, b) => a.wilayaNum - b.wilayaNum || a.name.localeCompare(b.name, "ar"));
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to load wilayas" });
+    }
+  });
+  app.get("/api/schools/wilaya/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { SCHOOL_DB: SCHOOL_DB2 } = await Promise.resolve().then(() => (init_schools(), schools_exports));
+      const wilayaData = SCHOOL_DB2[id];
+      if (!wilayaData) {
+        return res.status(404).json({ error: "Wilaya not found" });
+      }
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      res.json({ id, name: wilayaData.name, communes: wilayaData.communes });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to load wilaya details" });
     }
   });
   app.post("/api/schools/search", geminiLimiter, async (req, res) => {
