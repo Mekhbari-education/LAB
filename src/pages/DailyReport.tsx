@@ -1517,7 +1517,7 @@ export default function DailyReport() {
               {/* Signer 1: Lab Manager */}
               <div className="space-y-6">
                 <p className="text-sm font-black text-primary underline underline-offset-8">
-                  توقيع {formatOfficialRankTitle(docSigners[0] || docSender || institution?.jobTitle)}
+                  {formatOfficialRankTitle(docSigners[0] || docSender || institution?.jobTitle)}
                 </p>
                 <div 
                   onClick={() => setIsSignatureModalOpen(true)}
@@ -1541,7 +1541,7 @@ export default function DailyReport() {
                     الناظر
                   </p>
                   <div className="h-24 border-2 border-dashed border-primary/15 rounded-3xl flex items-center justify-center">
-                    <span className="text-primary/15 font-sans text-2xl italic">Visa & Signature</span>
+                    <span className="text-primary/15 font-sans text-2xl italic">(التوقيع والختم)</span>
                   </div>
                 </div>
               )}
@@ -1549,10 +1549,10 @@ export default function DailyReport() {
               {/* Signer 3: School Principal */}
               <div className="space-y-6">
                 <p className="text-sm font-black text-primary underline underline-offset-8">
-                  توقيع ومصادقة {docSigners[docSigners.length - 1] || 'مدير المؤسسة'}
+                  {docSigners[docSigners.length - 1] || 'مدير المؤسسة'}
                 </p>
                 <div className="h-24 border-2 border-dashed border-primary/15 rounded-3xl flex items-center justify-center">
-                  <span className="text-primary/15 font-sans text-2xl italic">Signature & Cachet</span>
+                  <span className="text-primary/15 font-sans text-2xl italic">(التوقيع والختم)</span>
                 </div>
               </div>
             </div>

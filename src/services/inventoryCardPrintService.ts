@@ -22,6 +22,8 @@ export type PaperFormat = 'A4' | 'A5' | 'A4_DUAL';
 export type PrintSides = 'both' | 'front' | 'back';
 export type PrintScope = 'single' | 'all' | 'table';
 
+export type PrintColorMode = 'color' | 'grayscale' | 'bw';
+
 export interface InventoryCardPrintOptions {
   items: InventoryItemForPrint[];
   paperFormat: PaperFormat;
@@ -34,6 +36,10 @@ export interface InventoryCardPrintOptions {
   includeOfficialHeader?: boolean;
   includeQrCode?: boolean;
   includeStampBox?: boolean;
+  includeSupervisorStamp?: boolean;
+  colorMode?: PrintColorMode;
+  isEconomical?: boolean;
+  copies?: number;
 }
 
 function getItemCategory(name: string): string {
@@ -75,11 +81,16 @@ export function generateInventoryCardsHtml(options: InventoryCardPrintOptions): 
     includeOfficialHeader = true,
     includeQrCode = true,
     includeStampBox = true,
+    includeSupervisorStamp = true,
+    colorMode = 'color',
+    isEconomical = false,
   } = options;
 
   const isTableScope = printScope === 'table';
   const isA5 = paperFormat === 'A5' && !isTableScope;
   const isDual = paperFormat === 'A4_DUAL' && !isTableScope;
+  const isGrayscale = colorMode === 'grayscale' || isEconomical;
+  const isBw = colorMode === 'bw';
 
   const pageOrientation = isTableScope ? 'landscape' : 'portrait';
   const pagePaper = isA5 ? 'A5' : 'A4';
@@ -115,6 +126,7 @@ export function generateInventoryCardsHtml(options: InventoryCardPrintOptions): 
       overflow: visible !important;
       scrollbar-width: none !important;
       -ms-overflow-style: none !important;
+      ${isGrayscale ? 'filter: grayscale(100%);' : ''}
     }
 
     ::-webkit-scrollbar {
@@ -529,8 +541,8 @@ function renderRegistrySummaryTable(items: InventoryItemForPrint[], options: Inv
       <div class="official-header">
         <div class="header-columns">
           <div class="header-right">
-            مديرية التربية لولاية: ${directorate}<br>
-            المؤسسة: ${schoolName} (${commune})<br>
+            ${directorate}<br>
+            ${schoolName} (${commune})<br>
             مخبر الوسائل التعليمية والعلوم
           </div>
           <div class="header-center">
@@ -583,7 +595,7 @@ function renderRegistrySummaryTable(items: InventoryItemForPrint[], options: Inv
         </tbody>
       </table>
 
-      <div class="registry-stamps">
+      <div class="registry-stamps" style="grid-template-columns: repeat(${options.includeSupervisorStamp !== false ? '4' : '3'}, 1fr);">
         <div class="stamp-box">
           <div>المقتصد / مسير المصالح الاقتصادية:</div>
           <div style="height: 48px;"></div>
@@ -592,6 +604,12 @@ function renderRegistrySummaryTable(items: InventoryItemForPrint[], options: Inv
           <div>مسؤول المخبر الرئيسي:</div>
           <div style="height: 48px;"></div>
         </div>
+        ${options.includeSupervisorStamp !== false ? `
+        <div class="stamp-box">
+          <div>الناظر (التوقيع والختم):</div>
+          <div style="height: 48px;"></div>
+        </div>
+        ` : ''}
         <div class="stamp-box">
           <div>رئيس المؤسسة (المدير):</div>
           <div style="height: 48px;"></div>
@@ -677,7 +695,7 @@ function renderSingleCardFront(
         <div class="official-header">
           <div class="header-columns">
             <div class="header-right">
-              مديرية التربية لولاية: ${directorate}<br>
+              ${directorate}<br>
               ${schoolName} (${commune})<br>
               مخبر الوسائل التعليمية
             </div>
@@ -787,11 +805,17 @@ function renderSingleCardFront(
     </div>
 
     ${includeStampBox ? `
-      <div class="stamps-grid">
+      <div class="stamps-grid" style="grid-template-columns: repeat(${options.includeSupervisorStamp !== false ? '3' : '2'}, 1fr);">
         <div class="stamp-box">
           <div>تأشيرة وختم المقتصد / مسير المصالح الاقتصادية:</div>
           <div class="stamp-space"></div>
         </div>
+        ${options.includeSupervisorStamp !== false ? `
+        <div class="stamp-box">
+          <div>الناظر (التوقيع والختم):</div>
+          <div class="stamp-space"></div>
+        </div>
+        ` : ''}
         <div class="stamp-box">
           <div>تأشيرة وختم رئيس المؤسسة (المدير):</div>
           <div class="stamp-space"></div>
@@ -884,11 +908,17 @@ function renderSingleCardBack(item: InventoryItemForPrint, options: InventoryCar
     </div>
 
     ${includeStampBox ? `
-      <div class="stamps-grid">
+      <div class="stamps-grid" style="grid-template-columns: repeat(${options.includeSupervisorStamp !== false ? '3' : '2'}, 1fr);">
         <div class="stamp-box">
           <div>تأشيرة وختم المقتصد:</div>
           <div class="stamp-space"></div>
         </div>
+        ${options.includeSupervisorStamp !== false ? `
+        <div class="stamp-box">
+          <div>الناظر (التوقيع والختم):</div>
+          <div class="stamp-space"></div>
+        </div>
+        ` : ''}
         <div class="stamp-box">
           <div>تأشيرة وختم رئيس المؤسسة:</div>
           <div class="stamp-space"></div>

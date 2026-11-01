@@ -246,7 +246,6 @@ export default function App() {
                 <Route path={ROUTES.DAILY_REPORT.substring(1)} element={<DailyReport />} />
                 <Route path={ROUTES.PROFESSIONAL_EXAMS.substring(1)} element={<ProfessionalExams />} />
                 <Route path={ROUTES.SETTINGS.substring(1)} element={<Settings />} />
-                <Route path={ROUTES.ADMIN.substring(1)} element={<AdminDashboard />} />
                 <Route path={ROUTES.DESIGN_SYSTEM.substring(1)} element={<DesignSystem />} />
                 <Route path={ROUTES.DIAGNOSTIC.substring(1)} element={<Diagnostic />} />
                 {/* Catch-all 404 route for authenticated users */}

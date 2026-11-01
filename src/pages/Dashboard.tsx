@@ -872,7 +872,7 @@ export default function Dashboard() {
             <div className="text-start">
               <span className="block font-black text-primary text-[11px]">قاعدة البيانات المشتركة للمؤسسة</span>
               <span className="block text-[10px] text-on-surface/60">
-                مرتبطة تلقائياً مع: الأساتذة · ناظر الدروس · المدير · المقتصد
+                مرتبطة تلقائياً مع: الأساتذة · الناظر · المدير · المقتصد
               </span>
             </div>
           </div>

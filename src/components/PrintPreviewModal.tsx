@@ -16,22 +16,31 @@ import {
   ZoomOut, 
   Save, 
   RefreshCw, 
-  ChevronRight,
-  ChevronLeft,
-  Settings2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Copy,
+  ExternalLink,
+  Stamp,
+  Heading,
+  Layers,
+  Sparkles,
+  ShieldCheck,
+  CheckCheck
 } from 'lucide-react';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import { usePdfPreview } from '../context/PdfPreviewContext';
 import { PrintService } from '../services/printService';
 import { PDFService } from '../services/pdfService';
+import DOMPurify from 'dompurify';
 import { 
   PrintOrientation, 
   PrintColorMode, 
   PrintMargins, 
   PrintScale,
   PrintPaperSize,
-  PrintHeaderStyle
+  PrintHeaderStyle,
+  PrintWatermark,
+  PrintBorderStyle,
+  PrintLineHeight
 } from '../types/printSettings';
 import { formatSchoolWithCommune } from '../lib/utils';
 import logo from '/ministry-logo.png';
@@ -60,17 +69,33 @@ export default function PrintPreviewModal() {
   const [localHighContrast, setLocalHighContrast] = useState<boolean | null>(null);
   const [localStampSpace, setLocalStampSpace] = useState<boolean | null>(null);
 
+  // Windows-style print overrides
+  const [localWatermark, setLocalWatermark] = useState<PrintWatermark | null>(null);
+  const [localCustomWatermark, setLocalCustomWatermark] = useState<string>('');
+  const [localGutterMm, setLocalGutterMm] = useState<number | null>(null);
+  const [localCustomScalePercent, setLocalCustomScalePercent] = useState<number | null>(null);
+  const [localLineHeight, setLocalLineHeight] = useState<PrintLineHeight | null>(null);
+  const [localBorderStyle, setLocalBorderStyle] = useState<PrintBorderStyle | null>(null);
+  const [localShowPageNumbers, setLocalShowPageNumbers] = useState<boolean | null>(null);
+  const [localShowPrintDateTime, setLocalShowPrintDateTime] = useState<boolean | null>(null);
+  const [localCopies, setLocalCopies] = useState<number>(1);
+  const [localSignersCount, setLocalSignersCount] = useState<number | null>(null);
+  const [localShowNazir, setLocalShowNazir] = useState<boolean | null>(null);
+  const [localShowTeacher, setLocalShowTeacher] = useState<boolean | null>(null);
+  const [localShowInspector, setLocalShowInspector] = useState<boolean | null>(null);
+
   // Operation States
   const [isPrinting, setIsPrinting] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isReviewingPdf, setIsReviewingPdf] = useState(false);
   const [isSavingDefaults, setIsSavingDefaults] = useState(false);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [copiedHtml, setCopiedHtml] = useState<boolean>(false);
 
   // Viewport & Zoom Controls
   const [zoom, setZoom] = useState<number>(100);
   const [showSettingsDrawer, setShowSettingsDrawer] = useState<boolean>(true);
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'layout' | 'style' | 'header' | 'signatures'>('layout');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'layout' | 'style' | 'watermark' | 'header' | 'signatures'>('layout');
   const [viewMode, setViewMode] = useState<'custom' | 'structured'>('custom');
   const printContainerRef = useRef<HTMLDivElement>(null);
 
@@ -88,7 +113,21 @@ export default function PrintPreviewModal() {
       setLocalTableStriped(null);
       setLocalHighContrast(null);
       setLocalStampSpace(null);
+      setLocalWatermark(null);
+      setLocalCustomWatermark('');
+      setLocalGutterMm(null);
+      setLocalCustomScalePercent(null);
+      setLocalLineHeight(null);
+      setLocalBorderStyle(null);
+      setLocalShowPageNumbers(null);
+      setLocalShowPrintDateTime(null);
+      setLocalCopies(1);
+      setLocalSignersCount(null);
+      setLocalShowNazir(null);
+      setLocalShowTeacher(null);
+      setLocalShowInspector(null);
       setZoom(100);
+      setCopiedHtml(false);
     }
   }, [previewData]);
 
@@ -105,6 +144,33 @@ export default function PrintPreviewModal() {
   const highContrast = localHighContrast !== null ? localHighContrast : globalSettings.appearance.highContrastBorders;
   const stampSpace = localStampSpace !== null ? localStampSpace : globalSettings.signatures.reserveStampSpace;
 
+  const watermark = localWatermark !== null ? localWatermark : (globalSettings.appearance?.watermark || 'none');
+  const watermarkText = watermark === 'custom' 
+    ? (localCustomWatermark || 'معاينة') 
+    : watermark === 'official' 
+    ? 'رسمي' 
+    : watermark === 'draft' 
+    ? 'مسودة' 
+    : watermark === 'confidential' 
+    ? 'سري للغاية' 
+    : watermark === 'certified' 
+    ? 'نسخة مصادق عليها' 
+    : watermark === 'lab_copy' 
+    ? 'خاص بالمخبر' 
+    : '';
+
+  const gutterMm = localGutterMm !== null ? localGutterMm : (globalSettings.layout?.gutterMm || 0);
+  const customScalePercent = localCustomScalePercent !== null ? localCustomScalePercent : (globalSettings.layout?.customScalePercent || 100);
+  const lineHeight = localLineHeight !== null ? localLineHeight : (globalSettings.layout?.lineHeight || 'normal');
+  const borderStyle = localBorderStyle !== null ? localBorderStyle : (globalSettings.appearance?.borderStyle || 'standard');
+  const showPageNumbers = localShowPageNumbers !== null ? localShowPageNumbers : (globalSettings.appearance?.showPageNumbers ?? false);
+  const showPrintDateTime = localShowPrintDateTime !== null ? localShowPrintDateTime : (globalSettings.appearance?.showPrintDateTime ?? false);
+  const copies = localCopies || 1;
+  const signersCount = localSignersCount !== null ? localSignersCount : (globalSettings.signatures?.signersCount || 3);
+  const showNazir = localShowNazir !== null ? localShowNazir : (globalSettings.signatures?.showNazir ?? true);
+  const showTeacher = localShowTeacher !== null ? localShowTeacher : (globalSettings.signatures?.showTeacher ?? false);
+  const showInspector = localShowInspector !== null ? localShowInspector : (globalSettings.signatures?.showInspector ?? false);
+
   // Build active combined settings snapshot
   const activeEffectiveSettings = useMemo(() => {
     return {
@@ -114,13 +180,22 @@ export default function PrintPreviewModal() {
         orientation,
         paperSize,
         margins,
-        fontSizeScale: scale
+        fontSizeScale: scale,
+        copies,
+        gutterMm,
+        customScalePercent,
+        lineHeight
       },
       appearance: {
         ...globalSettings.appearance,
         colorMode,
         tableStriped,
-        highContrastBorders: highContrast
+        highContrastBorders: highContrast,
+        watermark,
+        customWatermarkText: localCustomWatermark,
+        borderStyle,
+        showPageNumbers,
+        showPrintDateTime
       },
       institution: {
         ...globalSettings.institution,
@@ -129,7 +204,11 @@ export default function PrintPreviewModal() {
       signatures: {
         ...globalSettings.signatures,
         showSignatures,
-        reserveStampSpace: stampSpace
+        reserveStampSpace: stampSpace,
+        showNazir,
+        showTeacher,
+        showInspector,
+        signersCount
       }
     };
   }, [
@@ -144,15 +223,36 @@ export default function PrintPreviewModal() {
     showHeader,
     headerStyle,
     showSignatures,
-    stampSpace
+    stampSpace,
+    watermark,
+    localCustomWatermark,
+    gutterMm,
+    customScalePercent,
+    lineHeight,
+    borderStyle,
+    showPageNumbers,
+    showPrintDateTime,
+    copies,
+    signersCount,
+    showNazir,
+    showTeacher,
+    showInspector
   ]);
 
+  const currentPrintData = useMemo(() => {
+    if (!previewData) return null;
+    if (viewMode === 'structured') {
+      return { ...previewData, customHtml: undefined };
+    }
+    return previewData;
+  }, [previewData, viewMode]);
+
   const handlePrint = async () => {
-    if (!previewData) return;
+    if (!currentPrintData) return;
     setIsPrinting(true);
     try {
-      const html = PrintService.generateReportHtml(previewData, activeEffectiveSettings);
-      await PrintService.printHtml(html, { title: previewData.title });
+      const html = PrintService.generateReportHtml(currentPrintData, activeEffectiveSettings);
+      await PrintService.printHtml(html, { title: currentPrintData.title });
     } catch (e) {
       console.error('Print error:', e);
     } finally {
@@ -183,6 +283,7 @@ export default function PrintPreviewModal() {
         orientation: orientation === 'landscape' ? 'l' : 'p',
         summaryCards: previewData.summaryCards || [],
         showSignatures,
+        showNazir,
         notes: previewData.notes,
         save: true
       });
@@ -194,9 +295,9 @@ export default function PrintPreviewModal() {
   };
 
   const handleExportWord = () => {
-    if (!previewData) return;
+    if (!currentPrintData) return;
     try {
-      PrintService.downloadReportWord(previewData, activeEffectiveSettings);
+      PrintService.downloadReportWord(currentPrintData, activeEffectiveSettings);
     } catch (e) {
       console.error('Word export error:', e);
     }
@@ -225,6 +326,7 @@ export default function PrintPreviewModal() {
         orientation: orientation === 'landscape' ? 'l' : 'p',
         summaryCards: previewData.summaryCards || [],
         showSignatures,
+        showNazir,
         notes: previewData.notes,
         save: false
       });
@@ -239,6 +341,24 @@ export default function PrintPreviewModal() {
       console.error('PDF review error:', e);
     } finally {
       setIsReviewingPdf(false);
+    }
+  };
+
+  const handlePrintInNewTab = () => {
+    if (!currentPrintData) return;
+    const html = PrintService.generateReportHtml(currentPrintData, activeEffectiveSettings);
+    PrintService.printInNewTab(html, { title: currentPrintData.title, autoPrint: true });
+  };
+
+  const handleCopyHtml = async () => {
+    if (!currentPrintData) return;
+    try {
+      const html = PrintService.generateReportHtml(currentPrintData, activeEffectiveSettings);
+      await navigator.clipboard.writeText(html);
+      setCopiedHtml(true);
+      setTimeout(() => setCopiedHtml(false), 2500);
+    } catch (e) {
+      console.error('Copy HTML error:', e);
     }
   };
 
@@ -268,6 +388,19 @@ export default function PrintPreviewModal() {
     setLocalTableStriped(null);
     setLocalHighContrast(null);
     setLocalStampSpace(null);
+    setLocalWatermark(null);
+    setLocalCustomWatermark('');
+    setLocalGutterMm(null);
+    setLocalCustomScalePercent(null);
+    setLocalLineHeight(null);
+    setLocalBorderStyle(null);
+    setLocalShowPageNumbers(null);
+    setLocalShowPrintDateTime(null);
+    setLocalCopies(1);
+    setLocalSignersCount(null);
+    setLocalShowNazir(null);
+    setLocalShowTeacher(null);
+    setLocalShowInspector(null);
     setZoom(100);
   };
 
@@ -292,7 +425,38 @@ export default function PrintPreviewModal() {
   const handleZoomReset = () => setZoom(100);
   const handleZoomFit = () => setZoom(orientation === 'landscape' ? 80 : 90);
 
-  // Guard clause ONLY after all React Hooks have executed unconditionally
+  // Extract custom embedded CSS rules from customHtml
+  const extractedCustomStyles = useMemo(() => {
+    if (!previewData?.customHtml) return '';
+    const styleMatches = previewData.customHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+    if (!styleMatches) return '';
+    return styleMatches
+      .map(tag => tag.replace(/<\/?style[^>]*>/gi, ''))
+      .join('\n');
+  }, [previewData?.customHtml]);
+
+  // Sanitize custom HTML using useMemo unconditionally before any early returns
+  const sanitizedCustomHtml = useMemo(() => {
+    if (!previewData?.customHtml) return '';
+    let content = previewData.customHtml;
+    const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) {
+      content = bodyMatch[1];
+    }
+    return DOMPurify.sanitize(content, {
+      FORCE_BODY: false,
+      ADD_TAGS: ['style'],
+      ADD_ATTR: [
+        'target', 'style', 'class', 'align', 'valign', 'border', 
+        'cellpadding', 'cellspacing', 'dir', 'width', 'height',
+        'colspan', 'rowspan', 'scope', 'id', 'name', 'nowrap'
+      ],
+      FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'formaction']
+    });
+  }, [previewData?.customHtml]);
+
+  // Guard clause ONLY after ALL React Hooks have executed unconditionally
   if (!isPreviewOpen || !previewData) {
     return null;
   }
@@ -322,9 +486,9 @@ export default function PrintPreviewModal() {
   // Colors based on color mode
   const isBw = colorMode === 'blackAndWhite';
   const isGrayscale = colorMode === 'grayscale';
-  const brandPrimary = isBw ? '#000000' : isGrayscale ? '#333333' : '#2b3d22';
+  const brandPrimary = isBw ? '#000000' : isGrayscale ? '#1a1a1a' : '#2b3d22';
   const bgHeader = isBw ? '#ffffff' : isGrayscale ? '#e2e2e2' : '#2b3d22';
-  const textHeader = isBw ? '#000000' : isGrayscale ? '#111111' : '#ffffff';
+  const textHeader = isBw ? '#000000' : isGrayscale ? '#000000' : '#ffffff';
   const rowZebra = tableStriped
     ? (isBw ? '#ffffff' : isGrayscale ? '#f5f5f5' : '#f9faf7')
     : '#ffffff';
@@ -332,6 +496,12 @@ export default function PrintPreviewModal() {
 
   const inst = globalSettings.institution;
   const sig = globalSettings.signatures;
+
+  const currentDateFormatted = new Date().toLocaleDateString('ar-DZ', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
   return (
     <AnimatePresence>
@@ -355,8 +525,8 @@ export default function PrintPreviewModal() {
                   <h3 className="text-base sm:text-lg font-black text-primary truncate max-w-xs sm:max-w-md">
                     {previewData.title}
                   </h3>
-                  <span className="text-[11px] font-bold text-secondary bg-surface px-2 py-0.5 rounded-md border border-outline-variant/30">
-                    {paperSize.toUpperCase()} · {orientation === 'landscape' ? 'أفقي' : 'عمودي'}
+                  <span className="text-[11px] font-bold text-secondary bg-surface px-2 py-0.5 rounded-md border border-outline-variant/30 uppercase">
+                    {paperSize} · {orientation === 'landscape' ? 'أفقي' : 'عمودي'} {copies > 1 ? `· ${copies} نسخ` : ''}
                   </span>
                 </div>
                 <p className="text-xs text-secondary/80 hidden sm:block">
@@ -436,10 +606,30 @@ export default function PrintPreviewModal() {
                     ? 'bg-primary text-white border-primary shadow-sm' 
                     : 'bg-surface text-secondary hover:bg-secondary-container/30 border-outline-variant/30'
                 }`}
-                title="إظهار / إخفاء شريط إعدادات وخيارات الطباعة"
+                title="إظهار / إخفاء شريط خيارات الطباعة المتقدمة"
               >
                 <Sliders size={17} />
                 <span className="hidden sm:inline">خيارات الطباعة</span>
+              </button>
+
+              {/* Open in Dedicated Print Tab */}
+              <button
+                onClick={handlePrintInNewTab}
+                className="p-2.5 bg-surface text-secondary hover:text-primary border border-outline-variant/30 rounded-xl transition-all hidden xl:flex items-center gap-1 text-xs font-bold shadow-sm"
+                title="فتح الطباعة في تبويب مستقل"
+              >
+                <ExternalLink size={16} />
+                <span>تبويب مستقل</span>
+              </button>
+
+              {/* Copy HTML */}
+              <button
+                onClick={handleCopyHtml}
+                className="p-2.5 bg-surface text-secondary hover:text-primary border border-outline-variant/30 rounded-xl transition-all hidden xl:flex items-center gap-1 text-xs font-bold shadow-sm"
+                title="نسخ كود HTML للوثيقة"
+              >
+                {copiedHtml ? <CheckCheck size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                <span>{copiedHtml ? 'تم النسخ!' : 'نسخ HTML'}</span>
               </button>
 
               {/* Review PDF */}
@@ -483,6 +673,9 @@ export default function PrintPreviewModal() {
               >
                 <Printer size={17} />
                 <span>{isPrinting ? 'جاري الإرسال...' : 'طباعة فورية'}</span>
+                <span className="hidden sm:inline-block px-1.5 py-0.5 bg-white/20 rounded text-[10px] font-mono">
+                  Ctrl+P
+                </span>
               </button>
 
               {/* Close Modal */}
@@ -509,82 +702,384 @@ export default function PrintPreviewModal() {
                   transformOrigin: 'top center',
                   transition: 'transform 0.15s ease-out'
                 }}
-                className="my-2 flex flex-col items-center"
+                className="flex flex-col items-center pb-12"
               >
-                {/* View switcher when both views are available */}
+                {/* Secondary View Switcher if both structured and custom HTML exist */}
                 {hasBothViews && (
-                  <div className="flex items-center gap-1.5 bg-surface/90 backdrop-blur p-1 rounded-xl border border-outline-variant/30 mb-3 shadow-md">
+                  <div className="mb-4 bg-surface p-1.5 rounded-2xl shadow-md border border-outline-variant/30 flex items-center gap-2">
                     <button
                       onClick={() => setViewMode('custom')}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                        viewMode === 'custom' ? 'bg-primary text-white shadow-sm' : 'text-secondary hover:text-primary'
+                      className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        viewMode === 'custom'
+                          ? 'bg-primary text-white shadow-sm'
+                          : 'text-secondary hover:text-primary hover:bg-surface-container'
                       }`}
                     >
-                      النموذج الأصلي
+                      النموذج الخاص الكامل
                     </button>
                     <button
                       onClick={() => setViewMode('structured')}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                        viewMode === 'structured' ? 'bg-primary text-white shadow-sm' : 'text-secondary hover:text-primary'
+                      className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        viewMode === 'structured'
+                          ? 'bg-primary text-white shadow-sm'
+                          : 'text-secondary hover:text-primary hover:bg-surface-container'
                       }`}
                     >
-                      الجدول الرسمي المنظم
+                      الجدول الرسمي
                     </button>
                   </div>
                 )}
 
-                {/* Paper sheet container */}
+                {/* Simulated Paper Sheet */}
                 <div
                   style={{
-                    padding: marginPx,
                     width: sheetWidth,
                     minHeight: sheetMinHeight,
-                    fontSize: `${11 * fontMultiplier}pt`
+                    padding: marginPx,
+                    paddingRight: gutterMm > 0 ? `calc(${marginPx} + ${gutterMm}mm)` : marginPx,
+                    fontSize: `${11 * fontMultiplier}pt`,
+                    lineHeight: lineHeight === 'compact' ? '1.3' : lineHeight === 'relaxed' ? '1.7' : '1.5',
+                    fontFamily: `${globalSettings.layout.fontFamily || 'Cairo'}, sans-serif`,
+                    direction: 'rtl'
                   }}
-                  className={`bg-white text-neutral-900 shadow-2xl transition-all duration-200 border border-neutral-300 rounded-sm relative select-text sheet ${
-                    colorMode === 'grayscale' ? 'filter grayscale' : ''
+                  className={`bg-white text-neutral-900 shadow-2xl rounded-sm transition-all relative overflow-hidden ${
+                    borderStyle === 'double_official' 
+                      ? 'border-4 border-double border-neutral-800' 
+                      : borderStyle === 'high_contrast' 
+                      ? 'border-2 border-neutral-900' 
+                      : 'border border-neutral-200'
                   }`}
                 >
-                  {/* If custom view is active */}
-                  {shouldRenderCustom ? (
+                  {/* Binding Gutter Visual Guide if enabled */}
+                  {gutterMm > 0 && (
                     <div 
-                      dangerouslySetInnerHTML={{ __html: previewData.customHtml || '' }} 
-                      className="w-full h-full"
-                    />
+                      style={{ width: `${gutterMm}mm` }}
+                      className="absolute top-0 right-0 bottom-0 border-l border-dashed border-red-300 bg-red-50/20 pointer-events-none flex flex-col justify-around items-center"
+                      title={`هامش التثقيب والتجليد: ${gutterMm}mm`}
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full border border-red-400 bg-white opacity-40"></div>
+                      <div className="w-2.5 h-2.5 rounded-full border border-red-400 bg-white opacity-40"></div>
+                      <div className="w-2.5 h-2.5 rounded-full border border-red-400 bg-white opacity-40"></div>
+                    </div>
+                  )}
+
+                  {/* Watermark Overlay in Preview Canvas */}
+                  {watermarkText && (
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-10 overflow-hidden"
+                    >
+                      <div 
+                        style={{
+                          transform: 'rotate(-35deg)',
+                          color: 'rgba(120, 140, 115, 0.14)',
+                          borderColor: 'rgba(120, 140, 115, 0.18)'
+                        }}
+                        className="text-6xl font-black border-4 border-dashed px-10 py-3 rounded-2xl uppercase tracking-widest whitespace-nowrap"
+                      >
+                        {watermarkText}
+                      </div>
+                    </div>
+                  )}
+
+                  {shouldRenderCustom ? (
+                    /* Render Pure Custom HTML provided by the page (e.g. Daily Report custom sheet) with complete Algerian styling */
+                    <div className="w-full">
+                      <style>{`
+                        .custom-rendered-sheet {
+                          width: 100%;
+                          color: ${isBw ? '#000000' : '#1e2819'};
+                          line-height: ${lineHeight === 'compact' ? '1.3' : lineHeight === 'relaxed' ? '1.7' : '1.45'};
+                          font-size: ${11 * fontMultiplier * (customScalePercent / 100)}pt;
+                          font-family: '${globalSettings.layout.fontFamily || 'Cairo'}', 'Cairo', 'Amiri', sans-serif;
+                          direction: rtl;
+                          ${isBw ? 'filter: grayscale(100%) contrast(150%);' : isGrayscale ? 'filter: grayscale(100%);' : ''}
+                        }
+                        .custom-rendered-sheet .republic-header {
+                          text-align: center;
+                          font-size: ${14.5 * fontMultiplier * (customScalePercent / 100)}px;
+                          font-weight: 900;
+                          color: ${isBw ? '#000000' : '#1e2819'};
+                          margin-bottom: 2px;
+                          font-family: 'Amiri', serif;
+                          letter-spacing: 0.3px;
+                          ${!showHeader ? 'display: none !important;' : ''}
+                        }
+                        .custom-rendered-sheet .ministry-header {
+                          text-align: center;
+                          font-size: ${12.5 * fontMultiplier * (customScalePercent / 100)}px;
+                          font-weight: 700;
+                          color: ${isBw ? '#333333' : '#3c4632'};
+                          margin-bottom: 5px;
+                          font-family: 'Amiri', serif;
+                          ${!showHeader ? 'display: none !important;' : ''}
+                        }
+                        .custom-rendered-sheet .institution-bar {
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: flex-start;
+                          font-size: ${11 * fontMultiplier * (customScalePercent / 100)}px;
+                          font-weight: bold;
+                          color: #32382c;
+                          border-bottom: 1.5px solid ${isBw ? '#000000' : '#c8d2c3'};
+                          padding-bottom: 6px;
+                          margin-bottom: 8px;
+                          line-height: 1.5;
+                          font-family: 'Amiri', serif;
+                        }
+                        .custom-rendered-sheet .title-banner {
+                          background-color: ${isBw ? '#ffffff' : bgHeader};
+                          color: ${textHeader};
+                          border: ${isBw ? '2px solid #000000' : isGrayscale ? '1px solid #888888' : 'none'};
+                          border-radius: 5px;
+                          padding: 7px 14px;
+                          text-align: center;
+                          margin: 6px 0 8px;
+                          box-shadow: 0 1px 3px rgba(43,61,34,0.2);
+                        }
+                        .custom-rendered-sheet .title-banner h1 {
+                          margin: 0;
+                          font-size: ${16 * fontMultiplier * (customScalePercent / 100)}px;
+                          font-weight: 800;
+                          color: ${textHeader};
+                          font-family: 'Cairo', sans-serif;
+                          letter-spacing: 0.4px;
+                        }
+                        .custom-rendered-sheet .title-banner .subtitle {
+                          margin: 2px 0 0;
+                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px;
+                          color: ${isBw ? '#000000' : isGrayscale ? '#222222' : '#e6f0dc'};
+                          font-family: 'Amiri', serif;
+                        }
+                        .custom-rendered-sheet .summary-cards {
+                          display: flex;
+                          gap: 8px;
+                          margin-bottom: 8px;
+                        }
+                        .custom-rendered-sheet .summary-card {
+                          flex: 1;
+                          background: ${isBw ? '#ffffff' : '#f5f8f2'};
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d7e1cd'};
+                          border-radius: 4px;
+                          padding: 5px 8px;
+                          text-align: center;
+                        }
+                        .custom-rendered-sheet .summary-card .label {
+                          font-size: ${9 * fontMultiplier * (customScalePercent / 100)}px;
+                          color: #64735f;
+                          font-family: 'Amiri', serif;
+                          margin-bottom: 1px;
+                        }
+                        .custom-rendered-sheet .summary-card .value {
+                          font-size: ${12 * fontMultiplier * (customScalePercent / 100)}px;
+                          font-weight: bold;
+                          color: ${isBw ? '#000000' : brandPrimary};
+                          font-family: 'Cairo', sans-serif;
+                        }
+                        .custom-rendered-sheet table.data-table {
+                          width: 100%;
+                          border-collapse: collapse;
+                          margin: 6px 0;
+                          font-size: ${11.5 * fontMultiplier * (customScalePercent / 100)}px;
+                          ${borderStyle === 'double_official' ? 'border: 3px double #2b3d22 !important;' : ''}
+                        }
+                        .custom-rendered-sheet table.data-table th {
+                          background-color: ${isBw ? '#ffffff' : bgHeader};
+                          color: ${textHeader};
+                          font-weight: bold;
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : isGrayscale ? '#888888' : bgHeader};
+                          padding: 6px 7px;
+                          text-align: right;
+                          font-family: 'Cairo', sans-serif;
+                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px;
+                        }
+                        .custom-rendered-sheet table.data-table td {
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#e1e6d7'};
+                          padding: 5px 7px;
+                          vertical-align: middle;
+                          background-color: #ffffff;
+                        }
+                        ${tableStriped ? `
+                          .custom-rendered-sheet table.data-table tbody tr:nth-child(even) td {
+                            background-color: ${isBw ? '#ffffff' : colorMode === 'grayscale' ? '#f5f5f5' : '#f9faf7'};
+                          }
+                        ` : `
+                          .custom-rendered-sheet table.data-table tbody tr td {
+                            background-color: #ffffff !important;
+                          }
+                        `}
+                        .custom-rendered-sheet table.observations-table {
+                          width: 100%;
+                          border-collapse: collapse;
+                          margin: 6px 0 4px;
+                          font-size: ${11 * fontMultiplier * (customScalePercent / 100)}px;
+                        }
+                        .custom-rendered-sheet table.observations-table th {
+                          background-color: ${isBw ? '#f0f0f0' : '#f5f8f2'};
+                          color: ${isBw ? '#000000' : brandPrimary};
+                          font-weight: bold;
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d7e1cd'};
+                          padding: 4px 6px;
+                          text-align: center;
+                          font-family: 'Cairo', sans-serif;
+                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px;
+                        }
+                        .custom-rendered-sheet table.observations-table td {
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d7e1cd'};
+                          padding: 6px 8px;
+                          vertical-align: top;
+                          min-height: 48px;
+                          line-height: 1.4;
+                          background: #ffffff;
+                        }
+                        .custom-rendered-sheet .release-line {
+                          text-align: left;
+                          margin: 6px 0 6px;
+                          font-weight: bold;
+                          font-size: ${11.5 * fontMultiplier * (customScalePercent / 100)}px;
+                          color: ${isBw ? '#000000' : brandPrimary};
+                          font-family: 'Cairo', sans-serif;
+                        }
+                        .custom-rendered-sheet .signatures-grid {
+                          display: flex;
+                          justify-content: space-between;
+                          gap: 12px;
+                          margin-top: 6px;
+                          text-align: center;
+                          ${!showSignatures ? 'display: none !important;' : ''}
+                        }
+                        .custom-rendered-sheet .sig-box {
+                          flex: 1;
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d2d7cd'};
+                          border-radius: 4px;
+                          padding: 6px 8px;
+                          background: #fefefd;
+                          min-height: ${stampSpace ? '78px' : '65px'};
+                          display: flex;
+                          flex-direction: column;
+                          justify-content: space-between;
+                        }
+                        ${!showNazir ? `
+                          .custom-rendered-sheet .signatures-grid .sig-box:nth-child(2),
+                          .custom-rendered-sheet .signatures-grid .sig-box-nazir {
+                            display: none !important;
+                          }
+                        ` : ''}
+                        ${signersCount === 1 ? `
+                          .custom-rendered-sheet .signatures-grid .sig-box:nth-child(2),
+                          .custom-rendered-sheet .signatures-grid .sig-box:nth-child(3),
+                          .custom-rendered-sheet .signatures-grid .sig-box-nazir,
+                          .custom-rendered-sheet .signatures-grid .sig-box-principal {
+                            display: none !important;
+                          }
+                        ` : ''}
+                        .custom-rendered-sheet .sig-title {
+                          font-weight: bold;
+                          font-size: ${12 * fontMultiplier * (customScalePercent / 100)}px;
+                          color: ${isBw ? '#000000' : brandPrimary};
+                          font-family: 'Cairo', sans-serif;
+                        }
+                        .custom-rendered-sheet .sig-content {
+                          min-height: 42px;
+                          display: flex;
+                          align-items: center;
+                          justify-content: center;
+                        }
+                        .custom-rendered-sheet .sig-placeholder {
+                          color: #828c7d;
+                          font-size: 10px;
+                          font-family: 'Amiri', serif;
+                        }
+
+                        /* Universal styling for any table inside custom forms */
+                        .custom-rendered-sheet table {
+                          width: 100% !important;
+                          border-collapse: collapse !important;
+                          margin: 6px 0 !important;
+                          font-size: ${11.5 * fontMultiplier * (customScalePercent / 100)}px;
+                        }
+                        .custom-rendered-sheet table th,
+                        .custom-rendered-sheet th {
+                          background-color: ${isBw ? '#ffffff' : bgHeader} !important;
+                          color: ${textHeader} !important;
+                          font-weight: bold !important;
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : isGrayscale ? '#888888' : bgHeader} !important;
+                          padding: 6px 7px !important;
+                          text-align: center !important;
+                          font-family: 'Cairo', sans-serif !important;
+                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px !important;
+                        }
+                        .custom-rendered-sheet table td,
+                        .custom-rendered-sheet td {
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d2d8ce'} !important;
+                          padding: 5px 7px !important;
+                          vertical-align: middle !important;
+                          background-color: #ffffff;
+                        }
+                        ${tableStriped ? `
+                          .custom-rendered-sheet table tbody tr:nth-child(even) td,
+                          .custom-rendered-sheet table tr:nth-child(even) td {
+                            background-color: ${isBw ? '#ffffff' : colorMode === 'grayscale' ? '#f5f5f5' : '#f9faf7'};
+                          }
+                        ` : ''}
+                        .custom-rendered-sheet .paper-wrapper {
+                          width: 100% !important;
+                          max-width: 100% !important;
+                          min-height: auto !important;
+                          margin: 0 !important;
+                          padding: 0 !important;
+                          box-shadow: none !important;
+                          border: none !important;
+                          background: transparent !important;
+                        }
+
+                        /* Embedded custom styles from template */
+                        ${extractedCustomStyles}
+                      `}</style>
+                      <div 
+                        className="custom-rendered-sheet w-full"
+                        dangerouslySetInnerHTML={{ __html: sanitizedCustomHtml }}
+                      />
+                      {(showPrintDateTime || showPageNumbers) && (
+                        <div className="mt-4 pt-2 border-t border-neutral-300 flex justify-between items-center text-[10px] text-neutral-500">
+                          <div>{showPrintDateTime ? `طُبع بتاريخ: ${currentDateFormatted}` : ''}</div>
+                          <div>{sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
+                          <div>{showPageNumbers ? 'صفحة 1 / 1' : ''}</div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
+                    /* Render Unified Standard Document Template */
                     <>
-                      {/* Official institutional header */}
+                      {/* Official Ministry Header */}
                       {showHeader && (
-                        <div className="mb-4 pb-3 border-b border-neutral-300 text-center">
+                        <div className="border-b border-neutral-300 pb-2 mb-3">
                           {inst.showRepublicHeader && (
-                            <h4 className="font-extrabold text-sm text-neutral-800 mb-0.5" style={{ color: brandPrimary }}>
+                            <h1 className="text-center font-extrabold text-sm tracking-wide mb-0.5" style={{ color: brandPrimary }}>
                               {inst.country}
-                            </h4>
+                            </h1>
                           )}
                           {inst.showMinistry && (
-                            <h5 className="font-bold text-xs text-neutral-600 mb-2">
+                            <h2 className="text-center font-bold text-xs text-neutral-600 mb-2">
                               {inst.ministry}
-                            </h5>
+                            </h2>
                           )}
 
-                          <div className="flex justify-between items-center text-[10px] text-neutral-700 mt-2 px-1">
-                            <div className="text-right leading-relaxed">
-                              <div><strong>مديرية التربية:</strong> {inst.directorate}</div>
+                          <div className="flex justify-between items-start text-[11px] leading-relaxed">
+                            <div className="text-right">
+                              <div>{inst.directorate}</div>
                               <div>{formatSchoolWithCommune(inst.school, inst.commune)}</div>
-                              <div><strong>المخبر:</strong> {inst.laboratory}</div>
+                              <div><strong>المصلحة / المخبر:</strong> {inst.laboratory}</div>
                             </div>
 
                             {inst.showLogo && (
-                              <div className="px-2">
-                                <img src={logo} alt="شعار التربية الوطنية" className="h-10 w-auto object-contain mx-auto" />
+                              <div className="text-center px-2">
+                                <img src={inst.customLogoUrl || logo} alt="شعار المؤسسة" className="h-12 w-auto mx-auto object-contain" />
                               </div>
                             )}
 
-                            <div className="text-left leading-relaxed">
+                            <div className="text-left" dir="rtl">
                               <div><strong>السنة الدراسية:</strong> {inst.academicYear}</div>
-                              {inst.showDate && (
-                                <div><strong>التاريخ:</strong> {new Date().toLocaleDateString('ar-DZ')}</div>
-                              )}
+                              {inst.showDate && <div><strong>تاريخ الإصدار:</strong> {currentDateFormatted}</div>}
                               <div><strong>المسؤول:</strong> {sig.labManagerTitle}</div>
                             </div>
                           </div>
@@ -694,12 +1189,26 @@ export default function PrintPreviewModal() {
 
                       {/* Official Signatures Block */}
                       {showSignatures && (
-                        <div className="mt-6 pt-4 flex justify-between gap-4 border-t border-dashed border-neutral-300 text-center">
+                        <div className="mt-6 pt-4 flex justify-between gap-3 border-t border-dashed border-neutral-300 text-center">
                           {sig.showLabManager && (
-                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[75px]">
+                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
                               <div>
                                 <div className="text-[11px] font-bold text-neutral-800">{sig.labManagerTitle}</div>
-                                <div className="text-[9px] text-neutral-500">(الاسم، التوقيع والختم)</div>
+                                <div className="text-[9px] text-neutral-500">(التوقيع والختم)</div>
+                              </div>
+                              {stampSpace && (
+                                <div className="w-12 h-12 rounded-full border border-dotted border-neutral-300 mx-auto my-1 flex items-center justify-center text-[8px] text-neutral-400">
+                                  موضع الختم
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {showNazir && (
+                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
+                              <div>
+                                <div className="text-[11px] font-bold text-neutral-800">{sig.nazirTitle || 'الناظر'}</div>
+                                <div className="text-[9px] text-neutral-500">(التوقيع والختم)</div>
                               </div>
                               {stampSpace && (
                                 <div className="w-12 h-12 rounded-full border border-dotted border-neutral-300 mx-auto my-1 flex items-center justify-center text-[8px] text-neutral-400">
@@ -710,10 +1219,10 @@ export default function PrintPreviewModal() {
                           )}
 
                           {sig.showPrincipal && (
-                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[75px]">
+                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
                               <div>
                                 <div className="text-[11px] font-bold text-neutral-800">{sig.principalTitle}</div>
-                                <div className="text-[9px] text-neutral-500">(تأشيرة المصادقة والختم)</div>
+                                <div className="text-[9px] text-neutral-500">(التوقيع والختم)</div>
                               </div>
                               {stampSpace && (
                                 <div className="w-12 h-12 rounded-full border border-dotted border-neutral-300 mx-auto my-1 flex items-center justify-center text-[8px] text-neutral-400">
@@ -723,11 +1232,20 @@ export default function PrintPreviewModal() {
                             </div>
                           )}
 
-                          {sig.showTeacher && (
-                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[75px]">
+                          {showTeacher && (
+                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
                               <div>
                                 <div className="text-[11px] font-bold text-neutral-800">{sig.teacherTitle}</div>
                                 <div className="text-[9px] text-neutral-500">(التوقيع)</div>
+                              </div>
+                            </div>
+                          )}
+
+                          {showInspector && (
+                            <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
+                              <div>
+                                <div className="text-[11px] font-bold text-neutral-800">{sig.inspectorTitle}</div>
+                                <div className="text-[9px] text-neutral-500">(توقيع وختم المفتش)</div>
                               </div>
                             </div>
                           )}
@@ -737,8 +1255,9 @@ export default function PrintPreviewModal() {
                       {/* Document Standard Footer */}
                       <div className="mt-6 pt-2 border-t border-neutral-200 flex justify-between text-[9px] text-neutral-500">
                         <div>{sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
-                        <div>{inst.school} — {inst.laboratory}</div>
-                        <div>صفحة 1 من 1</div>
+                        <div>{formatSchoolWithCommune(inst.school, inst.commune)} — {inst.laboratory}</div>
+                        {showPrintDateTime && <div>طُبع في: {currentDateFormatted}</div>}
+                        {showPageNumbers && <div>صفحة 1 من 1</div>}
                       </div>
                     </>
                   )}
@@ -751,10 +1270,10 @@ export default function PrintPreviewModal() {
               {showSettingsDrawer && (
                 <motion.aside
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 340, opacity: 1 }}
+                  animate={{ width: 360, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="w-[340px] bg-surface border-s border-outline-variant/30 flex flex-col flex-shrink-0 overflow-hidden"
+                  className="w-[360px] bg-surface border-s border-outline-variant/30 flex flex-col flex-shrink-0 overflow-hidden"
                 >
                   {/* Sidebar Header & Tab Navigation */}
                   <div className="p-4 border-b border-outline-variant/20 bg-surface-container/50">
@@ -773,8 +1292,8 @@ export default function PrintPreviewModal() {
                       </button>
                     </div>
 
-                    {/* Category Tabs */}
-                    <div className="grid grid-cols-4 gap-1 p-1 bg-surface-container rounded-xl border border-outline-variant/20 text-[11px] font-bold text-center">
+                    {/* Category Tabs: 5 comprehensive Windows categories */}
+                    <div className="grid grid-cols-5 gap-1 p-1 bg-surface-container rounded-xl border border-outline-variant/20 text-[10px] font-bold text-center">
                       <button
                         onClick={() => setActiveSettingsTab('layout')}
                         className={`py-1.5 rounded-lg transition-all ${
@@ -793,7 +1312,17 @@ export default function PrintPreviewModal() {
                             : 'text-secondary hover:text-primary'
                         }`}
                       >
-                        الألوان
+                        المظهر
+                      </button>
+                      <button
+                        onClick={() => setActiveSettingsTab('watermark')}
+                        className={`py-1.5 rounded-lg transition-all ${
+                          activeSettingsTab === 'watermark'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-secondary hover:text-primary'
+                        }`}
+                      >
+                        العلامة
                       </button>
                       <button
                         onClick={() => setActiveSettingsTab('header')}
@@ -827,7 +1356,7 @@ export default function PrintPreviewModal() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
                             <Layout size={14} />
-                            <span>اتجاه الورقة</span>
+                            <span>اتجاه الورقة (Orientation)</span>
                           </label>
                           <div className="grid grid-cols-2 gap-2">
                             <button
@@ -857,7 +1386,7 @@ export default function PrintPreviewModal() {
                         <div className="space-y-2">
                           <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
                             <FileSpreadsheet size={14} />
-                            <span>حجم الورق</span>
+                            <span>حجم الورق (Paper Size)</span>
                           </label>
                           <div className="grid grid-cols-3 gap-2">
                             {(['a4', 'a3', 'letter'] as PrintPaperSize[]).map((size) => (
@@ -884,44 +1413,90 @@ export default function PrintPreviewModal() {
                               onClick={() => setLocalMargins('compact')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 margins === 'compact'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
-                              مضغوطة
+                              مضغوطة (8mm)
                             </button>
                             <button
                               onClick={() => setLocalMargins('standard')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 margins === 'standard'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
-                              قياسية
+                              قياسية (14mm)
                             </button>
                             <button
                               onClick={() => setLocalMargins('spacious')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 margins === 'spacious'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
-                              واسعة
+                              واسعة (20mm)
                             </button>
                           </div>
                         </div>
 
-                        {/* Font Scale */}
-                        <div className="space-y-2">
+                        {/* Binding Gutter Margin (Windows Hole-Punching) */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary flex items-center justify-between">
+                            <span>هامش التثقيب والتجليد (Binding Gutter)</span>
+                            <span className="font-mono text-[11px] text-primary">{gutterMm}mm</span>
+                          </label>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[0, 5, 10, 15].map((g) => (
+                              <button
+                                key={g}
+                                onClick={() => setLocalGutterMm(g)}
+                                className={`py-1.5 px-2 rounded-lg border text-xs font-bold text-center ${
+                                  gutterMm === g
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-surface text-secondary border-outline-variant/20'
+                                }`}
+                              >
+                                {g === 0 ? 'بدون' : `${g}mm`}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Copies */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary flex items-center justify-between">
+                            <span>عدد النسخ (Copies)</span>
+                            <span className="font-mono text-[11px] text-primary">{copies}</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {[1, 2, 3, 4, 5].map((c) => (
+                              <button
+                                key={c}
+                                onClick={() => setLocalCopies(c)}
+                                className={`flex-1 py-1.5 rounded-lg border text-xs font-bold text-center ${
+                                  copies === c
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-surface text-secondary border-outline-variant/20'
+                                }`}
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Font Scale & Custom Scale */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
                           <label className="text-xs font-bold text-secondary">حجم الخط والبيانات</label>
                           <div className="grid grid-cols-3 gap-2">
                             <button
                               onClick={() => setLocalScale('small')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 scale === 'small'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
@@ -931,7 +1506,7 @@ export default function PrintPreviewModal() {
                               onClick={() => setLocalScale('normal')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 scale === 'normal'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
@@ -941,7 +1516,7 @@ export default function PrintPreviewModal() {
                               onClick={() => setLocalScale('large')}
                               className={`p-2 rounded-xl border text-xs font-bold text-center ${
                                 scale === 'large'
-                                  ? 'bg-primary text-white border-primary'
+                                  ? 'bg-primary text-white border-primary shadow-sm'
                                   : 'bg-surface-container text-secondary border-outline-variant/20'
                               }`}
                             >
@@ -949,10 +1524,43 @@ export default function PrintPreviewModal() {
                             </button>
                           </div>
                         </div>
+
+                        {/* Custom Scale Percentage */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary flex items-center justify-between">
+                            <span>نسبة ملاءمة الصفحة (Scale %)</span>
+                            <span className="font-mono text-[11px] text-primary">{customScalePercent}%</span>
+                          </label>
+                          <div className="grid grid-cols-5 gap-1">
+                            {[75, 90, 100, 110, 125].map((pct) => (
+                              <button
+                                key={pct}
+                                type="button"
+                                onClick={() => setLocalCustomScalePercent(pct)}
+                                className={`py-1.5 rounded-lg border text-[11px] font-bold text-center transition-all ${
+                                  customScalePercent === pct
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-surface text-secondary border-outline-variant/20 hover:bg-secondary-container/30'
+                                }`}
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="range"
+                            min="60"
+                            max="140"
+                            step="5"
+                            value={customScalePercent}
+                            onChange={(e) => setLocalCustomScalePercent(Number(e.target.value))}
+                            className="w-full accent-primary h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-lg cursor-pointer mt-1"
+                          />
+                        </div>
                       </div>
                     )}
 
-                    {/* Tab 2: Style & Ink Eco Modes */}
+                    {/* Tab 2: Style & Appearance */}
                     {activeSettingsTab === 'style' && (
                       <div className="space-y-4">
                         <div className="space-y-2">
@@ -980,7 +1588,7 @@ export default function PrintPreviewModal() {
                                   : 'bg-surface text-secondary hover:bg-secondary-container/20 border-outline-variant/20'
                               }`}
                             >
-                              <span>تدرج رمادي لتوفير الحبر (Eco)</span>
+                              <span>تدرج رمادي لتوفير الحبر (Eco Grayscale)</span>
                               {colorMode === 'grayscale' && <Check size={14} />}
                             </button>
                             <button
@@ -991,16 +1599,64 @@ export default function PrintPreviewModal() {
                                   : 'bg-surface text-secondary hover:bg-secondary-container/20 border-outline-variant/20'
                               }`}
                             >
-                              <span>أبيض وأسود عالي التباين</span>
+                              <span>أبيض وأسود عالي التباين (Monochrome)</span>
                               {colorMode === 'blackAndWhite' && <Check size={14} />}
                             </button>
+                          </div>
+                        </div>
+
+                        {/* Border Style */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary">طراز الحدود والإطارات</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'standard', label: 'قياسي' },
+                              { id: 'high_contrast', label: 'تباين عالي' },
+                              { id: 'double_official', label: 'إطار مزدوج' }
+                            ].map((b) => (
+                              <button
+                                key={b.id}
+                                onClick={() => setLocalBorderStyle(b.id as PrintBorderStyle)}
+                                className={`p-2 rounded-xl border text-xs font-bold text-center ${
+                                  borderStyle === b.id
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-surface text-secondary border-outline-variant/20'
+                                }`}
+                              >
+                                {b.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Line Spacing / Text Density */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary">كثافة النص وتباعد الأسطر</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { id: 'compact', label: 'مضغوط (1.3)' },
+                              { id: 'normal', label: 'عادي (1.5)' },
+                              { id: 'relaxed', label: 'مريح (1.7)' }
+                            ].map((l) => (
+                              <button
+                                key={l.id}
+                                onClick={() => setLocalLineHeight(l.id as PrintLineHeight)}
+                                className={`p-2 rounded-xl border text-xs font-bold text-center ${
+                                  lineHeight === l.id
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-surface text-secondary border-outline-variant/20'
+                                }`}
+                              >
+                                {l.label}
+                              </button>
+                            ))}
                           </div>
                         </div>
 
                         {/* Table Enhancements */}
                         <div className="space-y-3 pt-3 border-t border-outline-variant/20">
                           <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer">
-                            <span>تظليل الصفوف المتناوبة (Zebra)</span>
+                            <span>تظليل الصفوف المتناوبة (Zebra Striping)</span>
                             <input
                               type="checkbox"
                               checked={tableStriped}
@@ -1009,7 +1665,7 @@ export default function PrintPreviewModal() {
                             />
                           </label>
                           <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer">
-                            <span>حدود بارزة عالية التباين</span>
+                            <span>حدود بارزة عالية التباين للبيانات</span>
                             <input
                               type="checkbox"
                               checked={highContrast}
@@ -1021,7 +1677,56 @@ export default function PrintPreviewModal() {
                       </div>
                     )}
 
-                    {/* Tab 3: Institutional Header */}
+                    {/* Tab 3: Watermark */}
+                    {activeSettingsTab === 'watermark' && (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-secondary flex items-center gap-1.5">
+                            <Sparkles size={14} />
+                            <span>العلامة المائية المطبوعة (Watermark)</span>
+                          </label>
+                          <div className="space-y-1.5">
+                            {[
+                              { id: 'none', label: 'بدون علامة مائية' },
+                              { id: 'official', label: 'رسمي (OFFICIAL)' },
+                              { id: 'draft', label: 'مسودة عمل (DRAFT)' },
+                              { id: 'confidential', label: 'سري للغاية (CONFIDENTIAL)' },
+                              { id: 'certified', label: 'نسخة للمصادقة (CERTIFIED)' },
+                              { id: 'lab_copy', label: 'خاص بالمخبر (LAB COPY)' },
+                              { id: 'custom', label: 'نص مخصص...' }
+                            ].map((w) => (
+                              <button
+                                key={w.id}
+                                onClick={() => setLocalWatermark(w.id as PrintWatermark)}
+                                className={`w-full p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
+                                  watermark === w.id
+                                    ? 'bg-primary/10 text-primary border-primary'
+                                    : 'bg-surface text-secondary hover:bg-secondary-container/20 border-outline-variant/20'
+                                }`}
+                              >
+                                <span>{w.label}</span>
+                                {watermark === w.id && <Check size={14} />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {watermark === 'custom' && (
+                          <div className="space-y-1.5 pt-2 border-t border-outline-variant/20">
+                            <label className="text-xs font-bold text-secondary">نص العلامة المائية المخصصة</label>
+                            <input
+                              type="text"
+                              value={localCustomWatermark}
+                              onChange={(e) => setLocalCustomWatermark(e.target.value)}
+                              placeholder="مثال: نسخة مؤقتة، للاطلاع فقط..."
+                              className="w-full p-2.5 rounded-xl border border-outline-variant/30 text-xs font-bold bg-surface focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Tab 4: Institutional Header & Footer */}
                     {activeSettingsTab === 'header' && (
                       <div className="space-y-3">
                         <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer pb-2 border-b border-outline-variant/20">
@@ -1035,7 +1740,7 @@ export default function PrintPreviewModal() {
                         </label>
 
                         {showHeader && (
-                          <div className="space-y-2 pt-1">
+                          <div className="space-y-3 pt-1">
                             <label className="text-xs font-bold text-secondary">طراز الترويسة الرسمية</label>
                             <div className="grid grid-cols-2 gap-2">
                               {[
@@ -1059,10 +1764,32 @@ export default function PrintPreviewModal() {
                             </div>
                           </div>
                         )}
+
+                        <div className="space-y-2.5 pt-3 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary block mb-1">عناصر التذييل وأسفل الصفحة</label>
+                          <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer">
+                            <span>ترقيم الصفحات (صفحة 1 من 1)</span>
+                            <input
+                              type="checkbox"
+                              checked={showPageNumbers}
+                              onChange={(e) => setLocalShowPageNumbers(e.target.checked)}
+                              className="rounded text-primary focus:ring-primary w-4 h-4"
+                            />
+                          </label>
+                          <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer">
+                            <span>طابع تاريخ ووقت الطباعة</span>
+                            <input
+                              type="checkbox"
+                              checked={showPrintDateTime}
+                              onChange={(e) => setLocalShowPrintDateTime(e.target.checked)}
+                              className="rounded text-primary focus:ring-primary w-4 h-4"
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
 
-                    {/* Tab 4: Signatures & Stamp */}
+                    {/* Tab 5: Signatures & Stamp */}
                     {activeSettingsTab === 'signatures' && (
                       <div className="space-y-3">
                         <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer pb-2 border-b border-outline-variant/20">
@@ -1077,8 +1804,40 @@ export default function PrintPreviewModal() {
 
                         {showSignatures && (
                           <div className="space-y-3 pt-1">
-                            <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer">
-                              <span>تخصيص موضع ختم المؤسسة</span>
+                            {/* Number of signers selector */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-secondary block">عدد خانات التوقيع الرسمية</label>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {[
+                                  { count: 1, label: 'موقّع واحد', desc: 'مسير المخبر' },
+                                  { count: 2, label: 'موقّعان (2)', desc: 'المسير + المدير' },
+                                  { count: 3, label: '3 موقعين', desc: 'المسير + الناظر + المدير' }
+                                ].map((s) => (
+                                  <button
+                                    key={s.count}
+                                    type="button"
+                                    onClick={() => {
+                                      setLocalSignersCount(s.count);
+                                      if (s.count === 3) setLocalShowNazir(true);
+                                      if (s.count < 3) setLocalShowNazir(false);
+                                    }}
+                                    className={`py-2 px-1.5 rounded-xl border text-center transition-all ${
+                                      signersCount === s.count
+                                        ? 'bg-primary text-white border-primary shadow-sm'
+                                        : 'bg-surface text-secondary hover:bg-secondary-container/30 border-outline-variant/20'
+                                    }`}
+                                  >
+                                    <div className="text-xs font-bold">{s.label}</div>
+                                    <div className={`text-[9px] mt-0.5 ${signersCount === s.count ? 'text-white/80' : 'text-neutral-500'}`}>
+                                      {s.desc}
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer p-2 rounded-xl bg-surface-container/30 border border-outline-variant/10">
+                              <span>تخصيص موضع ختم المؤسسة الدائري</span>
                               <input
                                 type="checkbox"
                                 checked={stampSpace}
@@ -1086,9 +1845,56 @@ export default function PrintPreviewModal() {
                                 className="rounded text-primary focus:ring-primary w-4 h-4"
                               />
                             </label>
-                            <p className="text-[10px] text-secondary/70">
-                              تتضمن خانات التوقيع: مسؤول المخبر، مدير المؤسسة، والأستاذ المؤطر مع موضع الختم الدائري.
-                            </p>
+
+                            <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                              <label className="text-xs font-bold text-secondary block">تفعيل وتخصيص الموقعين</label>
+
+                              {/* Nazir signature and stamp */}
+                              <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer p-2.5 rounded-xl hover:bg-surface-container/50 border border-outline-variant/20 transition-colors">
+                                <div>
+                                  <span className="block font-bold text-primary">الناظر (التوقيع والختم)</span>
+                                  <span className="text-[10px] text-secondary font-normal">إدراج خانة تأشيرة وختم السيد الناظر في التقرير</span>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showNazir}
+                                  onChange={(e) => {
+                                    const val = e.target.checked;
+                                    setLocalShowNazir(val);
+                                    setLocalSignersCount(val ? 3 : 2);
+                                  }}
+                                  className="rounded text-primary focus:ring-primary w-4 h-4"
+                                />
+                              </label>
+
+                              {/* Teacher signature */}
+                              <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer p-2.5 rounded-xl hover:bg-surface-container/50 border border-outline-variant/20 transition-colors">
+                                <div>
+                                  <span className="block font-bold text-primary">توقيع أستاذ(ة) المادة</span>
+                                  <span className="text-[10px] text-secondary font-normal">إدراج خانة توقيع أستاذ المادة المشرف على الحصة</span>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showTeacher}
+                                  onChange={(e) => setLocalShowTeacher(e.target.checked)}
+                                  className="rounded text-primary focus:ring-primary w-4 h-4"
+                                />
+                              </label>
+
+                              {/* Inspector signature */}
+                              <label className="flex items-center justify-between text-xs font-bold text-secondary cursor-pointer p-2.5 rounded-xl hover:bg-surface-container/50 border border-outline-variant/20 transition-colors">
+                                <div>
+                                  <span className="block font-bold text-primary">ختم وتوقيع مفتش المادة</span>
+                                  <span className="text-[10px] text-secondary font-normal">إدراج خانة زيارة وتأشيرة مفتش التربية الوطنية</span>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showInspector}
+                                  onChange={(e) => setLocalShowInspector(e.target.checked)}
+                                  className="rounded text-primary focus:ring-primary w-4 h-4"
+                                />
+                              </label>
+                            </div>
                           </div>
                         )}
                       </div>

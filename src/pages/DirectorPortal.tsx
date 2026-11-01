@@ -302,7 +302,7 @@ export default function DirectorPortal() {
             <div>
               <h2 className="text-lg font-black text-primary">سجل تأشيرات ومصادقة المدير على التقارير اليومية</h2>
               <p className="text-xs text-secondary mt-0.5">
-                تأشيرة رئيس المؤسسة الرسمية بعد فحص ومراجعة تأشيرة ناظر الدروس وملاحظات مسؤول المخبر.
+                تأشيرة رئيس المؤسسة الرسمية بعد فحص ومراجعة تأشيرة الناظر وملاحظات مسؤول المخبر.
               </p>
             </div>
             <Link
@@ -569,7 +569,7 @@ export default function DirectorPortal() {
                 <textarea
                   rows={4}
                   required
-                  placeholder="مثال: صودق عليه واعتمد بعد الاطلاع على تأشيرة ناظر الدروس وملاحظات مسؤول المخبر..."
+                  placeholder="مثال: صودق عليه واعتمد بعد الاطلاع على تأشيرة الناظر وملاحظات مسؤول المخبر..."
                   value={directorRemarks}
                   onChange={e => setDirectorRemarks(e.target.value)}
                   className="w-full bg-surface-container p-3 rounded-2xl border border-outline-variant text-sm font-bold focus:border-indigo-500 outline-none resize-none"

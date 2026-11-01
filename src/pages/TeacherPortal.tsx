@@ -246,7 +246,7 @@ export default function TeacherPortal() {
         localStorage.setItem('offline_activity_requests', JSON.stringify([{ id: Date.now().toString(), ...payload }, ...existing]));
       }
 
-      setNotification({ message: 'تم إرسال طلب الحصة المخبرية بنجاح إلى ناظر الدروس ومسؤول المخبر!', type: 'success' });
+      setNotification({ message: 'تم إرسال طلب الحصة المخبرية بنجاح إلى الناظر ومسؤول المخبر!', type: 'success' });
       setActivityTitle('');
       setPedagogicalObjective('');
       setSpecialInstructions('');
@@ -542,7 +542,7 @@ export default function TeacherPortal() {
                 <span>بيانات الحصة والتجربة المخبرية</span>
               </h2>
               <p className="text-xs text-secondary mt-1">
-                املأ تفاصيل الحصة ليتم إشعار مسؤول المخبر بتحضير العتاد وإشعار ناظر الدروس للاعتماد.
+                املأ تفاصيل الحصة ليتم إشعار مسؤول المخبر بتحضير العتاد وإشعار الناظر للاعتماد.
               </p>
             </div>
 
@@ -803,7 +803,7 @@ export default function TeacherPortal() {
               <FlaskConical className="mx-auto text-secondary mb-3 opacity-40" size={48} />
               <p className="text-base font-bold text-primary">لا توجد طلبات حصص مسجلة حتى الآن</p>
               <p className="text-xs text-secondary mt-1 max-w-sm mx-auto">
-                يمكنك الضغط على زر "طلب حصة مخبرية وتجهيز" لإرسال أول طلب إلى ناظر الدروس ومسؤول المخبر.
+                يمكنك الضغط على زر "طلب حصة مخبرية وتجهيز" لإرسال أول طلب إلى الناظر ومسؤول المخبر.
               </p>
               <button
                 onClick={() => setActiveTab('request')}

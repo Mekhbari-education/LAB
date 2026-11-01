@@ -26,7 +26,7 @@ export const ROLE_PERMITTED_ROUTES: Record<UserRole, string[]> = {
     ROUTES.DIAGNOSTIC,
   ],
 
-  // 2. ناظر الدروس (المشرف البيداغوجي)
+  // 2. الناظر (المشرف البيداغوجي)
   censor: [
     ROUTES.CENSOR_PORTAL,
     ROUTES.PEDAGOGICAL_DASHBOARD,
@@ -174,5 +174,5 @@ export function isRouteAllowedForRole(role: UserRole | string | null | undefined
   if (cleanPath === '/' || cleanPath === '') {
     return allowed.includes(ROUTES.HOME) || allowed.includes('/');
   }
-  return allowed.some(r => r === cleanPath || (r !== '/' && cleanPath.startsWith(r)));
+  return allowed.some(r => r === cleanPath || (r !== '/' && cleanPath.startsWith(r + '/')));
 }

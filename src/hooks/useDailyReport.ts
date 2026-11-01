@@ -48,7 +48,7 @@ export function useDailyReport() {
   }, [academicYear]);
   const [docLocation, setDocLocation] = useState('عين كرشة');
   const [docSender, setDocSender] = useState('الملحق الرئيس بالمخابر');
-  const [docRecipient, setDocRecipient] = useState('السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس');
+  const [docRecipient, setDocRecipient] = useState('السيد: مدير المؤسسة — تحت إشراف السيد: الناظر');
   const [docSigners, setDocSigners] = useState<string[]>([
     'الملحق الرئيس بالمخابر',
     'الناظر',
@@ -147,7 +147,7 @@ export function useDailyReport() {
 
     switch (type) {
       case 'hierarchical_nazir':
-        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس';
+        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: الناظر';
         signersList = [baseSender, 'الناظر', 'مدير المؤسسة'];
         break;
       case 'hierarchical_cpe':
@@ -884,7 +884,7 @@ export function useDailyReport() {
         <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
         <style>
           @page {
-            size: A4 landscape;
+            size: A4 portrait;
             margin: 8mm 10mm 8mm 10mm;
           }
           * {
@@ -1081,8 +1081,8 @@ export function useDailyReport() {
 
         <div class="institution-bar">
           <div style="text-align: right;">
-            <div><strong>مديرية التربية:</strong> ${directorate}</div>
-            <div><strong>المؤسسة:</strong> ${formattedSchool}</div>
+            <div>${directorate}</div>
+            <div>${formattedSchool}</div>
           </div>
           <div style="text-align: left;">
             <div><strong>السنة الدراسية:</strong> ${activeYear}</div>
@@ -1149,19 +1149,19 @@ export function useDailyReport() {
 
         <!-- Official Signatures Block (Matching PDF exactly) -->
         <div class="signatures-grid">
-          <div class="sig-box">
+          <div class="sig-box sig-box-manager">
             <div class="sig-title">${labOfficerTitle}</div>
             <div class="sig-content">
               ${signature ? `<img src="${signature}" style="max-height: 48px; max-width: 130px; object-fit: contain;" alt="Signature" />` : `<span class="sig-placeholder">(التوقيع والختم)</span>`}
             </div>
           </div>
-          <div class="sig-box">
-            <div class="sig-title">${supervisorTitle}</div>
+          <div class="sig-box sig-box-nazir">
+            <div class="sig-title">الناظر</div>
             <div class="sig-content">
               <span class="sig-placeholder">(التوقيع والختم)</span>
             </div>
           </div>
-          <div class="sig-box">
+          <div class="sig-box sig-box-principal">
             <div class="sig-title">${principalTitle}</div>
             <div class="sig-content">
               <span class="sig-placeholder">(التوقيع والختم)</span>
@@ -1182,7 +1182,23 @@ export function useDailyReport() {
       subtitle: `السنة الدراسية: ${docAcademicYear} · رقم التقرير: ${reportNumber || '—'}`,
       type: 'custom',
       suggestedOrientation: 'portrait',
-      customHtml: html
+      customHtml: html,
+      headers: ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'],
+      rows: (noActivities ? [] : rows).map((r, i) => [
+        i + 1,
+        `${r.teacher || '—'}${r.teacherSubject ? ' (' + r.teacherSubject + ')' : ''}`,
+        r.time || '—',
+        r.class || '—',
+        `${r.activityTitle || '—'}${r.activityType ? ' [' + r.activityType + ']' : ''}`,
+        r.equipment || '—',
+        r.notes || '—'
+      ]),
+      summaryCards: [
+        { label: 'رقم التقرير', value: reportNumber || '—' },
+        { label: 'الحصص المنجزة', value: noActivities ? '0' : String(rows.length) },
+        { label: 'تاريخ النشاط', value: date }
+      ],
+      notes: labNotes || undefined
     });
   };
 
@@ -1336,7 +1352,14 @@ export function useDailyReport() {
       subtitle: `وزارة التربية الوطنية · ${docAcademicYear}`,
       type: 'custom',
       suggestedOrientation: 'portrait',
-      customHtml: html
+      customHtml: html,
+      headers: ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'],
+      rows: [],
+      summaryCards: [
+        { label: 'رقم التقرير', value: reportNumber || '—' },
+        { label: 'النوع', value: 'استمارة بيضاء للتحرير اليدوي' },
+        { label: 'تاريخ الاستخراج', value: date }
+      ]
     });
   };
 
@@ -1350,7 +1373,15 @@ export function useDailyReport() {
       subtitle: `السنة الدراسية: ${docAcademicYear}`,
       type: 'custom',
       suggestedOrientation: 'portrait',
-      customHtml: html
+      customHtml: html,
+      headers: ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'],
+      rows: [],
+      summaryCards: [
+        { label: 'رقم التقرير', value: reportNumber || '—' },
+        { label: 'الوضعية', value: 'لا توجد نشاطات تطبيقية' },
+        { label: 'تاريخ اليوم', value: date }
+      ],
+      notes: noActivitiesReason || undefined
     });
   };
 
@@ -1531,7 +1562,23 @@ export function useDailyReport() {
       subtitle: `رقم التقرير: ${report.reportNumber || '—'} · المصلحة: ${report.department || docDepartment}`,
       type: 'custom',
       suggestedOrientation: 'portrait',
-      customHtml: html
+      customHtml: html,
+      headers: ['#', 'الأستاذ(ة) والمادة', 'التوقيت', 'القسم', 'عنوان النشاط والنوع', 'الأدوات والمواد المستعملة', 'ملاحظات'],
+      rows: (report.rows || []).map((r: any, i: number) => [
+        i + 1,
+        `${r.teacher || '—'}${r.teacherSubject ? ' (' + r.teacherSubject + ')' : ''}`,
+        r.time || '—',
+        r.class || '—',
+        `${r.activityTitle || '—'}${r.activityType ? ' [' + r.activityType + ']' : ''}`,
+        r.equipment || '—',
+        r.notes || '—'
+      ]),
+      summaryCards: [
+        { label: 'رقم التقرير', value: report.reportNumber || '—' },
+        { label: 'الحصص المنجزة', value: report.noActivities ? '0' : String((report.rows || []).length) },
+        { label: 'تاريخ النشاط', value: report.date }
+      ],
+      notes: report.labNotes || undefined
     });
   };
 

@@ -49,7 +49,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleInfo> = {
   },
   censor: {
     role: 'censor',
-    label: 'ناظر الدروس (المشرف البيداغوجي)',
+    label: 'الناظر (المشرف البيداغوجي)',
     shortLabel: 'الناظر',
     badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-800',
     defaultPath: '/censor-portal',

@@ -18,6 +18,27 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
+  // Pass active school ID header if stored locally, to be validated against server records
+  if (!headers.has('x-school-id')) {
+    try {
+      const activeSchool = localStorage.getItem('active_school_id');
+      if (activeSchool) {
+        headers.set('x-school-id', activeSchool);
+      } else {
+        const localSettings = localStorage.getItem('lab_settings');
+        if (localSettings) {
+          const parsed = JSON.parse(localSettings);
+          const schoolClaim = parsed.schoolId || parsed.school;
+          if (schoolClaim) {
+            headers.set('x-school-id', schoolClaim);
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const targetUrl = url.startsWith('http') ? url : `${apiBase}${url}`;
   const response = await fetch(targetUrl, { ...options, headers });

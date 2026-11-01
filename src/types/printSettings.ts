@@ -5,6 +5,9 @@ export type PrintScale = 'small' | 'normal' | 'large';
 export type PrintColorMode = 'color' | 'grayscale' | 'blackAndWhite';
 export type PrintHeaderStyle = 'official' | 'compact' | 'modern' | 'minimal';
 export type QRStickerPreset = '2x4' | '3x7' | '4x8' | 'custom';
+export type PrintWatermark = 'none' | 'official' | 'draft' | 'confidential' | 'certified' | 'lab_copy' | 'custom';
+export type PrintBorderStyle = 'standard' | 'high_contrast' | 'double_official' | 'minimal';
+export type PrintLineHeight = 'compact' | 'normal' | 'relaxed';
 
 export interface InstitutionPrintSettings {
   country: string;
@@ -19,6 +22,7 @@ export interface InstitutionPrintSettings {
   showMinistry: boolean;
   showLogo: boolean;
   showDate: boolean;
+  showInstitutionDetails?: boolean;
   customLogoUrl?: string;
 }
 
@@ -28,6 +32,10 @@ export interface LayoutPrintSettings {
   margins: PrintMargins;
   fontSizeScale: PrintScale;
   fontFamily: 'Amiri' | 'Cairo' | 'ManaraDocs' | 'system';
+  copies?: number;
+  gutterMm?: number;
+  customScalePercent?: number;
+  lineHeight?: PrintLineHeight;
 }
 
 export interface AppearancePrintSettings {
@@ -36,6 +44,11 @@ export interface AppearancePrintSettings {
   compactRows: boolean;
   printBackgrounds: boolean;
   highContrastBorders: boolean;
+  watermark?: PrintWatermark;
+  customWatermarkText?: string;
+  borderStyle?: PrintBorderStyle;
+  showPageNumbers?: boolean;
+  showPrintDateTime?: boolean;
 }
 
 export interface SignaturesPrintSettings {
@@ -48,6 +61,9 @@ export interface SignaturesPrintSettings {
   teacherTitle: string;
   showInspector: boolean;
   inspectorTitle: string;
+  showNazir?: boolean;
+  nazirTitle?: string;
+  signersCount?: number;
   reserveStampSpace: boolean;
   customDisclaimer: string;
 }
@@ -90,6 +106,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     showMinistry: true,
     showLogo: true,
     showDate: true,
+    showInstitutionDetails: true,
     customLogoUrl: ''
   },
   layout: {
@@ -97,14 +114,23 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     orientation: 'portrait',
     margins: 'standard',
     fontSizeScale: 'normal',
-    fontFamily: 'Cairo'
+    fontFamily: 'Cairo',
+    copies: 1,
+    gutterMm: 0,
+    customScalePercent: 100,
+    lineHeight: 'normal'
   },
   appearance: {
     colorMode: 'color',
     tableStriped: true,
     compactRows: false,
     printBackgrounds: true,
-    highContrastBorders: false
+    highContrastBorders: false,
+    watermark: 'none',
+    customWatermarkText: '',
+    borderStyle: 'standard',
+    showPageNumbers: false,
+    showPrintDateTime: false
   },
   signatures: {
     showSignatures: true,
@@ -116,6 +142,9 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
     teacherTitle: 'الأستاذ المؤطر',
     showInspector: false,
     inspectorTitle: 'مفتش المادة',
+    showNazir: true,
+    nazirTitle: 'الناظر',
+    signersCount: 3,
     reserveStampSpace: true,
     customDisclaimer: 'وثيقة رسمية مصادق عليها صادرة عن النظام الرقمي للمخابر المدرسية'
   },

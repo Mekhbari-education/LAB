@@ -58,7 +58,6 @@ import { Helmet } from 'react-helmet-async';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import ministryLogo from '/ministry-logo.png';
-import { SCHOOL_DB } from '../data/schools';
 
 type AdminTab = 'overview' | 'users' | 'schools' | 'tickets' | 'purchases' | 'announcements' | 'system';
 

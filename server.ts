@@ -5,6 +5,7 @@ import admin from 'firebase-admin';
 import fs from 'fs';
 
 import { GoogleGenAI } from '@google/genai';
+import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 
 // ─── Rate Limiter الأمني ──────────────────────────────────────────────────
 // تم تصميم هذا النظام ليكون "جاهزاً للسحاب". حالياً يعمل في الذاكرة (MemoryStore)،
@@ -103,6 +104,22 @@ function createRateLimiter(windowMs: number, maxRequests: number, store: RateLim
 
 const geminiLimiter   = createRateLimiter(60_000, 30);   // 30 طلب / دقيقة
 const adminLimiter    = createRateLimiter(60_000, 5);     // 5  طلبات / دقيقة
+
+const userGeminiLimiter = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const key = req.user?.uid || req.ip || 'unknown';
+    const result = await activeRateLimitStore.increment(`gemini:${key}`, 60_000);
+    if (result.count > 30) {
+      return res.status(429).json({ 
+        error: 'تم تجاوز الحد المسموح من طلبات الذكاء الاصطناعي (30 طلب/دقيقة). يرجى الانتظار دقيقة واحدة.',
+        retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000)
+      });
+    }
+    next();
+  } catch (error) {
+    next();
+  }
+};
 // ──────────────────────────────────────────────────────────────────────────
 
 // ─── حماية نقاط الإدارة: localhost فقط ────────────────────────────────────
@@ -135,8 +152,8 @@ async function startServer() {
     return res.status(200).send('fbvthxxtta2cr1lkxsr1x7syknal90');
   });
 
-  // 2. API Gemini proxy — مع Rate Limiting
-  app.post('/api/gemini', geminiLimiter, async (req, res) => {
+  // 2. API Gemini proxy — يتطلب مصادقة Firebase + Rate Limiting لكل مستخدم + فحص المدخلات
+  app.post('/api/gemini', requireAuth, userGeminiLimiter, async (req: AuthRequest, res: Response) => {
     try {
       const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -148,15 +165,15 @@ async function startServer() {
         return res.status(400).json({ error: 'Missing contents field.' });
       }
 
-      const deprecatedModels = [
-        'gemini-1.5-flash',
-        'gemini-1.5-pro',
-        'gemini-2.0-flash',
-        'gemini-2.0-pro',
-        'gemini-2.0-flash-thinking',
-        'gemini-pro'
-      ];
-      if (!model || deprecatedModels.includes(model)) {
+      // Input length limit (25,000 characters)
+      const contentStr = typeof contents === 'string' ? contents : JSON.stringify(contents);
+      if (contentStr.length > 25000) {
+        return res.status(400).json({ error: 'حجم الطلب يتجاوز الحد المسموح به (25000 حرف).' });
+      }
+
+      // Model allowlist
+      const ALLOWED_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      if (!model || !ALLOWED_MODELS.includes(model)) {
         model = 'gemini-3.8-flash';
       }
 
@@ -198,12 +215,12 @@ async function startServer() {
 
       throw lastError;
     } catch (error: any) {
-      // في الإنتاج لا نُرسل تفاصيل الخطأ للعميل
       const isDev = process.env.NODE_ENV !== 'production';
       if (isDev) console.error('Gemini error:', error);
       res.status(500).json({ error: isDev ? (error.message || 'Failed') : 'خطأ في خادم الذكاء الاصطناعي.' });
     }
   });
+
 
   // 3. /api/setup-admin — localhost فقط + Rate Limiting
   app.post('/api/setup-admin', requireLocalhost, adminLimiter, async (req, res) => {
@@ -356,7 +373,41 @@ async function startServer() {
     }
   });
 
-  // 5. /api/schools/search — مفتوح لكن مع Rate Limiting
+  // 5. School Directory Endpoints (Lightweight subset delivery)
+  app.get('/api/schools/wilayas', async (_req, res) => {
+    try {
+      const { SCHOOL_DB } = await import('./src/data/schools');
+      const list = Object.entries(SCHOOL_DB).map(([id, data]) => {
+        const wilayaNum = parseInt(id.slice(0, 2), 10) || 99;
+        return {
+          id,
+          name: data.name,
+          wilayaNum
+        };
+      }).sort((a, b) => a.wilayaNum - b.wilayaNum || a.name.localeCompare(b.name, 'ar'));
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.json(list);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to load wilayas' });
+    }
+  });
+
+  app.get('/api/schools/wilaya/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { SCHOOL_DB } = await import('./src/data/schools');
+      const wilayaData = (SCHOOL_DB as any)[id];
+      if (!wilayaData) {
+        return res.status(404).json({ error: 'Wilaya not found' });
+      }
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.json({ id, name: wilayaData.name, communes: wilayaData.communes });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to load wilaya details' });
+    }
+  });
+
+  // 6. /api/schools/search — مفتوح لكن مع Rate Limiting
   app.post('/api/schools/search', geminiLimiter, async (req, res) => {
     try {
       const { suggestion } = req.body;

@@ -78,6 +78,7 @@ export interface ActivityRequestPDFOptions {
 
 export interface AdminDocumentPDFOptions {
   title: string;
+  formatType?: 'correspondence' | 'voucher_form' | 'minutes_pv' | 'report' | 'certificate' | 'circular_memo';
   reference?: string;
   category?: string;
   date?: string;
@@ -89,6 +90,7 @@ export interface AdminDocumentPDFOptions {
   subject?: string;
   content?: string;
   notes?: string;
+  closingFormula?: string;
   hasTable?: boolean;
   tableHeaders?: string[];
   tableRows?: any[][];
@@ -96,6 +98,15 @@ export interface AdminDocumentPDFOptions {
   schoolInfo?: SchoolInfo;
   fileName?: string;
   save?: boolean;
+  showCorrespondenceMeta?: boolean;
+  showSubject?: boolean;
+  showReference?: boolean;
+  showApprovalBox?: boolean;
+  showStampSpace?: boolean;
+  stampTitle?: string;
+  orientation?: 'portrait' | 'landscape';
+  margins?: 'compact' | 'standard' | 'spacious';
+  fontSizeScale?: 'compact' | 'standard' | 'large';
 }
 
 export interface LegislationSheetOptions {
@@ -307,24 +318,42 @@ export class PDFService {
         doc.addPage();
         currentY = 20;
       }
-      const sigWidth = 65;
       doc.setFont(fontName, 'bold');
       doc.setFontSize(9);
       doc.setTextColor(30, 45, 25);
       
-      // Right signature: Lab Officer
-      doc.text(this.processArabic('المسؤول عن المخبر'), pageWidth - margin - (sigWidth / 2), currentY, { align: 'center' });
-      doc.setFont(fontName, 'normal');
-      doc.setFontSize(7.5);
-      doc.text(this.processArabic('(الاسم، التوقيع والختم)'), pageWidth - margin - (sigWidth / 2), currentY + 4.5, { align: 'center' });
+      const showNazir = options.showNazir !== false;
+      const sigCount = showNazir ? 3 : 2;
+      const sigColWidth = (pageWidth - margin * 2) / sigCount;
 
-      // Left signature: Principal
+      // 1. Right: Lab Officer
+      const x1 = pageWidth - margin - (sigColWidth / 2);
       doc.setFont(fontName, 'bold');
       doc.setFontSize(9);
-      doc.text(this.processArabic('مدير(ة) المؤسسة'), margin + (sigWidth / 2), currentY, { align: 'center' });
+      doc.text(this.processArabic('المسؤول عن المخبر'), x1, currentY, { align: 'center' });
       doc.setFont(fontName, 'normal');
       doc.setFontSize(7.5);
-      doc.text(this.processArabic('(التوقيع والختم)'), margin + (sigWidth / 2), currentY + 4.5, { align: 'center' });
+      doc.text(this.processArabic('(الاسم، التوقيع والختم)'), x1, currentY + 4.5, { align: 'center' });
+
+      // 2. Center: Nazir
+      if (showNazir) {
+        const x2 = margin + (pageWidth - margin * 2) / 2;
+        doc.setFont(fontName, 'bold');
+        doc.setFontSize(9);
+        doc.text(this.processArabic('الناظر'), x2, currentY, { align: 'center' });
+        doc.setFont(fontName, 'normal');
+        doc.setFontSize(7.5);
+        doc.text(this.processArabic('(التوقيع والختم)'), x2, currentY + 4.5, { align: 'center' });
+      }
+
+      // 3. Left: Principal
+      const x3 = margin + (sigColWidth / 2);
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(9);
+      doc.text(this.processArabic('مدير(ة) المؤسسة'), x3, currentY, { align: 'center' });
+      doc.setFont(fontName, 'normal');
+      doc.setFontSize(7.5);
+      doc.text(this.processArabic('(التوقيع والختم)'), x3, currentY + 4.5, { align: 'center' });
     }
 
     if (options.save !== false) {
@@ -516,7 +545,7 @@ export class PDFService {
       if (obs.supervisorNotes) {
         doc.setFont(fontName, 'normal');
         doc.setFontSize(8);
-        doc.text(this.processArabic(`• ملاحظات الناظر / مستشار التربية: ${obs.supervisorNotes}`), pageWidth - margin, currentY, { align: 'right' });
+        doc.text(this.processArabic(`• ملاحظات وتأشيرة الناظر: ${obs.supervisorNotes}`), pageWidth - margin, currentY, { align: 'right' });
         currentY += 4.5;
       }
       if (obs.directorNotes) {
@@ -534,7 +563,7 @@ export class PDFService {
       currentY = 16;
     }
     const sigColWidth = (pageWidth - margin * 2) / 3;
-    const signers = options.signers || ['المسؤول عن المخبر', 'الناظر / مستشار التربية', 'مدير المؤسسة'];
+    const signers = options.signers || ['المسؤول عن المخبر', 'الناظر', 'مدير المؤسسة'];
     
     doc.setFont(fontName, 'bold');
     doc.setFontSize(8.5);
@@ -556,38 +585,251 @@ export class PDFService {
 
   /**
    * Generates Daily Report Word document
+  /**
+   * Generates Microsoft Word document HTML for the Daily Report matching the official PDF layout identically
    */
-  static generateDailyReportWord(options: any): void {
-    const previewData: PrintPreviewData = {
-      title: `التقرير اليومي للمخبر - ${options.date || ''}`,
-      subtitle: `رقم التقرير: ${options.reportNumber || '—'} · السنة الدراسية: ${options.academicYear || ''}`,
-      headers: ['رقم', 'الأستاذ(ة)', 'المادة', 'التوقيت', 'الفوج', 'عنوان النشاط', 'الوسائل المستعملة'],
-      rows: options.noActivities ? [] : (options.rows || []).map((r: any, idx: number) => [
-        String(idx + 1),
-        r.teacher || '—',
-        r.teacherSubject || '—',
-        r.time || '—',
-        r.class || '—',
-        r.activityTitle || '—',
-        r.equipment || '—'
-      ]),
-      notes: options.noActivities 
-        ? `نموذج خاص: يوم بدون أنشطة تطبيقية (${options.noActivitiesReason || 'لا توجد أنشطة'})`
-        : [options.observations?.labNotes, options.observations?.supervisorNotes, options.observations?.directorNotes].filter(Boolean).join(' | '),
-      suggestedOrientation: 'portrait'
-    };
-    const settings: any = {
-      ...DEFAULT_PRINT_SETTINGS,
-      institution: {
-        ...DEFAULT_PRINT_SETTINGS.institution,
-        school: options.schoolInfo?.school || DEFAULT_PRINT_SETTINGS.institution.school,
-        commune: options.schoolInfo?.commune || DEFAULT_PRINT_SETTINGS.institution.commune,
-        directorate: options.schoolInfo?.directorate || DEFAULT_PRINT_SETTINGS.institution.directorate,
-        laboratory: options.department || DEFAULT_PRINT_SETTINGS.institution.laboratory,
-        academicYear: options.academicYear || DEFAULT_PRINT_SETTINGS.institution.academicYear,
-      }
-    };
-    PrintService.downloadReportWord(previewData, settings);
+  static generateDailyReportWordHtml(options: DailyReportPDFOptions): string {
+    const school = options.schoolInfo || {};
+    const formattedSchool = formatSchoolWithCommune(school.school, school.commune) || 'المؤسسة التعليمية';
+    const directorate = school.directorate || 'مديرية التربية لولاية أم البواقي';
+    const academicYear = options.academicYear || '2025 / 2026';
+    const reportNum = options.reportNumber || '01';
+    const activeDate = options.date || new Date().toISOString().split('T')[0];
+    const dept = options.department || 'مخبر العلوم الفيزيائية والطبيعية';
+    const isNoAct = Boolean(options.noActivities);
+    const noActReason = options.noActivitiesReason || 'لا توجد أنشطة تطبيقية مبرمجة لهذا اليوم بالمخبر';
+    const rawRows = options.rows || [];
+
+    const labNotes = options.observations?.labNotes?.trim() || '';
+    const supervisorNotes = options.observations?.supervisorNotes?.trim() || '';
+    const directorNotes = options.observations?.directorNotes?.trim() || '';
+
+    const signers = options.signers && options.signers.length > 0 
+      ? options.signers 
+      : [options.sender || 'المسؤول عن المخبر', 'الناظر', 'مدير المؤسسة'];
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          @page Section1 {
+            size: 210mm 297mm;
+            mso-page-orientation: portrait;
+            margin: 12mm;
+            mso-header-margin: 10mm;
+            mso-footer-margin: 10mm;
+          }
+          div.Section1 { page: Section1; }
+          body {
+            font-family: 'Traditional Arabic', 'Amiri', 'Cairo', Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            font-size: 10pt;
+            color: #1a1a1a;
+            line-height: 1.5;
+          }
+        </style>
+      </head>
+      <body lang="AR-DZ" dir="rtl">
+        <div class="Section1">
+          <!-- Official Header -->
+          <p style="text-align: center; font-weight: bold; font-size: 11.5pt; color: #1e2d19; margin: 0 0 2pt 0;">
+            الجمهورية الجزائرية الديمقراطية الشعبية
+          </p>
+          <p style="text-align: center; font-weight: bold; font-size: 10pt; color: #415437; margin: 0 0 8pt 0;">
+            وزارة التربية الوطنية
+          </p>
+
+          <!-- Institution Metadata -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 6pt; border: none;">
+            <tr>
+              <td style="text-align: right; width: 55%; font-size: 9pt; vertical-align: top; border: none;">
+                <div>${directorate}</div>
+                <div>${formattedSchool}</div>
+                <div><strong>المصلحة / المخبر:</strong> ${dept}</div>
+              </td>
+              <td style="text-align: left; width: 45%; font-size: 9pt; vertical-align: top; border: none;" dir="rtl">
+                <div><strong>السنة الدراسية:</strong> ${academicYear}</div>
+                <div><strong>تاريخ اليوم:</strong> ${activeDate}</div>
+                <div><strong>رقم التقرير:</strong> ${reportNum}</div>
+              </td>
+            </tr>
+          </table>
+
+          <hr style="border: none; border-top: 1.5pt solid #2b3d22; margin: 4pt 0 8pt 0;" />
+
+          <!-- Title Banner -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 10pt; border: none;">
+            <tr>
+              <td style="background-color: #2b3d22; color: #ffffff; text-align: center; padding: 6pt 10pt; border-radius: 4pt;">
+                <h1 style="font-size: 13pt; font-weight: bold; margin: 0; color: #ffffff;">التقرير اليومي لسير الأنشطة المخبرية</h1>
+              </td>
+            </tr>
+          </table>
+
+          ${isNoAct ? `
+            <!-- Special Amber Box for Zero Activities -->
+            <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 12pt; background-color: #fef9eb; border: 2pt solid #d97706; border-radius: 4pt;">
+              <tr>
+                <td style="padding: 12pt 16pt; text-align: center;">
+                  <h2 style="font-size: 13pt; font-weight: bold; color: #b45309; margin: 0 0 6pt 0;">
+                    نموذج خاص: يوم بدون أنشطة تطبيقية
+                  </h2>
+                  <p style="font-size: 10.5pt; color: #78350f; font-weight: bold; margin: 0 0 6pt 0;">
+                    ${noActReason}
+                  </p>
+                  <p style="font-size: 9.5pt; color: #92400e; margin: 0;">
+                    تم استغلال هذا اليوم في أعمال الصيانة الدورية، جرد الوسائل وتنظيم المخزن وتحضير الكواشف والمحاليل للدروس المقبلة.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          ` : `
+            <!-- Summary Metric Cards -->
+            <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 10pt; border: none;">
+              <tr>
+                <td style="width: 33.3%; text-align: center; padding: 6pt; background-color: #f4f6f2; border: 1pt solid #d2d8ce;">
+                  <div style="font-size: 8.5pt; color: #666;">رقم التقرير</div>
+                  <div style="font-size: 12pt; font-weight: bold; color: #2b3d22;">${reportNum}</div>
+                </td>
+                <td style="width: 33.3%; text-align: center; padding: 6pt; background-color: #f4f6f2; border: 1pt solid #d2d8ce;">
+                  <div style="font-size: 8.5pt; color: #666;">إجمالي الحصص المنجزة</div>
+                  <div style="font-size: 12pt; font-weight: bold; color: #2b3d22;">${rawRows.length}</div>
+                </td>
+                <td style="width: 33.3%; text-align: center; padding: 6pt; background-color: #f4f6f2; border: 1pt solid #d2d8ce;">
+                  <div style="font-size: 8.5pt; color: #666;">تاريخ النشاط</div>
+                  <div style="font-size: 12pt; font-weight: bold; color: #2b3d22;">${activeDate}</div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Activity Sessions Table -->
+            <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 12pt; border: 1.5pt solid #2b3d22;">
+              <thead>
+                <tr style="background-color: #2b3d22; color: #ffffff;">
+                  <th style="border: 1pt solid #415437; padding: 6pt 4pt; width: 28pt; text-align: center; color: #ffffff; font-weight: bold; font-size: 9.5pt;">رقم</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 6pt; text-align: right; color: #ffffff; font-weight: bold; font-size: 9.5pt;">الأستاذ(ة)</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 6pt; text-align: center; width: 65pt; color: #ffffff; font-weight: bold; font-size: 9.5pt;">المادة</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 6pt; text-align: center; width: 55pt; color: #ffffff; font-weight: bold; font-size: 9.5pt;">التوقيت</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 6pt; text-align: center; width: 50pt; color: #ffffff; font-weight: bold; font-size: 9.5pt;">الفوج</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 8pt; text-align: right; color: #ffffff; font-weight: bold; font-size: 9.5pt;">عنوان النشاط التجريبي</th>
+                  <th style="border: 1pt solid #415437; padding: 6pt 8pt; text-align: right; color: #ffffff; font-weight: bold; font-size: 9.5pt;">الوسائل والتجهيزات المستعملة</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rawRows.map((r: any, idx: number) => `
+                  <tr style="background-color: ${idx % 2 === 0 ? '#ffffff' : '#f9faf7'};">
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 4pt; text-align: center; font-weight: bold;">${idx + 1}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 6pt; text-align: right; font-weight: bold;">${r.teacher || '—'}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 6pt; text-align: center;">${r.teacherSubject || '—'}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 6pt; text-align: center;">${r.time || '—'}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 6pt; text-align: center;">${r.class || '—'}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 8pt; text-align: right;">${r.activityTitle || '—'}</td>
+                    <td style="border: 1pt solid #d2d8ce; padding: 5pt 8pt; text-align: right;">${r.equipment || '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `}
+
+          <!-- Observations Table (3 Official Sections) -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 14pt; border: 1pt solid #d2d8ce;">
+            <tr>
+              <td style="width: 33.3%; padding: 6pt 8pt; border: 1pt solid #d2d8ce; vertical-align: top; background-color: #fcfdfb;">
+                <div style="font-weight: bold; font-size: 9.5pt; color: #2b3d22; border-bottom: 1pt solid #e2e8de; padding-bottom: 3pt; margin-bottom: 4pt;">
+                  ملاحظات مسير المخبر:
+                </div>
+                <div style="font-size: 8.5pt; color: #444; min-height: 40pt;">
+                  ${labNotes || 'تمت جميع التجارب في ظروف عادية ووفق معايير السلامة والأمن المخبري.'}
+                </div>
+              </td>
+              <td style="width: 33.3%; padding: 6pt 8pt; border: 1pt solid #d2d8ce; vertical-align: top; background-color: #fcfdfb;">
+                <div style="font-weight: bold; font-size: 9.5pt; color: #2b3d22; border-bottom: 1pt solid #e2e8de; padding-bottom: 3pt; margin-bottom: 4pt;">
+                 وملاحظات السيد الناظر:
+                </div>
+                <div style="font-size: 8.5pt; color: #444; min-height: 40pt;">
+                  ${supervisorNotes || 'شوهد وتمت المطابقة مع جداول توقيت المخابر.'}
+                </div>
+              </td>
+              <td style="width: 33.3%; padding: 6pt 8pt; border: 1pt solid #d2d8ce; vertical-align: top; background-color: #fcfdfb;">
+                <div style="font-weight: bold; font-size: 9.5pt; color: #2b3d22; border-bottom: 1pt solid #e2e8de; padding-bottom: 3pt; margin-bottom: 4pt;">
+                 وملاحظات السيد مدير المؤسسة:
+                </div>
+                <div style="font-size: 8.5pt; color: #444; min-height: 40pt;">
+                  ${directorNotes || 'اطُّلِع عليه، ويُصادَق على السير البيداغوجي للمخبر.'}
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Official Signatures Block with Round Stamp Placeholder -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 14pt; margin-bottom: 16pt;">
+            <tr>
+              ${signers.map(sig => `
+                <td style="width: ${Math.floor(100 / signers.length)}%; text-align: center; vertical-align: top; padding: 6pt; border: 1pt dashed #889980; background-color: #fcfdfb;">
+                  <div style="font-weight: bold; font-size: 10pt; color: #2b3d22; border-bottom: 1pt solid #e0e5dc; padding-bottom: 3pt; margin-bottom: 6pt;">
+                    ${sig}
+                  </div>
+                  <div style="font-size: 8.5pt; color: #888888; height: 30pt; padding-top: 6pt;">
+                    (الاسم، التوقيع والختم)
+                  </div>
+                  <div style="margin: 6pt auto 4pt auto; width: 50pt; height: 50pt; border: 1pt dotted #a3b09d; border-radius: 50%; text-align: center; padding-top: 16pt; font-size: 7.5pt; color: #778873;">
+                    موضع الختم الرسمي
+                  </div>
+                </td>
+              `).join('')}
+            </tr>
+          </table>
+
+          <!-- Footer -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 12pt; border-top: 1pt solid #d2d8ce;">
+            <tr>
+              <td style="text-align: right; font-size: 8pt; color: #777; padding-top: 4pt; border: none;">
+                الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية
+              </td>
+              <td style="text-align: center; font-size: 8pt; color: #777; padding-top: 4pt; border: none;">
+                ${formattedSchool}
+              </td>
+              <td style="text-align: left; font-size: 8pt; color: #777; padding-top: 4pt; border: none;">
+                صفحة 1 من 1
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Downloads Microsoft Word document (.doc) for the Daily Report matching the official PDF layout
+   */
+  static generateDailyReportWord(options: DailyReportPDFOptions): void {
+    const html = this.generateDailyReportWordHtml(options);
+    const blob = new Blob(['\ufeff', html], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeTitle = `التقرير_اليومي_للمخبر_${options.date || 'اليوم'}`.replace(/[/\\?%*:|"<>]/g, '_');
+    link.download = `${safeTitle}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   /**
@@ -754,39 +996,68 @@ export class PDFService {
   }
 
   /**
-   * Generates Activity Request Word document
+   * Generates Activity Request Word document matching HTML and PDF layout identically
    */
   static generateActivityRequestWord(options: any): void {
-    const isBlank = Boolean(options.isBlank);
-    const officerRank = options.jobTitle || 'الملحق الرئيس بالمخابر';
-    const previewData: PrintPreviewData = {
-      title: 'طلب تحضير نشاط تجريبي / مخبري',
-      subtitle: `رقم الطلب: ${options.orderNum || '—'} · الأستاذ: ${options.teacherName || '—'}`,
-      headers: ['رقم', 'اسم الجهاز / الوسيلة', 'الكمية المطلوبة', 'ملاحظات'],
-      rows: isBlank ? [] : (options.equipItems || []).map((e: any, idx: number) => [
-        String(idx + 1),
-        e.name || '—',
-        String(e.quantity || 1),
-        e.notes || 'جاهز للاستعمال'
-      ]),
-      notes: `توقيع أستاذ المادة وتأشيرة: ${officerRank} (التوقيع والختم)`,
-      suggestedOrientation: 'portrait'
-    };
-    const settings: any = {
-      ...DEFAULT_PRINT_SETTINGS,
-      institution: {
-        ...DEFAULT_PRINT_SETTINGS.institution,
-        school: options.schoolInfo?.school || DEFAULT_PRINT_SETTINGS.institution.school,
-        commune: options.schoolInfo?.commune || DEFAULT_PRINT_SETTINGS.institution.commune,
-        directorate: options.schoolInfo?.directorate || DEFAULT_PRINT_SETTINGS.institution.directorate,
-        academicYear: options.schoolInfo?.academicYear || DEFAULT_PRINT_SETTINGS.institution.academicYear,
-      },
-      signatures: {
-        ...DEFAULT_PRINT_SETTINGS.signatures,
-        labManagerTitle: officerRank
-      }
-    };
-    PrintService.downloadReportWord(previewData, settings);
+    const rawHtml = this.generateActivityRequestHtml(options);
+    const bodyContent = rawHtml
+      .replace(/<!DOCTYPE html>[\s\S]*?<div class="sheet">/, '')
+      .replace(/<\/div>\s*<\/body>\s*<\/html>[\s\S]*$/, '');
+
+    const wordHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          @page Section1 {
+            size: 210mm 297mm;
+            mso-page-orientation: portrait;
+            margin: 12mm;
+            mso-header-margin: 10mm;
+            mso-footer-margin: 10mm;
+          }
+          div.Section1 { page: Section1; }
+          body {
+            font-family: 'Traditional Arabic', 'Amiri', 'Cairo', Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            font-size: 10pt;
+            color: #1a1a1a;
+            line-height: 1.4;
+          }
+        </style>
+      </head>
+      <body lang="AR-DZ" dir="rtl">
+        <div class="Section1">
+          ${bodyContent}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob(['\ufeff', wordHtml], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeTitle = `طلب_نشاط_مخبري_${options.teacherName || 'استمارة'}`.replace(/[/\\?%*:|"<>]/g, '_');
+    link.download = `${safeTitle}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   /**
@@ -949,7 +1220,7 @@ export class PDFService {
           <div class="sig-rank">${officerRank}</div>
           <div class="sig-sub">(التوقيع والختم)</div>
           <div class="sig-box">
-            <div style="font-size: 8pt; color: #777; text-align: right;">تأشيرة استلام وتحضير العتاد</div>
+            <div style="font-size: 8pt; color: #777; text-align: right;"> استلام وتحضير العتاد</div>
           </div>
         </td>
       </tr>
@@ -965,8 +1236,9 @@ export class PDFService {
    * Returns Promise<Blob> as required by callers
    */
   static async generateAdministrativeDocumentPDF(options: AdminDocumentPDFOptions): Promise<Blob> {
+    const orientation = options.orientation || 'portrait';
     const doc = new jsPDF({
-      orientation: 'portrait',
+      orientation: orientation,
       unit: 'mm',
       format: 'a4',
       putOnlyUsedFonts: true
@@ -975,15 +1247,22 @@ export class PDFService {
     const hasFont = await this.init(doc);
     const fontName = hasFont ? 'ManaraDocs' : 'helvetica';
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 14;
-    let currentY = 14;
+    const pageHeight = doc.internal.pageSize.getHeight();
+    
+    // Dynamic margin calculation
+    let margin = 14;
+    if (options.margins === 'compact') margin = 10;
+    else if (options.margins === 'spacious') margin = 18;
+
+    let currentY = margin;
 
     const school = options.schoolInfo || {};
     const formattedSchool = formatSchoolWithCommune(school.school, school.commune) || 'المؤسسة التعليمية';
     const directorate = school.directorate || 'مديرية التربية لولاية';
     const academicYear = options.academicYear || school.academicYear || '2025 / 2026';
+    const fmt = options.formatType || 'correspondence';
 
-    // Header
+    // Header - Official Republic & Ministry
     doc.setFont(fontName, 'bold');
     doc.setFontSize(10.5);
     doc.setTextColor(30, 45, 25);
@@ -1005,29 +1284,31 @@ export class PDFService {
     if (options.department) {
       doc.text(this.processArabic(options.department), pageWidth - margin, currentY, { align: 'right' });
     }
-    if (options.reference) {
+    if (options.reference && options.showReference !== false) {
       doc.text(this.processArabic(`الرقم: ${options.reference}`), margin, currentY, { align: 'left' });
     }
-    currentY += 7;
+    currentY += 6;
 
-    // Line
+    // Dividing Line
     doc.setDrawColor(65, 84, 55);
     doc.setLineWidth(0.4);
     doc.line(margin, currentY, pageWidth - margin, currentY);
-    currentY += 7;
+    currentY += 6.5;
 
-    // Title
+    // Document Title Banner
     doc.setFont(fontName, 'bold');
-    doc.setFontSize(14);
+    doc.setFontSize(13.5);
     doc.setTextColor(43, 61, 34);
     doc.text(this.processArabic(options.title), pageWidth / 2, currentY, { align: 'center' });
     currentY += 7;
 
-    // Subject / Context Box
-    if (options.sender || options.recipient || options.subject) {
+    // Context / Format-Specific Block
+    const showCorresp = options.showCorrespondenceMeta !== false;
+    if (fmt === 'correspondence' && showCorresp && (options.sender || options.recipient || options.subject)) {
       doc.setFillColor(248, 250, 246);
       doc.setDrawColor(210, 216, 206);
-      doc.roundedRect(margin, currentY, pageWidth - margin * 2, 18, 1.5, 1.5, 'FD');
+      const boxHeight = (options.subject && options.showSubject !== false) ? 18 : 11;
+      doc.roundedRect(margin, currentY, pageWidth - margin * 2, boxHeight, 1.5, 1.5, 'FD');
       
       doc.setFont(fontName, 'bold');
       doc.setFontSize(8.5);
@@ -1038,16 +1319,59 @@ export class PDFService {
       if (options.recipient) {
         doc.text(this.processArabic(`إلى: ${options.recipient}`), margin + (pageWidth - margin * 2) / 2 - 4, currentY + 5.5, { align: 'right' });
       }
-      if (options.subject) {
+      if (options.subject && options.showSubject !== false) {
         doc.text(this.processArabic(`الموضوع: ${options.subject}`), pageWidth - margin - 4, currentY + 13, { align: 'right' });
       }
-      currentY += 23;
+      currentY += boxHeight + 5;
+    } else if (fmt === 'voucher_form') {
+      // Slip / Form header box (طالب السند، المصلحة، التاريخ)
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(margin, currentY, pageWidth - margin * 2, 12, 1.5, 1.5, 'FD');
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(30, 41, 59);
+      if (options.sender) {
+        doc.text(this.processArabic(`طالب السند / المسؤول: ${options.sender}`), pageWidth - margin - 4, currentY + 4.5, { align: 'right' });
+      }
+      if (options.department) {
+        doc.text(this.processArabic(`المصلحة / المخبر: ${options.department}`), margin + (pageWidth - margin * 2) / 2 - 4, currentY + 4.5, { align: 'right' });
+      }
+      if (options.reference && options.showReference !== false) {
+        doc.text(this.processArabic(`سند رقم: ${options.reference}`), pageWidth - margin - 4, currentY + 9, { align: 'right' });
+      }
+      if (options.subject && options.showSubject !== false) {
+        doc.text(this.processArabic(`الغرض: ${options.subject}`), margin + (pageWidth - margin * 2) / 2 - 4, currentY + 9, { align: 'right' });
+      }
+      currentY += 16;
+    } else if (fmt === 'circular_memo' && (options.recipient || options.subject)) {
+      doc.setFillColor(240, 253, 250);
+      doc.setDrawColor(204, 251, 241);
+      doc.roundedRect(margin, currentY, pageWidth - margin * 2, 12, 1.5, 1.5, 'FD');
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(15, 118, 110);
+      if (options.recipient) {
+        doc.text(this.processArabic(`موجهة إلى: ${options.recipient}`), pageWidth - margin - 4, currentY + 5, { align: 'right' });
+      }
+      if (options.subject && options.showSubject !== false) {
+        doc.text(this.processArabic(`الموضوع: ${options.subject}`), pageWidth - margin - 4, currentY + 9.5, { align: 'right' });
+      }
+      currentY += 16;
+    } else if (options.subject && options.showSubject !== false && fmt !== 'correspondence') {
+      // Small simple subject line
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(43, 61, 34);
+      doc.text(this.processArabic(`الموضوع: ${options.subject}`), pageWidth - margin, currentY, { align: 'right' });
+      currentY += 6;
     }
 
     // Main Content
     if (options.content) {
       doc.setFont(fontName, 'normal');
-      doc.setFontSize(9.5);
+      const baseFontSize = options.fontSizeScale === 'compact' ? 8.5 : options.fontSizeScale === 'large' ? 10.5 : 9.5;
+      doc.setFontSize(baseFontSize);
       doc.setTextColor(40, 40, 40);
       const splitContent = doc.splitTextToSize(this.processArabic(options.content), pageWidth - margin * 2);
       doc.text(splitContent, pageWidth - margin, currentY, { align: 'right' });
@@ -1070,9 +1394,9 @@ export class PDFService {
 
     // Notes
     if (options.notes) {
-      if (currentY > doc.internal.pageSize.getHeight() - 35) {
+      if (currentY > pageHeight - 45) {
         doc.addPage();
-        currentY = 16;
+        currentY = margin;
       }
       doc.setFont(fontName, 'bold');
       doc.setFontSize(8.5);
@@ -1084,11 +1408,45 @@ export class PDFService {
       currentY += 8;
     }
 
-    // Signers
-    if (options.signers && options.signers.length > 0) {
-      if (currentY > doc.internal.pageSize.getHeight() - 35) {
+    // Closing Formula
+    if (options.closingFormula && options.closingFormula !== 'بدون عبارة ختامية') {
+      if (currentY > pageHeight - 40) {
         doc.addPage();
-        currentY = 16;
+        currentY = margin;
+      }
+      doc.setFont(fontName, 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(50, 50, 50);
+      doc.text(this.processArabic(options.closingFormula), pageWidth - margin - 6, currentY, { align: 'right' });
+      currentY += 7;
+    }
+
+    // Approval / Decision Box (Optional)
+    if (options.showApprovalBox) {
+      if (currentY > pageHeight - 45) {
+        doc.addPage();
+        currentY = margin;
+      }
+      doc.setDrawColor(180, 195, 175);
+      doc.setFillColor(252, 253, 250);
+      doc.roundedRect(margin, currentY, pageWidth - margin * 2, 14, 1.5, 1.5, 'FD');
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(43, 61, 34);
+      doc.text(this.processArabic('قرار وختم إدارة المؤسسة:'), pageWidth - margin - 4, currentY + 5, { align: 'right' });
+      doc.setFont(fontName, 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(60, 60, 60);
+      doc.text(this.processArabic('[   ] موافقة تامة         [   ] موافقة مع تحفظ         [   ] مرفوض'), pageWidth - margin - 50, currentY + 5, { align: 'right' });
+      doc.text(this.processArabic('الملاحظات: ............................................................................   التاريخ والتوقيع: ................................'), pageWidth - margin - 4, currentY + 10.5, { align: 'right' });
+      currentY += 19;
+    }
+
+    // Signers and Official Stamps
+    if (options.signers && options.signers.length > 0) {
+      if (currentY > pageHeight - 38) {
+        doc.addPage();
+        currentY = margin;
       }
       const count = options.signers.length;
       const colW = (pageWidth - margin * 2) / count;
@@ -1101,6 +1459,14 @@ export class PDFService {
         doc.setFont(fontName, 'normal');
         doc.setFontSize(7.5);
         doc.text(this.processArabic('(التوقيع والختم)'), x, currentY + 4.5, { align: 'center' });
+
+        if (options.showStampSpace) {
+          doc.setDrawColor(200, 210, 200);
+          doc.circle(x, currentY + 15, 7, 'S');
+          doc.setFontSize(6.5);
+          doc.setTextColor(140, 150, 140);
+          doc.text(this.processArabic('موضع الختم الرسمي'), x, currentY + 15.5, { align: 'center' });
+        }
       });
     }
 
@@ -1109,6 +1475,318 @@ export class PDFService {
     }
 
     return doc.output('blob');
+  }
+
+  /**
+   * Generates Microsoft Word document HTML for Administrative Documents matching the PDF layout identically
+   */
+  static generateAdministrativeDocumentWordHtml(options: AdminDocumentPDFOptions): string {
+    const school = options.schoolInfo || {};
+    const formattedSchool = formatSchoolWithCommune(school.school, school.commune) || 'المؤسسة التعليمية';
+    const directorate = school.directorate || 'مديرية التربية لولاية';
+    const academicYear = options.academicYear || school.academicYear || '2025 / 2026';
+    const fmt = options.formatType || 'correspondence';
+    const orient = options.orientation || 'portrait';
+    const isLandscape = orient === 'landscape';
+    const dateStr = options.date || new Date().toISOString().split('T')[0];
+    const signers = options.signers && options.signers.length > 0 ? options.signers : ['مسير المخبر', 'مدير المؤسسة'];
+    const showCorresp = options.showCorrespondenceMeta !== false;
+    const showAppr = Boolean(options.showApprovalBox);
+    const showStmp = options.showStampSpace !== false;
+    const marginMm = options.margins === 'compact' ? 10 : options.margins === 'spacious' ? 18 : 14;
+    const baseFontSize = options.fontSizeScale === 'compact' ? '9.5pt' : options.fontSizeScale === 'large' ? '12pt' : '11pt';
+
+    // Format-specific metadata HTML
+    let metaBoxHtml = '';
+    if (fmt === 'correspondence' && showCorresp && (options.sender || options.recipient || options.subject)) {
+      metaBoxHtml = `
+        <table class="meta-box-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 12pt; background-color: #f7f9f5; border: 1.5pt solid #2b3d22;">
+          <tr>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top; border-bottom: 1pt solid #d2d8ce;">
+              <strong>من:</strong> ${options.sender || 'مسير المخبر'}
+            </td>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top; border-bottom: 1pt solid #d2d8ce;">
+              <strong>إلى:</strong> ${options.recipient || 'السيد مدير المؤسسة'}
+            </td>
+          </tr>
+          ${(options.subject && options.showSubject !== false) ? `
+          <tr>
+            <td colspan="2" style="padding: 6pt 10pt; vertical-align: top;">
+              <strong>الموضوع:</strong> ${options.subject}
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+      `;
+    } else if (fmt === 'voucher_form') {
+      metaBoxHtml = `
+        <table class="meta-box-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 12pt; background-color: #f8fafc; border: 1.5pt solid #0f766e;">
+          <tr>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top; border-bottom: 1pt solid #cbd5e1;">
+              <strong>طالب السند / المسؤول:</strong> ${options.sender || 'المسؤول عن المخبر'}
+            </td>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top; border-bottom: 1pt solid #cbd5e1;">
+              <strong>المصلحة / المخبر:</strong> ${options.department || 'مخبر العلوم'}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top;">
+              <strong>سند رقم:</strong> ${options.reference || '—'}
+            </td>
+            <td style="padding: 6pt 10pt; width: 50%; vertical-align: top;">
+              <strong>الغرض:</strong> ${options.subject || '—'}
+            </td>
+          </tr>
+        </table>
+      `;
+    } else if (fmt === 'circular_memo') {
+      metaBoxHtml = `
+        <table class="meta-box-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 12pt; background-color: #f0fdfa; border: 1.5pt solid #0d9488;">
+          <tr>
+            <td style="padding: 6pt 10pt; vertical-align: top; border-bottom: 1pt solid #99f6e4;">
+              <strong>موجهة إلى:</strong> ${options.recipient || 'جميع الأساتذة ومستخدمي المخبر'}
+            </td>
+          </tr>
+          ${(options.subject && options.showSubject !== false) ? `
+          <tr>
+            <td style="padding: 6pt 10pt; vertical-align: top;">
+              <strong>الموضوع:</strong> ${options.subject}
+            </td>
+          </tr>
+          ` : ''}
+        </table>
+      `;
+    } else if (options.subject && options.showSubject !== false) {
+      metaBoxHtml = `
+        <div style="margin-top: 8pt; margin-bottom: 10pt; font-weight: bold; font-size: 11pt; color: #2b3d22;">
+          <strong>الموضوع:</strong> ${options.subject}
+        </div>
+      `;
+    }
+
+    // Items Table HTML
+    let tableHtml = '';
+    if (options.hasTable && options.tableHeaders && options.tableRows && options.tableRows.length > 0) {
+      tableHtml = `
+        <table class="data-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 12pt; margin-bottom: 12pt; border: 1.5pt solid #2b3d22;">
+          <thead>
+            <tr style="background-color: #2b3d22; color: #ffffff;">
+              ${options.tableHeaders.map(h => `
+                <th style="border: 1pt solid #415437; padding: 6pt 8pt; text-align: center; font-weight: bold; font-size: 10pt; color: #ffffff;">
+                  ${h}
+                </th>
+              `).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${options.tableRows.map((row, rIdx) => `
+              <tr style="background-color: ${rIdx % 2 === 0 ? '#ffffff' : '#f9faf7'};">
+                ${row.map(cell => `
+                  <td style="border: 1pt solid #d2d8ce; padding: 5pt 8pt; font-size: 9.5pt; color: #1a1a1a;">
+                    ${cell !== null && cell !== undefined ? String(cell) : '—'}
+                  </td>
+                `).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // Notes Box
+    let notesHtml = '';
+    if (options.notes) {
+      notesHtml = `
+        <table class="notes-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 10pt; margin-bottom: 10pt; background-color: #fcfdfb; border-right: 3pt solid #2b3d22; border: 1pt solid #d2d8ce;">
+          <tr>
+            <td style="padding: 7pt 10pt; font-size: 9.5pt; color: #333333;">
+              <strong style="color: #2b3d22;">ملاحظات وتوجيهات:</strong> ${options.notes}
+            </td>
+          </tr>
+        </table>
+      `;
+    }
+
+    // Closing Formula
+    let closingHtml = '';
+    if (options.closingFormula && options.closingFormula !== 'بدون عبارة ختامية') {
+      closingHtml = `
+        <p style="margin-top: 14pt; margin-bottom: 14pt; font-size: 11pt; color: #2b3d22; font-weight: bold;">
+          ${options.closingFormula}
+        </p>
+      `;
+    }
+
+    // Approval / Decision Box
+    let approvalHtml = '';
+    if (showAppr) {
+      approvalHtml = `
+        <table class="approval-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 14pt; margin-bottom: 14pt; background-color: #fbfcf9; border: 1.5pt solid #2b3d22;">
+          <tr>
+            <td style="padding: 8pt 12pt;">
+              <div style="font-weight: bold; color: #2b3d22; font-size: 11pt; margin-bottom: 5pt;">قرار وختم إدارة المؤسسة:</div>
+              <div style="font-size: 10pt; margin-bottom: 5pt;">
+                [ &nbsp; ] موافقة تامة &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] موافقة مع تحفظ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; [ &nbsp; ] مرفوض
+              </div>
+              <div style="font-size: 9pt; color: #555555;">
+                الملاحظات: ............................................................................ &nbsp;&nbsp;&nbsp;&nbsp; التوقيع والختم: ................................
+              </div>
+            </td>
+          </tr>
+        </table>
+      `;
+    }
+
+    // Signatures Table
+    const colWidthPercent = Math.floor(100 / Math.max(signers.length, 1));
+    const signaturesHtml = `
+      <table class="signatures-table" dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 24pt; margin-bottom: 16pt;">
+        <tr>
+          ${signers.map(sig => `
+            <td style="width: ${colWidthPercent}%; text-align: center; vertical-align: top; padding: 6pt; border: 1pt dashed #889980; background-color: #fcfdfb;">
+              <div style="font-weight: bold; font-size: 10.5pt; color: #2b3d22; border-bottom: 1pt solid #e0e5dc; padding-bottom: 4pt; margin-bottom: 8pt;">
+                ${sig}
+              </div>
+              <div style="font-size: 8.5pt; color: #888888; height: 35pt; padding-top: 10pt;">
+                (الاسم، التوقيع والختم)
+              </div>
+              ${showStmp ? `
+                <div style="margin: 8pt auto 4pt auto; width: 55pt; height: 55pt; border: 1pt dotted #a3b09d; border-radius: 50%; text-align: center; padding-top: 18pt; font-size: 7.5pt; color: #778873;">
+                  موضع الختم الرسمي
+                </div>
+              ` : ''}
+              <div style="font-size: 7.5pt; color: #999999; margin-top: 6pt;">
+                حرر في: .....................
+              </div>
+            </td>
+          `).join('')}
+        </tr>
+      </table>
+    `;
+
+    return `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office"
+            xmlns:w="urn:schemas-microsoft-com:office:word"
+            xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <w:WordDocument>
+            <w:View>Print</w:View>
+            <w:Zoom>100</w:Zoom>
+            <w:DoNotOptimizeForBrowser/>
+          </w:WordDocument>
+        </xml>
+        <![endif]-->
+        <style>
+          @page Section1 {
+            size: ${isLandscape ? '297mm 210mm' : '210mm 297mm'};
+            mso-page-orientation: ${orient};
+            margin: ${marginMm}mm;
+            mso-header-margin: 10mm;
+            mso-footer-margin: 10mm;
+          }
+          div.Section1 { page: Section1; }
+          body {
+            font-family: 'Traditional Arabic', 'Amiri', 'Cairo', Arial, sans-serif;
+            direction: rtl;
+            text-align: right;
+            font-size: ${baseFontSize};
+            color: #1a1a1a;
+            line-height: 1.6;
+          }
+        </style>
+      </head>
+      <body lang="AR-DZ" dir="rtl">
+        <div class="Section1">
+          <!-- Official Republic & Ministry -->
+          <p style="text-align: center; font-weight: bold; font-size: 12pt; color: #2b3d22; margin: 0 0 2pt 0;">
+            ${school.country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}
+          </p>
+          <p style="text-align: center; font-weight: bold; font-size: 10.5pt; color: #415437; margin: 0 0 8pt 0;">
+            ${school.ministry || 'وزارة التربية الوطنية'}
+          </p>
+
+          <!-- Institution Details Table -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 8pt; border: none;">
+            <tr>
+              <td style="text-align: right; width: 55%; font-size: 9.5pt; vertical-align: top; border: none;">
+                <div>${directorate}</div>
+                <div>${formattedSchool}</div>
+                ${options.department ? `<div><strong>المصلحة / المخبر:</strong> ${options.department}</div>` : ''}
+              </td>
+              <td style="text-align: left; width: 45%; font-size: 9.5pt; vertical-align: top; border: none;" dir="rtl">
+                <div><strong>السنة الدراسية:</strong> ${academicYear}</div>
+                <div><strong>التاريخ:</strong> ${dateStr}</div>
+                ${(options.reference && options.showReference !== false) ? `<div><strong>الرقم:</strong> ${options.reference}</div>` : ''}
+              </td>
+            </tr>
+          </table>
+
+          <hr style="border: none; border-top: 1.5pt solid #2b3d22; margin: 6pt 0 10pt 0;" />
+
+          <!-- Title Banner -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-bottom: 12pt; border: none;">
+            <tr>
+              <td style="background-color: #2b3d22; color: #ffffff; text-align: center; padding: 7pt 12pt; border-radius: 4pt;">
+                <h1 style="font-size: 13.5pt; font-weight: bold; margin: 0; color: #ffffff;">${options.title}</h1>
+              </td>
+            </tr>
+          </table>
+
+          ${metaBoxHtml}
+
+          <!-- Body Content -->
+          ${options.content ? `
+            <div style="font-size: ${baseFontSize}; line-height: 1.7; margin-top: 10pt; margin-bottom: 12pt; text-align: justify;">
+              ${options.content.split('\n').map(p => p.trim() ? `<p style="margin: 0 0 8pt 0; text-indent: 18pt;">${p}</p>` : '').join('')}
+            </div>
+          ` : ''}
+
+          ${tableHtml}
+          ${notesHtml}
+          ${closingHtml}
+          ${approvalHtml}
+          ${signaturesHtml}
+
+          <!-- Footer -->
+          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 16pt; border-top: 1pt solid #d2d8ce;">
+            <tr>
+              <td style="text-align: right; font-size: 8pt; color: #777777; padding-top: 4pt; border: none;">
+                الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية
+              </td>
+              <td style="text-align: center; font-size: 8pt; color: #777777; padding-top: 4pt; border: none;">
+                ${formattedSchool}
+              </td>
+              <td style="text-align: left; font-size: 8pt; color: #777777; padding-top: 4pt; border: none;">
+                صفحة 1 من 1
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Downloads Microsoft Word document (.doc) for Administrative Documents matching the official PDF layout identically
+   */
+  static generateAdministrativeDocumentWord(options: AdminDocumentPDFOptions): void {
+    const html = this.generateAdministrativeDocumentWordHtml(options);
+    const blob = new Blob(['\ufeff', html], {
+      type: 'application/msword;charset=utf-8'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeTitle = (options.title || 'وثيقة_إدارية').replace(/[/\\?%*:|"<>]/g, '_');
+    link.download = `${safeTitle}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   /**

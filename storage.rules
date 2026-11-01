@@ -1,0 +1,43 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'faycalassoul@gmail.com') ||
+        firestore.exists(/databases/(default)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isSchoolMember(schoolId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+         firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.schoolId == schoolId)
+      );
+    }
+
+    // School documents, assets, and lab reports
+    match /schools/{schoolId}/{allPaths=**} {
+      allow read: if isSchoolMember(schoolId);
+      allow write: if isSchoolMember(schoolId) &&
+                   request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // User-specific attachments
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin()) &&
+                   request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

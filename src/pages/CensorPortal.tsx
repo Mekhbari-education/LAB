@@ -104,7 +104,7 @@ export default function CensorPortal() {
         await updateDoc(doc(getUserCollection(schoolId, 'activity_requests'), request.id), {
           status: 'approved',
           censorApprovedAt: new Date().toISOString(),
-          censorNotes: censorNote.trim() || request.censorNotes || 'معتمد من ناظر الدروس بدون تحفظ.'
+          censorNotes: censorNote.trim() || request.censorNotes || 'معتمد من الناظر بدون تحفظ.'
         });
       } else {
         const stored = JSON.parse(localStorage.getItem('offline_activity_requests') || '[]');
@@ -215,7 +215,7 @@ export default function CensorPortal() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       <Helmet>
-        <title>فضاء ناظر الدروس | {schoolName}</title>
+        <title>فضاء الناظر | {schoolName}</title>
       </Helmet>
 
       {/* Header Banner */}
@@ -235,7 +235,7 @@ export default function CensorPortal() {
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black mt-1 text-white">
-                لوحة قيادة ناظر الدروس
+                لوحة قيادة الناظر
               </h1>
               <p className="text-xs sm:text-sm text-emerald-100/90 mt-1">
                 اعتماد طلبات التجارب والحصص المخبرية، تأشير التقارير اليومية، وتنسيق العمل البيداغوجي.
@@ -516,7 +516,7 @@ export default function CensorPortal() {
 
                     {req.censorNotes && (
                       <div className="text-xs p-3 bg-surface-container rounded-xl text-primary font-bold border border-outline-variant">
-                        <strong>ملاحظة ناظر الدروس:</strong> {req.censorNotes}
+                        <strong>ملاحظة الناظر:</strong> {req.censorNotes}
                       </div>
                     )}
                   </div>
@@ -534,7 +534,7 @@ export default function CensorPortal() {
             <div>
               <h2 className="text-lg font-black text-primary">تأشيرة وملاحظات الناظر على التقارير اليومية</h2>
               <p className="text-xs text-secondary mt-0.5">
-                تأشيرة ناظر الدروس الرسمية على سجل الحصص المخبرية المنجزة اليومية للمؤسسة.
+                تأشيرة الناظر الرسمية على سجل الحصص المخبرية المنجزة اليومية للمؤسسة.
               </p>
             </div>
             <Link
@@ -592,7 +592,7 @@ export default function CensorPortal() {
 
                   {report.observations?.supervisorNotes && (
                     <div className="p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl text-xs">
-                      <strong className="text-emerald-900 dark:text-emerald-200 block mb-1">ملاحظات وتأشيرة ناظر الدروس:</strong>
+                      <strong className="text-emerald-900 dark:text-emerald-200 block mb-1">ملاحظات وتأشيرة الناظر:</strong>
                       <p className="text-primary font-bold">{report.observations.supervisorNotes}</p>
                     </div>
                   )}
@@ -804,7 +804,7 @@ export default function CensorPortal() {
             <form onSubmit={handleSaveReportVisa} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-secondary block">
-                  ملاحظات وتوجيهات ناظر الدروس الرسمية:
+                  ملاحظات وتوجيهات الناظر الرسمية:
                 </label>
                 <textarea
                   rows={4}

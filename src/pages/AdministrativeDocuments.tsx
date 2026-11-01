@@ -28,7 +28,17 @@ import {
   BadgeCheck,
   Scale,
   FileDown,
-  Wand2
+  Wand2,
+  Settings2,
+  SlidersHorizontal,
+  Palette,
+  ShieldCheck,
+  CheckSquare,
+  Stamp,
+  Layers,
+  Maximize2,
+  RefreshCw,
+  LayoutTemplate
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSchool } from '../context/SchoolContext';
@@ -43,6 +53,7 @@ import SmartDocumentGeneratorModal from '../components/SmartDocumentGeneratorMod
 
 export type DocCategory = 'all' | 'requests' | 'reports' | 'minutes' | 'forms' | 'saved';
 export type RoutingType = 'direct' | 'hierarchical_nazir' | 'hierarchical_cpe' | 'financial';
+export type DocFormatType = 'correspondence' | 'voucher_form' | 'minutes_pv' | 'report' | 'certificate' | 'circular_memo';
 
 export interface AdminTableRow {
   col1: string;
@@ -55,6 +66,7 @@ export interface AdminTableRow {
 export interface AdminTemplateItem {
   id: string;
   category: 'requests' | 'reports' | 'minutes' | 'forms';
+  formatType?: DocFormatType;
   title: string;
   subTitle: string;
   tag: string;
@@ -67,10 +79,17 @@ export interface AdminTemplateItem {
   subjectDefault: string;
   contentDefault: string;
   notesDefault?: string;
+  closingFormulaDefault?: string;
   hasTable?: boolean;
   tableHeaders?: string[];
   defaultRows?: AdminTableRow[];
   signers: string[];
+  showCorrespondenceMeta?: boolean;
+  showSubject?: boolean;
+  showReference?: boolean;
+  showApprovalBox?: boolean;
+  showStampSpace?: boolean;
+  orientationDefault?: 'portrait' | 'landscape';
 }
 
 export interface SavedAdminDoc {
@@ -78,6 +97,7 @@ export interface SavedAdminDoc {
   templateId: string;
   title: string;
   category: string;
+  formatType?: DocFormatType;
   date: string;
   reference: string;
   sender: string;
@@ -89,8 +109,22 @@ export interface SavedAdminDoc {
   subject: string;
   content: string;
   notes?: string;
+  closingFormula?: string;
   rows?: AdminTableRow[];
+  tableHeaders?: string[];
   signers: string[];
+  showCorrespondenceMeta?: boolean;
+  showSubject?: boolean;
+  showReference?: boolean;
+  showApprovalBox?: boolean;
+  showStampSpace?: boolean;
+  paperOrientation?: 'portrait' | 'landscape';
+  paperMargins?: 'compact' | 'standard' | 'spacious';
+  fontFamily?: 'amiri' | 'cairo' | 'traditional' | 'system';
+  fontSizeScale?: 'compact' | 'standard' | 'large';
+  lineSpacing?: '1.4' | '1.6' | '1.8';
+  borderStyle?: 'none' | 'subtle' | 'official_double';
+  accentColor?: 'emerald' | 'slate' | 'navy' | 'monochrome';
   createdAt: any;
 }
 
@@ -486,6 +520,62 @@ export default function AdministrativeDocuments() {
   const [docSigners, setDocSigners] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Paper & Drafting Format Customization States
+  const [docFormatType, setDocFormatType] = useState<DocFormatType>('correspondence');
+  const [showCorrespondenceMeta, setShowCorrespondenceMeta] = useState(true);
+  const [showSubject, setShowSubject] = useState(true);
+  const [showReference, setShowReference] = useState(true);
+  const [showApprovalBox, setShowApprovalBox] = useState(false);
+  const [showStampSpace, setShowStampSpace] = useState(true);
+  const [paperOrientation, setPaperOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [paperMargins, setPaperMargins] = useState<'compact' | 'standard' | 'spacious'>('standard');
+  const [paperSize, setPaperSize] = useState<'A4' | 'A3' | 'Letter'>('A4');
+  const [fontFamily, setFontFamily] = useState<'amiri' | 'cairo' | 'traditional' | 'system'>('amiri');
+  const [fontSizeScale, setFontSizeScale] = useState<'compact' | 'standard' | 'large'>('standard');
+  const [lineSpacing, setLineSpacing] = useState<'1.4' | '1.6' | '1.8'>('1.6');
+  const [borderStyle, setBorderStyle] = useState<'none' | 'subtle' | 'official_double'>('subtle');
+  const [accentColor, setAccentColor] = useState<'emerald' | 'slate' | 'navy' | 'monochrome'>('emerald');
+  const [closingFormula, setClosingFormula] = useState<string>('تفضلوا بقبول أسمى عبارات التقدير والاحترام');
+  const [docTableHeaders, setDocTableHeaders] = useState<string[]>([]);
+  const [editorActiveTab, setEditorActiveTab] = useState<'edit' | 'paper_details' | 'preview'>('edit');
+  const [showSplitPreview, setShowSplitPreview] = useState<boolean>(true);
+  const [previewZoom, setPreviewZoom] = useState<number>(0.9);
+
+  const handleSelectFormatType = (fmt: DocFormatType) => {
+    setDocFormatType(fmt);
+    if (fmt === 'voucher_form') {
+      setShowCorrespondenceMeta(false);
+      setShowApprovalBox(true);
+      setBorderStyle('official_double');
+      setClosingFormula('بدون عبارة ختامية');
+    } else if (fmt === 'minutes_pv') {
+      setShowCorrespondenceMeta(false);
+      setShowApprovalBox(false);
+      setBorderStyle('official_double');
+      setClosingFormula('بدون عبارة ختامية');
+    } else if (fmt === 'report') {
+      setShowCorrespondenceMeta(false);
+      setShowApprovalBox(false);
+      setBorderStyle('subtle');
+      setClosingFormula('وفي انتظار اتخاذ الإجراءات المناسبة، تقبلوا منا أسمى عبارات التقدير');
+    } else if (fmt === 'circular_memo') {
+      setShowCorrespondenceMeta(false);
+      setShowApprovalBox(false);
+      setBorderStyle('subtle');
+      setClosingFormula('لأجل الإعلام والمتابعة وحسن التنفيذ');
+    } else if (fmt === 'certificate') {
+      setShowCorrespondenceMeta(false);
+      setShowApprovalBox(false);
+      setBorderStyle('official_double');
+      setClosingFormula('سلمت هذه الشهادة للمعني بناء على طلبه للإدلاء بها واستعمالها في حدود ما يسمح به القانون');
+    } else {
+      setShowCorrespondenceMeta(true);
+      setShowApprovalBox(false);
+      setBorderStyle('subtle');
+      setClosingFormula('تفضلوا بقبول أسمى عبارات التقدير والاحترام');
+    }
+  };
+
   const formattedSchool = formatSchoolWithCommune(schoolName, commune) || 'المؤسسة التربوية';
 
   // Load saved documents from localStorage & Firestore
@@ -538,8 +628,8 @@ export default function AdministrativeDocuments() {
 
     switch (type) {
       case 'hierarchical_nazir':
-        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس';
-        signersList = [baseSender, 'تحت إشراف ناظر الدروس', 'مدير المؤسسة'];
+        recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: الناظر';
+        signersList = [baseSender, 'تحت إشراف الناظر', 'مدير المؤسسة'];
         break;
       case 'hierarchical_cpe':
         recipientText = 'السيد: مدير المؤسسة — تحت إشراف السيد: المستشار الرئيسي للتربية';
@@ -576,8 +666,8 @@ export default function AdministrativeDocuments() {
 
     const baseSender = template.senderDefault ? template.senderDefault.split('/')[0].trim() : 'الملحق الرئيس بالمخابر';
     if (chosenRouting === 'hierarchical_nazir') {
-      setDocRecipient('السيد: مدير المؤسسة — تحت إشراف السيد: ناظر الدروس');
-      setDocSigners([baseSender, 'تحت إشراف ناظر الدروس', 'مدير المؤسسة']);
+      setDocRecipient('السيد: مدير المؤسسة — تحت إشراف السيد: الناظر');
+      setDocSigners([baseSender, 'تحت إشراف الناظر', 'مدير المؤسسة']);
     } else if (chosenRouting === 'hierarchical_cpe') {
       setDocRecipient('السيد: مدير المؤسسة — تحت إشراف السيد: المستشار الرئيسي للتربية');
       setDocSigners([baseSender, 'تحت إشراف المستشار الرئيسي للتربية', 'مدير المؤسسة']);
@@ -590,12 +680,31 @@ export default function AdministrativeDocuments() {
     }
 
     setDocDepartment(template.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية');
-    setDocAcademicYear(template.academicYearDefault || '2026 / 2027');
+    setDocAcademicYear(template.academicYearDefault || academicYear || '2026 / 2027');
     setDocLocation(template.locationDefault || commune || 'عين كرشة');
     setDocSubject(template.subjectDefault);
     setDocContent(template.contentDefault);
     setDocNotes(template.notesDefault || '');
     setDocRows(template.defaultRows ? JSON.parse(JSON.stringify(template.defaultRows)) : []);
+    setDocTableHeaders(template.tableHeaders ? [...template.tableHeaders] : ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات']);
+
+    // Determine Format Type and Paper Settings
+    const fmt = template.formatType || (template.category === 'minutes' ? 'minutes_pv' : template.category === 'forms' ? 'voucher_form' : template.category === 'reports' ? 'report' : 'correspondence');
+    setDocFormatType(fmt);
+    setShowCorrespondenceMeta(template.showCorrespondenceMeta !== undefined ? template.showCorrespondenceMeta : (fmt === 'correspondence'));
+    setShowSubject(template.showSubject !== undefined ? template.showSubject : true);
+    setShowReference(template.showReference !== undefined ? template.showReference : true);
+    setShowApprovalBox(template.showApprovalBox !== undefined ? template.showApprovalBox : (fmt === 'voucher_form' || template.category === 'forms'));
+    setShowStampSpace(template.showStampSpace !== undefined ? template.showStampSpace : true);
+    setPaperOrientation(template.orientationDefault || 'portrait');
+    setPaperMargins('standard');
+    setFontFamily('amiri');
+    setFontSizeScale('standard');
+    setLineSpacing('1.6');
+    setBorderStyle(fmt === 'minutes_pv' || fmt === 'voucher_form' ? 'official_double' : 'subtle');
+    setAccentColor('emerald');
+    setClosingFormula(template.closingFormulaDefault || (fmt === 'correspondence' ? 'تفضلوا بقبول أسمى عبارات التقدير والاحترام' : 'بدون عبارة ختامية'));
+    setEditorActiveTab('edit');
     setIsEditorOpen(true);
   };
 
@@ -603,7 +712,8 @@ export default function AdministrativeDocuments() {
   const handleOpenSavedDoc = (savedDoc: SavedAdminDoc) => {
     const parentTpl = TEMPLATES.find(t => t.id === savedDoc.templateId) || {
       id: savedDoc.templateId || 'custom',
-      category: 'requests' as const,
+      category: (savedDoc.category as any) || 'requests',
+      formatType: savedDoc.formatType || 'correspondence',
       title: savedDoc.title,
       subTitle: 'وثيقة إدارية محفوظة',
       tag: 'وثيقة مخصصة',
@@ -617,7 +727,7 @@ export default function AdministrativeDocuments() {
       contentDefault: savedDoc.content,
       notesDefault: savedDoc.notes,
       hasTable: Boolean(savedDoc.rows && savedDoc.rows.length > 0),
-      tableHeaders: ['الرقم', 'البيان والتعيين', 'الكمية / المواصفة', 'الملاحظات'],
+      tableHeaders: savedDoc.tableHeaders || ['الرقم', 'البيان والتعيين', 'الكمية / المواصفة', 'الملاحظات'],
       defaultRows: savedDoc.rows,
       signers: savedDoc.signers
     };
@@ -636,6 +746,25 @@ export default function AdministrativeDocuments() {
     setDocNotes(savedDoc.notes || '');
     setDocRows(savedDoc.rows || []);
     setDocSigners(savedDoc.signers || ['الملحق الرئيس بالمخابر', 'مدير المؤسسة']);
+    setDocTableHeaders(savedDoc.tableHeaders || parentTpl.tableHeaders || ['الرقم', 'البيان والتعيين', 'الكمية / المواصفة', 'الملاحظات']);
+
+    // Restore format & paper preferences
+    const fmt = savedDoc.formatType || parentTpl.formatType || 'correspondence';
+    setDocFormatType(fmt);
+    setShowCorrespondenceMeta(savedDoc.showCorrespondenceMeta !== undefined ? savedDoc.showCorrespondenceMeta : (fmt === 'correspondence'));
+    setShowSubject(savedDoc.showSubject !== undefined ? savedDoc.showSubject : true);
+    setShowReference(savedDoc.showReference !== undefined ? savedDoc.showReference : true);
+    setShowApprovalBox(savedDoc.showApprovalBox !== undefined ? savedDoc.showApprovalBox : false);
+    setShowStampSpace(savedDoc.showStampSpace !== undefined ? savedDoc.showStampSpace : true);
+    setPaperOrientation(savedDoc.paperOrientation || 'portrait');
+    setPaperMargins(savedDoc.paperMargins || 'standard');
+    setFontFamily(savedDoc.fontFamily || 'amiri');
+    setFontSizeScale(savedDoc.fontSizeScale || 'standard');
+    setLineSpacing(savedDoc.lineSpacing || '1.6');
+    setBorderStyle(savedDoc.borderStyle || 'subtle');
+    setAccentColor(savedDoc.accentColor || 'emerald');
+    setClosingFormula(savedDoc.closingFormula || 'بدون عبارة ختامية');
+    setEditorActiveTab('edit');
     setIsEditorOpen(true);
   };
 
@@ -662,7 +791,8 @@ export default function AdministrativeDocuments() {
   // Add row to table
   const handleAddRow = () => {
     const nextNum = (docRows.length + 1).toString();
-    const hasFive = (selectedTemplate?.tableHeaders?.length || 4) >= 5;
+    const headers = docTableHeaders.length > 0 ? docTableHeaders : (selectedTemplate?.tableHeaders || ['الرقم', 'البيان', 'المرجع', 'الكمية']);
+    const hasFive = headers.length >= 5;
     setDocRows([...docRows, { col1: nextNum, col2: '', col3: '', col4: '', ...(hasFive ? { col5: '' } : {}) }]);
   };
 
@@ -688,6 +818,7 @@ export default function AdministrativeDocuments() {
         templateId: selectedTemplate.id,
         title: selectedTemplate.title,
         category: selectedTemplate.category,
+        formatType: docFormatType,
         date: docDate,
         reference: docRef,
         sender: docSender,
@@ -699,8 +830,22 @@ export default function AdministrativeDocuments() {
         subject: docSubject,
         content: docContent,
         notes: docNotes,
+        closingFormula: closingFormula,
         rows: docRows,
+        tableHeaders: docTableHeaders,
         signers: docSigners,
+        showCorrespondenceMeta,
+        showSubject,
+        showReference,
+        showApprovalBox,
+        showStampSpace,
+        paperOrientation,
+        paperMargins,
+        fontFamily,
+        fontSizeScale,
+        lineSpacing,
+        borderStyle,
+        accentColor,
         createdAt: new Date().toISOString()
       };
 
@@ -717,7 +862,7 @@ export default function AdministrativeDocuments() {
         });
       } catch {}
 
-      showNotification('تم حفظ الوثيقة بنجاح في أرشيفك الشخصي!', 'success');
+      showNotification('تم حفظ الوثيقة بجميع خصائص الورقة بنجاح في أرشيفك الشخصي!', 'success');
     } catch (err) {
       console.error('Error saving document:', err);
       showNotification('تعذر الحفظ في السحابة، تم الحفظ محلياً.', 'info');
@@ -726,29 +871,144 @@ export default function AdministrativeDocuments() {
     }
   };
 
-  // Generate HTML for printing
+  // Generate HTML for printing & live preview
   const generateOfficialHtml = () => {
     if (!selectedTemplate) return '';
 
-    const tableHeaders = selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'الملاحظات'];
+    const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) 
+      ? docTableHeaders 
+      : (selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'الملاحظات']);
     const hasCol5 = (tableHeaders.length >= 5) || docRows.some(r => Boolean(r.col5));
 
+    // Colors according to accent color scheme
+    const colors = {
+      emerald: { primary: '#0f766e', light: '#f0fdfa', border: '#99f6e4', dark: '#115e59', text: '#0f172a' },
+      slate: { primary: '#334155', light: '#f8fafc', border: '#cbd5e1', dark: '#1e293b', text: '#0f172a' },
+      navy: { primary: '#1e3a8a', light: '#eff6ff', border: '#bfdbfe', dark: '#172554', text: '#0f172a' },
+      monochrome: { primary: '#18181b', light: '#f4f4f5', border: '#d4d4d8', dark: '#09090b', text: '#09090b' }
+    }[accentColor] || { primary: '#0f766e', light: '#f0fdfa', border: '#99f6e4', dark: '#115e59', text: '#0f172a' };
+
+    // Font family definition
+    const fontCss = fontFamily === 'cairo' 
+      ? "'Cairo', 'Segoe UI', Tahoma, sans-serif" 
+      : fontFamily === 'traditional'
+      ? "'Traditional Arabic', 'Amiri', serif"
+      : fontFamily === 'system'
+      ? "system-ui, -apple-system, sans-serif"
+      : "'Amiri', 'Traditional Arabic', serif";
+
+    // Font size & line height scaling
+    const baseFontSize = fontSizeScale === 'compact' ? '12.5px' : fontSizeScale === 'large' ? '15.5px' : '14px';
+    const marginMm = paperMargins === 'compact' ? '10mm' : paperMargins === 'spacious' ? '20mm' : '15mm';
+    const borderCss = borderStyle === 'official_double' 
+      ? `border: 4px double ${colors.primary}; padding: 16px;` 
+      : borderStyle === 'subtle'
+      ? `border: 1px solid ${colors.border}; padding: 18px;`
+      : 'border: none; padding: 0;';
+
+    // Format specific header rendering
+    let formatHeaderHtml = '';
+    if (docFormatType === 'correspondence') {
+      formatHeaderHtml = `
+        <div class="title-box" style="background-color: ${colors.light}; border: 2px solid ${colors.primary}; border-radius: 8px; padding: 10px 16px; text-align: center; margin: 16px 0;">
+          <h1 style="margin: 0; font-size: 19px; color: ${colors.primary}; font-weight: 900;">${selectedTemplate.title}</h1>
+        </div>
+        ${showCorrespondenceMeta ? `
+          <div class="correspondence-meta" style="background-color: #fafaf9; border-right: 5px solid ${colors.primary}; border-radius: 4px; padding: 10px 14px; margin: 14px 0; font-size: 13.5px; border: 1px solid #e2e8f0; border-right-width: 5px;">
+            <div style="margin-bottom: 4px;"><strong>من:</strong> ${docSender}</div>
+            <div style="margin-bottom: 4px;"><strong>إلى:</strong> ${docRecipient}</div>
+            ${showSubject ? `<div style="color: ${colors.primary}; font-weight: bold; margin-top: 5px;"><strong>الموضوع:</strong> ${docSubject}</div>` : ''}
+          </div>
+        ` : (showSubject ? `<div style="font-weight: bold; color: ${colors.primary}; margin: 12px 0 6px; font-size: 14px;"><strong>الموضوع:</strong> ${docSubject}</div>` : '')}
+      `;
+    } else if (docFormatType === 'voucher_form') {
+      // Standardized Algerian requisition voucher / slip
+      formatHeaderHtml = `
+        <div style="border: 2px solid ${colors.primary}; border-radius: 8px; background-color: #ffffff; margin: 16px 0; overflow: hidden;">
+          <div style="background-color: ${colors.primary}; color: #ffffff; padding: 8px 16px; text-align: center; font-weight: bold; font-size: 16px; letter-spacing: 0.5px;">
+            ${selectedTemplate.title}
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 16px; background-color: ${colors.light}; font-size: 12.5px; border-bottom: 1px solid ${colors.border};">
+            <div><strong>المصلحة / المخبر:</strong> ${docDepartment || 'مخبر العلوم'}</div>
+            <div><strong>المحرر / المسؤول:</strong> ${docSender || 'الملحق بالمخبر'}</div>
+            <div><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
+            <div><strong>تاريخ الطلب:</strong> ${docDate}</div>
+            ${showReference && docRef ? `<div style="grid-column: span 2;"><strong>سند رقم:</strong> ${docRef}</div>` : ''}
+            ${showSubject ? `<div style="grid-column: span 2; color: ${colors.primary}; font-weight: bold;"><strong>الغرض / الموضوع:</strong> ${docSubject}</div>` : ''}
+          </div>
+        </div>
+      `;
+    } else if (docFormatType === 'minutes_pv') {
+      // Official Algerian Procès-Verbal
+      formatHeaderHtml = `
+        <div style="text-align: center; margin: 16px 0 12px;">
+          <div style="display: inline-block; border-bottom: 3px double ${colors.primary}; padding-bottom: 6px;">
+            <h1 style="margin: 0; font-size: 20px; color: ${colors.primary}; font-weight: 900;">${selectedTemplate.title}</h1>
+          </div>
+          ${showReference && docRef ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">رقم القيد: ${docRef}</div>` : ''}
+        </div>
+        <div style="background-color: ${colors.light}; border: 1px solid ${colors.border}; border-radius: 6px; padding: 8px 12px; margin: 12px 0; font-size: 13px;">
+          <strong>تاريخ ومكان الانعقاد:</strong> في يوم ${docDate} بمقر ${formattedSchool} (${docDepartment || 'المخبر'})
+          ${showSubject ? `<div style="margin-top: 3px; color: ${colors.primary};"><strong>جدول الأعمال:</strong> ${docSubject}</div>` : ''}
+        </div>
+      `;
+    } else if (docFormatType === 'report') {
+      // Structured administrative / technical report
+      formatHeaderHtml = `
+        <div style="border-right: 6px solid ${colors.primary}; background-color: ${colors.light}; padding: 12px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; border: 1px solid #e2e8f0; border-right-width: 6px;">
+          <h1 style="margin: 0 0 6px 0; font-size: 18px; color: ${colors.primary}; font-weight: 900;">${selectedTemplate.title}</h1>
+          <div style="font-size: 12.5px; color: #475569; display: flex; gap: 16px; flex-wrap: wrap;">
+            <div><strong>المُعِدّ:</strong> ${docSender}</div>
+            <div><strong>الموجّه إليه:</strong> ${docRecipient}</div>
+            <div><strong>التاريخ:</strong> ${docDate}</div>
+          </div>
+          ${showSubject ? `<div style="margin-top: 6px; font-weight: bold; color: ${colors.dark};"><strong>موضوع التقرير:</strong> ${docSubject}</div>` : ''}
+        </div>
+      `;
+    } else if (docFormatType === 'certificate') {
+      // Certificate / Declaration
+      formatHeaderHtml = `
+        <div style="text-align: center; margin: 20px 0;">
+          <div style="border: 2px solid ${colors.primary}; display: inline-block; padding: 8px 30px; border-radius: 8px; background-color: ${colors.light};">
+            <h1 style="margin: 0; font-size: 21px; color: ${colors.primary}; font-weight: 900;">${selectedTemplate.title}</h1>
+          </div>
+          ${showReference && docRef ? `<div style="font-size: 12px; color: #64748b; margin-top: 6px;">الرقم: ${docRef}</div>` : ''}
+        </div>
+      `;
+    } else {
+      // Circular / Internal Memo
+      formatHeaderHtml = `
+        <div style="border: 2px solid ${colors.primary}; border-radius: 8px; margin: 16px 0; padding: 12px 16px; background-color: ${colors.light};">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid ${colors.border}; padding-bottom: 6px; margin-bottom: 8px;">
+            <span style="font-weight: 900; font-size: 17px; color: ${colors.primary};">مذكرة مصلحية داخلية</span>
+            <span style="font-size: 12px; font-weight: bold;">الرقم: ${docRef || '......'}</span>
+          </div>
+          <div style="font-size: 13px; line-height: 1.6;">
+            <div><strong>موجهة إلى:</strong> ${docRecipient || 'كافة الأساتذة والمستخدمين المعنيين بالمخبر'}</div>
+            <div><strong>من:</strong> ${docSender}</div>
+            ${showSubject ? `<div style="color: ${colors.primary}; font-weight: bold; margin-top: 4px;"><strong>الموضوع:</strong> ${docSubject}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Table HTML
     let tableHtml = '';
     if (selectedTemplate.hasTable && docRows.length > 0) {
       tableHtml = `
         <table style="width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 13px; text-align: center;">
           <thead>
-            <tr style="background-color: #f1f5f9; color: #1e293b;">
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 55px;">${tableHeaders[0] || 'الرقم'}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; text-align: right;">${tableHeaders[1] || 'السجل / البيان'}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: ${hasCol5 ? '130px' : '140px'};">${tableHeaders[2] || 'المرجع / الرمز'}</th>
-              <th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: ${hasCol5 ? '80px' : '100px'};">${tableHeaders[3] || 'الكمية'}</th>
-              ${hasCol5 ? `<th style="border: 1px solid #cbd5e1; padding: 8px 10px; width: 140px;">${tableHeaders[4] || 'ملاحظات / مواصفات'}</th>` : ''}
+            <tr style="background-color: ${colors.primary}; color: #ffffff;">
+              <th style="border: 1px solid ${colors.border}; padding: 8px 10px; width: 55px; color: #ffffff;">${tableHeaders[0] || 'الرقم'}</th>
+              <th style="border: 1px solid ${colors.border}; padding: 8px 10px; text-align: right; color: #ffffff;">${tableHeaders[1] || 'البيان والتسمية'}</th>
+              <th style="border: 1px solid ${colors.border}; padding: 8px 10px; width: ${hasCol5 ? '130px' : '140px'}; color: #ffffff;">${tableHeaders[2] || 'المرجع / الرمز'}</th>
+              <th style="border: 1px solid ${colors.border}; padding: 8px 10px; width: ${hasCol5 ? '80px' : '100px'}; color: #ffffff;">${tableHeaders[3] || 'الكمية'}</th>
+              ${hasCol5 ? `<th style="border: 1px solid ${colors.border}; padding: 8px 10px; width: 140px; color: #ffffff;">${tableHeaders[4] || 'ملاحظات / مواصفات'}</th>` : ''}
             </tr>
           </thead>
           <tbody>
             ${docRows.map((r, i) => `
-              <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#fafaf9'};">
+              <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : colors.light};">
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px; font-weight: bold;">${r.col1 || (i + 1)}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px; text-align: right;">${r.col2 || '-'}</td>
                 <td style="border: 1px solid #cbd5e1; padding: 7px 10px;">${r.col3 || '-'}</td>
@@ -761,12 +1021,40 @@ export default function AdministrativeDocuments() {
       `;
     }
 
+    // Official Administration Decision & Visa Box
+    const approvalBoxHtml = showApprovalBox ? `
+      <div style="border: 1.5px solid ${colors.primary}; border-radius: 8px; padding: 12px 16px; margin: 18px 0; background-color: #ffffff;">
+        <div style="font-weight: bold; font-size: 13.5px; color: ${colors.primary}; border-bottom: 1px dashed ${colors.border}; padding-bottom: 6px; margin-bottom: 8px; display: flex; justify-content: space-between;">
+          <span>قرار وتأشيرة إدارة المؤسسة:</span>
+          <span style="font-weight: normal; font-size: 12px; color: #475569;">خاص بالإدارة والمصالح المختصة</span>
+        </div>
+        <div style="display: flex; gap: 30px; font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+          <span>[ &nbsp; ] موافقة تامة</span>
+          <span>[ &nbsp; ] موافقة مع تحفظ</span>
+          <span>[ &nbsp; ] مرفوض</span>
+        </div>
+        <div style="font-size: 12.5px; color: #334155; display: flex; justify-content: space-between; align-items: flex-end; margin-top: 10px;">
+          <div style="flex: 1;">الملاحظات والتعليمات: ................................................................................................</div>
+          <div style="width: 170px; text-align: center; border-right: 1px solid #e2e8f0; padding-right: 12px;">
+            <div>التاريخ والتأشيرة والختم:</div>
+            <div style="height: 35px; color: #94a3b8; font-size: 10px; padding-top: 8px;">............................</div>
+          </div>
+        </div>
+      </div>
+    ` : '';
+
+    // Signers and Official Stamps
     const signaturesHtml = `
-      <div style="display: flex; justify-content: space-between; margin-top: 36px; padding-top: 10px; text-align: center;">
+      <div style="display: flex; justify-content: space-between; margin-top: 30px; padding-top: 10px; text-align: center;">
         ${docSigners.map(sig => `
           <div style="flex: 1; margin: 0 10px; border-top: 1px dashed #94a3b8; padding-top: 8px;">
             <div style="font-weight: bold; font-size: 13px; color: #1e293b;">${sig}</div>
-            <div style="height: 55px; margin-top: 8px; color: #94a3b8; font-size: 11px;">(التوقيع والختم)</div>
+            <div style="height: 25px; margin-top: 4px; color: #64748b; font-size: 11px;">(التوقيع والصفة)</div>
+            ${showStampSpace ? `
+              <div style="width: 72px; height: 72px; margin: 6px auto 0; border: 1.5px dashed #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: #94a3b8; line-height: 1.2;">
+                موضع الختم الرسمي
+              </div>
+            ` : ''}
           </div>
         `).join('')}
       </div>
@@ -780,24 +1068,30 @@ export default function AdministrativeDocuments() {
         <title>${selectedTemplate.title} - ${formattedSchool}</title>
         <style>
           @page {
-            size: A4 portrait;
-            margin: 15mm 15mm 15mm 15mm;
+            size: A4 ${paperOrientation};
+            margin: ${marginMm};
           }
           body {
-            font-family: 'Amiri', 'Traditional Arabic', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: ${fontCss};
             margin: 0;
             padding: 20px;
             color: #0f172a;
-            line-height: 1.6;
+            font-size: ${baseFontSize};
+            line-height: ${lineSpacing};
             direction: rtl;
             background: #fff;
+          }
+          .paper-wrapper {
+            ${borderCss}
+            max-width: 100%;
+            margin: 0 auto;
           }
           .header-center {
             text-align: center;
             font-size: 14px;
             font-weight: bold;
             color: #1e293b;
-            margin-bottom: 4px;
+            margin-bottom: 3px;
           }
           .inst-info {
             display: flex;
@@ -805,37 +1099,16 @@ export default function AdministrativeDocuments() {
             align-items: flex-start;
             font-size: 13px;
             font-weight: bold;
-            border-bottom: 2px solid #334155;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
-          }
-          .title-box {
-            background-color: #f8fafc;
-            border: 2px solid #0f766e;
-            border-radius: 8px;
-            padding: 10px 16px;
-            text-align: center;
-            margin: 16px 0;
-          }
-          .title-box h1 {
-            margin: 0;
-            font-size: 19px;
-            color: #0f766e;
-            font-weight: 900;
-          }
-          .correspondence-meta {
-            background-color: #fafaf9;
-            border-right: 4px solid #0f766e;
-            padding: 10px 14px;
-            margin: 14px 0;
-            font-size: 13.5px;
+            border-bottom: 2px solid ${colors.primary};
+            padding-bottom: 10px;
+            margin-bottom: 16px;
           }
           .body-content {
-            font-size: 14px;
+            font-size: ${baseFontSize};
             text-align: justify;
-            margin: 18px 0;
+            margin: 16px 0;
             white-space: pre-line;
-            line-height: 1.8;
+            line-height: ${lineSpacing};
           }
           .notes-box {
             background-color: #fffbeb;
@@ -846,46 +1119,51 @@ export default function AdministrativeDocuments() {
             border-radius: 6px;
             margin: 12px 0;
           }
+          .closing-formula {
+            margin: 18px 0 10px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 13.5px;
+            color: #334155;
+          }
         </style>
       </head>
       <body>
-        <div class="header-center">${country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</div>
-        <div class="header-center" style="font-size: 13px; color: #475569;">${ministry || 'وزارة التربية الوطنية'}</div>
+        <div class="paper-wrapper">
+          <div class="header-center">${country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</div>
+          <div class="header-center" style="font-size: 13px; color: #475569;">${ministry || 'وزارة التربية الوطنية'}</div>
 
-        <div class="inst-info">
-          <div>
-            <div>${directorate || 'مديرية التربية لولاية أم البواقي'}</div>
-            <div>${formattedSchool}</div>
-            <div style="margin-top: 3px; color: #0f766e; font-size: 13px;"><strong>المصلحة:</strong> ${docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}</div>
+          <div class="inst-info">
+            <div>
+              <div>${directorate || 'مديرية التربية'}</div>
+              <div>${formattedSchool}</div>
+              <div style="margin-top: 3px; color: ${colors.primary}; font-size: 13px;"><strong>المصلحة:</strong> ${docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}</div>
+            </div>
+            <div style="text-align: left;" dir="ltr">
+              <div style="font-size: 13px;"><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
+              <div>التاريخ: ${docDate}</div>
+              ${showReference && docRef ? `<div>المرجع: ${docRef}</div>` : ''}
+            </div>
           </div>
-          <div style="text-align: left;" dir="ltr">
-            <div style="font-size: 13px;"><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
-            <div>التاريخ: ${docDate}</div>
-            ${docRef ? `<div>المرجع: ${docRef}</div>` : ''}
+
+          ${formatHeaderHtml}
+
+          <div class="body-content">${docContent}</div>
+
+          ${tableHtml}
+
+          ${docNotes ? `<div class="notes-box"><strong>ملاحظة هامة:</strong> ${docNotes}</div>` : ''}
+
+          ${(closingFormula && closingFormula !== 'بدون عبارة ختامية') ? `<div class="closing-formula">${closingFormula}</div>` : ''}
+
+          ${approvalBoxHtml}
+
+          <div style="text-align: left; margin: 20px 0 10px; font-weight: bold; font-size: 13px; color: #1e293b;">
+            حرر بـ : ${docLocation || 'عين كرشة'} في : ${docDate}
           </div>
+
+          ${signaturesHtml}
         </div>
-
-        <div class="title-box">
-          <h1>${selectedTemplate.title}</h1>
-        </div>
-
-        <div class="correspondence-meta">
-          <div><strong>من:</strong> ${docSender}</div>
-          <div style="margin-top: 4px;"><strong>إلى:</strong> ${docRecipient}</div>
-          <div style="margin-top: 4px; color: #0f766e;"><strong>الموضوع:</strong> ${docSubject}</div>
-        </div>
-
-        <div class="body-content">${docContent}</div>
-
-        ${tableHtml}
-
-        ${docNotes ? `<div class="notes-box"><strong>ملاحظة هامة:</strong> ${docNotes}</div>` : ''}
-
-        <div style="text-align: left; margin: 24px 0 12px; font-weight: bold; font-size: 13.5px; color: #1e293b;">
-          حرر بـ : ${docLocation || 'عين كرشة'} في : ${docDate}
-        </div>
-
-        ${signaturesHtml}
       </body>
       </html>
     `;
@@ -899,7 +1177,7 @@ export default function AdministrativeDocuments() {
       title: selectedTemplate?.title || 'وثيقة إدارية رسمية',
       subtitle: `${selectedTemplate?.subTitle || ''} · ${schoolName}`,
       type: 'custom',
-      suggestedOrientation: 'portrait',
+      suggestedOrientation: paperOrientation,
       customHtml: html
     });
   };
@@ -921,11 +1199,19 @@ export default function AdministrativeDocuments() {
     const ref = customData?.reference || (templateItem ? '' : docRef);
     const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
     const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
-    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+    const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات']);
+    const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || 'correspondence';
+    const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
+    const showAppr = customData?.showApprovalBox !== undefined ? customData.showApprovalBox : showApprovalBox;
+    const showStmp = customData?.showStampSpace !== undefined ? customData.showStampSpace : showStampSpace;
+    const orient = customData?.paperOrientation || paperOrientation;
+    const margins = customData?.paperMargins || paperMargins;
+    const closeForm = customData?.closingFormula || closingFormula;
 
     try {
       const pdfBlob = await PDFService.generateAdministrativeDocumentPDF({
         title: tpl.title,
+        formatType: fmt,
         reference: ref,
         category: tpl.tag,
         date: date,
@@ -937,10 +1223,19 @@ export default function AdministrativeDocuments() {
         subject: subject,
         content: content,
         notes: notes,
+        closingFormula: closeForm,
         hasTable: Boolean(tpl.hasTable && rows.length > 0),
         tableHeaders: tableHeaders,
         tableRows: rows.map(r => (tableHeaders.length >= 5 || r.col5 !== undefined) ? [r.col1, r.col2, r.col3, r.col4, r.col5 || ''] : [r.col1, r.col2, r.col3, r.col4]),
         signers: signers,
+        showCorrespondenceMeta: showCorresp,
+        showSubject: showSubject,
+        showReference: showReference,
+        showApprovalBox: showAppr,
+        showStampSpace: showStmp,
+        orientation: orient,
+        margins: margins,
+        fontSizeScale: fontSizeScale,
         schoolInfo: {
           country,
           ministry,
@@ -980,11 +1275,19 @@ export default function AdministrativeDocuments() {
     const ref = customData?.reference || (templateItem ? '' : docRef);
     const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
     const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
-    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
+    const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات']);
+    const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || 'correspondence';
+    const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
+    const showAppr = customData?.showApprovalBox !== undefined ? customData.showApprovalBox : showApprovalBox;
+    const showStmp = customData?.showStampSpace !== undefined ? customData.showStampSpace : showStampSpace;
+    const orient = customData?.paperOrientation || paperOrientation;
+    const margins = customData?.paperMargins || paperMargins;
+    const closeForm = customData?.closingFormula || closingFormula;
 
     try {
       await PDFService.generateAdministrativeDocumentPDF({
         title: tpl.title,
+        formatType: fmt,
         reference: ref,
         category: tpl.tag,
         date: date,
@@ -996,10 +1299,19 @@ export default function AdministrativeDocuments() {
         subject: subject,
         content: content,
         notes: notes,
+        closingFormula: closeForm,
         hasTable: Boolean(tpl.hasTable && rows.length > 0),
         tableHeaders: tableHeaders,
         tableRows: rows.map(r => (tableHeaders.length >= 5 || r.col5 !== undefined) ? [r.col1, r.col2, r.col3, r.col4, r.col5 || ''] : [r.col1, r.col2, r.col3, r.col4]),
         signers: signers,
+        showCorrespondenceMeta: showCorresp,
+        showSubject: showSubject,
+        showReference: showReference,
+        showApprovalBox: showAppr,
+        showStampSpace: showStmp,
+        orientation: orient,
+        margins: margins,
+        fontSizeScale: fontSizeScale,
         schoolInfo: {
           country,
           ministry,
@@ -1022,286 +1334,73 @@ export default function AdministrativeDocuments() {
     const tpl = templateItem || selectedTemplate;
     if (!tpl) return;
 
-    const sender = customData?.sender || docSender || tpl.senderDefault;
-    const recipient = customData?.recipient || docRecipient || tpl.recipientDefault;
-    const dept = customData?.department || docDepartment || tpl.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية';
-    const academicYear = customData?.academicYear || docAcademicYear || tpl.academicYearDefault || '2026 / 2027';
-    const releaseLoc = customData?.location || docLocation || tpl.locationDefault || commune || 'عين كرشة';
-    const subject = customData?.subject || docSubject || tpl.subjectDefault;
-    const content = customData?.content || docContent || tpl.contentDefault;
-    const notes = customData?.notes !== undefined ? customData.notes : (docNotes !== undefined ? docNotes : tpl.notesDefault);
-    const date = customData?.date || docDate;
-    const ref = customData?.reference || docRef;
-    const rows = customData?.rows || docRows;
-    const signers = customData?.signers || docSigners || tpl.signers;
+    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
+    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || "مخبر العلوم الفيزيائية والطبيعية";
+    const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || "2026 / 2027";
+    const releaseLoc = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || "عين كرشة";
+    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
+    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
+    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const date = customData?.date || (templateItem ? new Date().toISOString().split("T")[0] : docDate);
+    const ref = customData?.reference || (templateItem ? "" : docRef);
+    const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
+    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || "correspondence";
+    const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
+    const showAppr = customData?.showApprovalBox !== undefined ? customData.showApprovalBox : showApprovalBox;
+    const showStmp = customData?.showStampSpace !== undefined ? customData.showStampSpace : showStampSpace;
+    const closeForm = customData?.closingFormula || closingFormula;
+    const orient = customData?.paperOrientation || paperOrientation;
+    const margins = customData?.paperMargins || paperMargins;
 
-    const tableHeaders = tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات'];
-    const hasCol5 = (tableHeaders.length >= 5) || (rows && rows.some(r => Boolean(r.col5)));
+    const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ["الرقم", "البيان والتسمية", "الكمية", "الملاحظات"]);
 
-    let tableHtml = '';
-    if (tpl.hasTable && rows && rows.length > 0) {
-      tableHtml = `
-        <table class="items-table" style="width: 100%; border-collapse: collapse; margin-top: 16pt; margin-bottom: 16pt; border: 1.5pt solid #0f766e;" dir="rtl">
-          <thead>
-            <tr style="background-color: #0f766e; color: #ffffff;">
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 40pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[0] || 'الرقم'}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[1] || 'السجل / البيان'}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 85pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[2] || 'المرجع / الرمز'}</th>
-              <th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 60pt; text-align: center; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[3] || 'الكمية'}</th>
-              ${hasCol5 ? `<th style="border: 1pt solid #0d9488; padding: 8pt 10pt; width: 95pt; text-align: right; font-weight: bold; font-size: 11pt; color: #ffffff; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${tableHeaders[4] || 'ملاحظات / مواصفات'}</th>` : ''}
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((r, i) => `
-              <tr style="background-color: ${i % 2 === 0 ? '#ffffff' : '#f8fafc'};">
-                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-weight: bold; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col1 || (i + 1)}</td>
-                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col2 || '-'}</td>
-                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col3 || '-'}</td>
-                <td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: center; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col4 || '-'}</td>
-                ${hasCol5 ? `<td style="border: 1pt solid #cbd5e1; padding: 7pt 10pt; text-align: right; font-size: 10.5pt; color: #0f172a; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">${r.col5 || '-'}</td>` : ''}
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
+    try {
+      PDFService.generateAdministrativeDocumentWord({
+        title: tpl.title,
+        formatType: fmt,
+        reference: ref,
+        category: tpl.tag,
+        date: date,
+        sender: sender,
+        recipient: recipient,
+        department: dept,
+        academicYear: academicYear,
+        location: releaseLoc,
+        subject: subject,
+        content: content,
+        notes: notes,
+        closingFormula: closeForm,
+        hasTable: Boolean(tpl.hasTable && rows.length > 0),
+        tableHeaders: tableHeaders,
+        tableRows: rows.map(r => (tableHeaders.length >= 5 || r.col5 !== undefined) ? [r.col1, r.col2, r.col3, r.col4, r.col5 || ""] : [r.col1, r.col2, r.col3, r.col4]),
+        signers: signers,
+        showCorrespondenceMeta: showCorresp,
+        showSubject: showSubject,
+        showReference: showReference,
+        showApprovalBox: showAppr,
+        showStampSpace: showStmp,
+        orientation: orient,
+        margins: margins,
+        fontSizeScale: fontSizeScale,
+        schoolInfo: {
+          country,
+          ministry,
+          directorate,
+          school: schoolName,
+          commune
+        },
+        fileName: `${tpl.title}.doc`
+      });
+      showNotification(`تم تنزيل وثيقة "${tpl.title}" بصيغة Word (.doc) بنجاح بنفس تفاصيل وهيئة الـ PDF!`, "success");
+    } catch (err) {
+      console.error("Word export error:", err);
+      showNotification("حدث خطأ أثناء تنزيل ملف Word", "error");
     }
-
-    const signersHtml = `
-      <table class="signatures-table" style="width: 100%; border-collapse: collapse; margin-top: 36pt; border: none;" dir="rtl">
-        <tr>
-          ${signers.map(sig => `
-            <td style="width: ${Math.floor(100 / Math.max(signers.length, 1))}%; text-align: center; vertical-align: top; padding: 0 10pt; border: none;">
-              <div style="border-top: 1.5pt dashed #64748b; padding-top: 8pt; font-weight: bold; font-size: 11.5pt; color: #1e293b; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
-                ${sig}
-              </div>
-              <div style="height: 55pt; padding-top: 18pt; color: #94a3b8; font-size: 9.5pt; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
-                (الاسم، التوقيع والختم الرسمي)
-              </div>
-            </td>
-          `).join('')}
-        </tr>
-      </table>
-    `;
-
-    const wordDocumentHtml = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office'
-            xmlns:w='urn:schemas-microsoft-com:office:word'
-            xmlns:v='urn:schemas-microsoft-com:vml'
-            xmlns='http://www.w3.org/TR/REC-html40'
-            dir='rtl' lang='ar'>
-      <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <title>${tpl.title} - ${formattedSchool}</title>
-        <!--[if gte mso 9]>
-        <xml>
-          <w:WordDocument>
-            <w:View>Print</w:View>
-            <w:Zoom>100</w:Zoom>
-            <w:DoNotOptimizeForBrowser/>
-            <w:Compatibility>
-              <w:UseWord2002TableStyleRules/>
-            </w:Compatibility>
-          </w:WordDocument>
-        </xml>
-        <![endif]-->
-        <style>
-          @page Section1 {
-            size: 595.35pt 841.95pt;
-            margin: 45.0pt 45.0pt 45.0pt 45.0pt;
-            mso-header-margin: 35.4pt;
-            mso-footer-margin: 35.4pt;
-            mso-paper-source: 0;
-          }
-          div.Section1 {
-            page: Section1;
-          }
-          body {
-            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
-            font-size: 13.5pt;
-            color: #0f172a;
-            line-height: 1.6;
-            direction: rtl;
-            text-align: right;
-            background-color: #ffffff;
-          }
-          p {
-            margin: 0 0 7pt 0;
-          }
-          .header-main {
-            text-align: center;
-            font-size: 13.5pt;
-            font-weight: bold;
-            color: #1e293b;
-            margin: 0 0 2pt 0;
-          }
-          .header-sub {
-            text-align: center;
-            font-size: 11.5pt;
-            font-weight: bold;
-            color: #475569;
-            margin: 0 0 10pt 0;
-          }
-          .meta-table {
-            width: 100%;
-            border-collapse: collapse;
-            border: none;
-            border-bottom: 2pt solid #0f766e;
-            padding-bottom: 6pt;
-            margin-bottom: 14pt;
-          }
-          .meta-table td {
-            border: none;
-            padding: 2pt 0;
-          }
-          .title-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 14pt 0;
-            background-color: #f0fdfa;
-            border: 2pt solid #0f766e;
-          }
-          .title-table td {
-            padding: 10pt 16pt;
-            text-align: center;
-            border: none;
-          }
-          .title-table h1 {
-            margin: 0;
-            font-size: 17pt;
-            font-weight: bold;
-            color: #0f766e;
-            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
-          }
-          .correspondence-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 14pt 0;
-            background-color: #f8fafc;
-            border: 1pt solid #cbd5e1;
-            border-right: 4.5pt solid #0f766e;
-          }
-          .correspondence-table td {
-            padding: 10pt 14pt;
-            border: none;
-            text-align: right;
-            font-size: 12.5pt;
-            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
-          }
-          .body-content {
-            font-size: 13.5pt;
-            text-align: justify;
-            text-justify: inter-word;
-            margin: 16pt 0;
-            line-height: 1.85;
-            white-space: pre-line;
-            color: #0f172a;
-          }
-          .notes-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 14pt 0;
-            background-color: #fffbeb;
-            border: 1pt solid #fef3c7;
-            border-right: 4pt solid #d97706;
-          }
-          .notes-table td {
-            padding: 8pt 12pt;
-            border: none;
-            text-align: right;
-            font-size: 11.5pt;
-            color: #92400e;
-            font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
-          }
-        </style>
-      </head>
-      <body lang="AR-DZ" dir="rtl">
-        <div class="Section1">
-          <p class="header-main">${country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</p>
-          <p class="header-sub">${ministry || 'وزارة التربية الوطنية'}</p>
-
-          <table class="meta-table" dir="rtl">
-            <tr>
-              <td style="text-align: right; vertical-align: top; font-weight: bold; font-size: 11.5pt; color: #1e293b;">
-                <div>${directorate || 'مديرية التربية لولاية أم البواقي'}</div>
-                <div>${formattedSchool}</div>
-                <div style="margin-top: 3pt; color: #0f766e;">المصلحة: ${dept}</div>
-              </td>
-              <td style="text-align: left; vertical-align: top; font-weight: bold; font-size: 11pt; color: #334155;" dir="ltr">
-                <div>السنة الدراسية: ${academicYear}</div>
-                <div>التاريخ: ${date}</div>
-                ${ref ? `<div>المرجع: ${ref}</div>` : ''}
-              </td>
-            </tr>
-          </table>
-
-          <table class="title-table" dir="rtl">
-            <tr>
-              <td>
-                <h1>${tpl.title}</h1>
-              </td>
-            </tr>
-          </table>
-
-          <table class="correspondence-table" dir="rtl">
-            <tr>
-              <td>
-                <p style="margin: 0 0 5pt 0; color: #1e293b;"><strong>من:</strong> ${sender}</p>
-                <p style="margin: 0 0 5pt 0; color: #1e293b;"><strong>إلى:</strong> ${recipient}</p>
-                <p style="margin: 0; color: #0f766e; font-weight: bold;"><strong>الموضوع:</strong> ${subject}</p>
-              </td>
-            </tr>
-          </table>
-
-          <div class="body-content">${content}</div>
-
-          ${tableHtml}
-
-          ${notes ? `
-            <table class="notes-table" dir="rtl">
-              <tr>
-                <td><strong>ملاحظة هامة:</strong> ${notes}</td>
-              </tr>
-            </table>
-          ` : ''}
-
-          <p style="text-align: left; margin: 18pt 0 10pt; font-weight: bold; font-size: 12pt; color: #1e293b;">
-            حرر بـ : ${releaseLoc} في : ${date}
-          </p>
-
-          ${signersHtml}
-
-          <table dir="rtl" style="width: 100%; border-collapse: collapse; margin-top: 28pt; border: none; border-top: 1pt solid #e2e8f0;">
-            <tr>
-              <td style="text-align: right; font-size: 9pt; color: #94a3b8; padding-top: 6pt; border: none; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;">
-                الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر المدرسية والتعليمية
-              </td>
-              <td style="text-align: left; font-size: 9pt; color: #94a3b8; padding-top: 6pt; border: none; font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;" dir="ltr">
-                ${date}
-              </td>
-            </tr>
-          </table>
-        </div>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob(['\ufeff', wordDocumentHtml], {
-      type: 'application/msword;charset=utf-8'
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const safeFilename = (tpl.title || 'وثيقة_إدارية').replace(/[/\\?%*:|"<>]/g, '_');
-    link.download = `${safeFilename}.doc`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-
-    showNotification(`تم تنزيل وثيقة "${tpl.title}" بصيغة Word (.doc) بنجاح بنفس تفاصيل وهيئة الـ PDF!`, 'success');
   };
 
-  // Copy structured text to clipboard
+    // Copy structured text to clipboard
   const handleCopyText = (template: AdminTemplateItem) => {
     const text = `
 الجمهورية الجزائرية الديمقراطية الشعبية
@@ -1857,487 +1956,1354 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="bg-surface w-full max-w-5xl rounded-[32px] overflow-hidden shadow-2xl border border-outline-variant flex flex-col max-h-[94vh]"
+              className={`bg-surface w-full ${showSplitPreview && editorActiveTab !== 'preview' ? 'max-w-7xl' : 'max-w-5xl'} transition-all duration-300 rounded-[32px] overflow-hidden shadow-2xl border border-outline-variant flex flex-col max-h-[94vh]`}
             >
               {/* Modal Header */}
-              <div className="p-4 sm:p-5 bg-surface-container-low border-b border-outline-variant/50 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                    <FileText size={22} />
+              <div className="p-4 sm:p-5 bg-surface-container-low border-b border-outline-variant/50 flex flex-col gap-3 shrink-0">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <FileText size={22} />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg sm:text-xl font-black text-primary leading-tight">
+                          {selectedTemplate.title}
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+                          {docFormatType === 'voucher_form' ? 'سند / استمارة' :
+                           docFormatType === 'minutes_pv' ? 'محضر رسمي' :
+                           docFormatType === 'report' ? 'تقرير إداري' :
+                           docFormatType === 'circular_memo' ? 'مذكرة مصلحة' :
+                           docFormatType === 'certificate' ? 'شهادة إدارية' : 'مراسلة رسمية'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-secondary">
+                        تحرير البيانات، تخصيص تفاصيل وهوية الورقة، ومعاينة حية ومطابقة للطباعة بحجم A4.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg sm:text-xl font-black text-primary leading-tight">
-                      {selectedTemplate.title}
-                    </h3>
-                    <p className="text-[11px] text-secondary">
-                      قم بضبط الحقول، إضافة العناصر، ثم اضغط على طباعة رسمية أو معاينة PDF.
-                    </p>
+
+                  {/* Header Actions */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={handleSaveDocument}
+                      disabled={isSaving}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50"
+                      title="حفظ في أرشيفي"
+                    >
+                      <Save size={14} />
+                      <span className="hidden sm:inline">حفظ بالأرشيف</span>
+                    </button>
+
+                    <button
+                      onClick={() => handlePreviewPdf()}
+                      className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                      title="معاينة PDF داخلية"
+                    >
+                      <Eye size={14} />
+                      <span className="hidden sm:inline">نافذة PDF</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadPdf()}
+                      className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                      title="تحميل كملف PDF"
+                    >
+                      <Download size={14} />
+                      <span className="hidden sm:inline">تحميل PDF</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadWord()}
+                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                      title="تحميل مستند Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
+                    >
+                      <FileDown size={14} />
+                      <span className="hidden sm:inline">تحميل Word</span>
+                    </button>
+
+                    <button
+                      onClick={handlePrint}
+                      className="px-4 py-2 bg-primary text-on-primary hover:opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                    >
+                      <Printer size={15} />
+                      <span>طباعة</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsEditorOpen(false)}
+                      className="p-2 hover:bg-surface-container rounded-full text-secondary transition-colors"
+                      title="إغلاق"
+                    >
+                      <X size={20} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={handleSaveDocument}
-                    disabled={isSaving}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all disabled:opacity-50"
-                    title="حفظ في أرشيفي"
-                  >
-                    <Save size={14} />
-                    <span className="hidden sm:inline">حفظ بالأرشيف</span>
-                  </button>
+                {/* Sub-Header: Mode Navigation Tabs + Split-view toggle */}
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-outline-variant/40">
+                  <div className="flex items-center gap-1.5 bg-surface-container p-1 rounded-2xl border border-outline-variant/60">
+                    <button
+                      type="button"
+                      onClick={() => setEditorActiveTab('edit')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                        editorActiveTab === 'edit'
+                          ? 'bg-primary text-on-primary shadow-xs'
+                          : 'text-secondary hover:text-on-surface hover:bg-surface'
+                      }`}
+                    >
+                      <FileText size={14} />
+                      <span>1. التحرير والمعطيات</span>
+                    </button>
 
-                  <button
-                    onClick={() => handlePreviewPdf()}
-                    className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
-                    title="معاينة PDF داخلية"
-                  >
-                    <Eye size={14} />
-                    <span className="hidden sm:inline">معاينة PDF</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditorActiveTab('paper_details')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                        editorActiveTab === 'paper_details'
+                          ? 'bg-primary text-on-primary shadow-xs'
+                          : 'text-secondary hover:text-on-surface hover:bg-surface'
+                      }`}
+                    >
+                      <SlidersHorizontal size={14} />
+                      <span>2. ضبط تفاصيل الورقة والصيغة</span>
+                    </button>
 
-                  <button
-                    onClick={() => handleDownloadPdf()}
-                    className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
-                    title="تحميل كملف PDF"
-                  >
-                    <Download size={14} />
-                    <span className="hidden sm:inline">تحميل PDF</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditorActiveTab('preview')}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all ${
+                        editorActiveTab === 'preview'
+                          ? 'bg-primary text-on-primary shadow-xs'
+                          : 'text-secondary hover:text-on-surface hover:bg-surface'
+                      }`}
+                    >
+                      <Eye size={14} />
+                      <span>3. معاينة مباشرة A4 كاملة</span>
+                    </button>
+                  </div>
 
-                  <button
-                    onClick={() => handleDownloadWord()}
-                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
-                    title="تحميل مستند Word بنفس تفاصيل وهيئة الـ PDF (.doc)"
-                  >
-                    <FileDown size={14} />
-                    <span className="hidden sm:inline">تحميل Word</span>
-                  </button>
-
-                  <button
-                    onClick={handlePrint}
-                    className="px-4 py-2 bg-primary text-on-primary hover:opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
-                  >
-                    <Printer size={15} />
-                    <span>طباعة</span>
-                  </button>
-
-                  <button
-                    onClick={() => setIsEditorOpen(false)}
-                    className="p-2 hover:bg-surface-container rounded-full text-secondary transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
+                  <div className="hidden lg:flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowSplitPreview(!showSplitPreview)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                        showSplitPreview
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-800 dark:text-emerald-300'
+                          : 'bg-surface border-outline-variant/60 text-secondary hover:bg-surface-container'
+                      }`}
+                      title={showSplitPreview ? 'إغلاق الشاشة المقسمة' : 'تفعيل الشاشة المقسمة لمشاهدة التغييرات فورياً أثناء التحرير'}
+                    >
+                      <LayoutTemplate size={14} />
+                      <span>{showSplitPreview ? 'شاشة مقسمة فورية (نشطة)' : 'تفعيل الشاشة المقسمة'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Modal Body / Editor Fields */}
-              <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
-                {/* Official Letterhead Banner */}
-                <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/40 text-center space-y-1">
-                  <div className="text-xs font-black text-primary">
-                    {country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}
-                  </div>
-                  <div className="text-[11px] text-secondary font-bold">
-                    {ministry || 'وزارة التربية الوطنية'}
-                  </div>
-                  <div className="text-[11px] text-secondary font-medium">
-                    {directorate || 'مديرية التربية لولاية أم البواقي'} — {formattedSchool}
-                  </div>
-                </div>
+              {/* Modal Body */}
+              <div className="flex-1 overflow-hidden flex flex-col">
+                {editorActiveTab === 'preview' ? (
+                  /* 👁️ FULL PREVIEW TAB (Tab 3) */
+                  <div className="flex flex-col h-full overflow-hidden bg-slate-100 dark:bg-slate-900/80">
+                    <div className="p-3 bg-surface border-b border-outline-variant/50 flex items-center justify-between gap-3 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Eye size={18} className="text-primary" />
+                        <div>
+                          <span className="text-xs font-black text-primary block leading-none">معاينة ورقة A4 الرسمية المطابقة للطباعة</span>
+                          <span className="text-[10px] text-secondary">
+                            الاتجاه: {paperOrientation === 'landscape' ? 'أفقي (Landscape)' : 'عمودي (Portrait)'} | الهوامش: {paperMargins === 'compact' ? 'مضغوطة (10 مم)' : paperMargins === 'spacious' ? 'واسعة (20 مم)' : 'قياسية (15 مم)'}
+                          </span>
+                        </div>
+                      </div>
 
-                {/* Administrative Routing Ladder Selector (السلم الإداري / المسؤول المباشر) */}
-                <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Scale size={18} className="text-primary" />
-                      <span className="text-xs font-black text-primary">
-                        مسار التوجيه الإداري (السلم الوظيفي):
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewZoom(prev => Math.max(0.5, +(prev - 0.1).toFixed(2)))}
+                          className="w-7 h-7 flex items-center justify-center hover:bg-surface-container rounded-lg text-secondary text-sm font-bold border border-outline-variant/40"
+                          title="تصغير"
+                        >
+                          -
+                        </button>
+                        <span className="text-xs font-black text-secondary min-w-[42px] text-center">
+                          {Math.round(previewZoom * 100)}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewZoom(prev => Math.min(1.4, +(prev + 0.1).toFixed(2)))}
+                          className="w-7 h-7 flex items-center justify-center hover:bg-surface-container rounded-lg text-secondary text-sm font-bold border border-outline-variant/40"
+                          title="تكبير"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewZoom(0.9)}
+                          className="p-1.5 hover:bg-surface-container rounded-lg text-secondary border border-outline-variant/40"
+                          title="إعادة ضبط المقياس"
+                        >
+                          <RefreshCw size={13} />
+                        </button>
+                      </div>
                     </div>
-                    <span className="text-[11px] text-secondary font-medium">
-                      اختر جهة التوجيه ليتم ضبط صيغة "المرسل إليه" والتوقيعات تلقائياً
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => handleSetRouting('direct')}
-                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
-                        docRouting === 'direct'
-                          ? 'bg-primary/10 border-primary text-primary font-bold shadow-xs'
-                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <span>🏢</span> المسؤول المباشر (المدير)
-                        </span>
-                        {docRouting === 'direct' && <CheckCircle2 size={16} className="text-primary" />}
-                      </div>
-                      <p className="text-[10px] text-secondary leading-relaxed">
-                        موجهة مباشرة للمدير: [الملحق الرئيس بالمخابر ↔ مدير المؤسسة]
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSetRouting('hierarchical_nazir')}
-                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
-                        docRouting === 'hierarchical_nazir'
-                          ? 'bg-emerald-500/10 border-emerald-600 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs'
-                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <span>🪜</span> السلم الإداري (تحت إشراف الناظر)
-                        </span>
-                        {docRouting === 'hierarchical_nazir' && <CheckCircle2 size={16} className="text-emerald-600" />}
-                      </div>
-                      <p className="text-[10px] text-secondary leading-relaxed">
-                        تحت إشراف ناظر الدروس مع تأشيرة الناظر في التوقيعات الرسمية
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSetRouting('hierarchical_cpe')}
-                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
-                        docRouting === 'hierarchical_cpe'
-                          ? 'bg-amber-500/10 border-amber-600 text-amber-800 dark:text-amber-300 font-bold shadow-xs'
-                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <span>📋</span> السلم الإداري (تحت إشراف مستشار التربية)
-                        </span>
-                        {docRouting === 'hierarchical_cpe' && <CheckCircle2 size={16} className="text-amber-600" />}
-                      </div>
-                      <p className="text-[10px] text-secondary leading-relaxed">
-                        تحت إشراف المستشار الرئيسي للتربية (CPE) للمسائل الانضباطية
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSetRouting('financial')}
-                      className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
-                        docRouting === 'financial'
-                          ? 'bg-blue-500/10 border-blue-600 text-blue-800 dark:text-blue-300 font-bold shadow-xs'
-                          : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-black flex items-center gap-1.5">
-                          <span>💰</span> المصالح الاقتصادية (المقتصد)
-                        </span>
-                        {docRouting === 'financial' && <CheckCircle2 size={16} className="text-blue-600" />}
-                      </div>
-                      <p className="text-[10px] text-secondary leading-relaxed">
-                        عن طريق المقتصد (المسير المالي) لتوفير الوسائل أو الصيانة
-                      </p>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Institution & Letterhead Metadata */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-container-low p-3.5 rounded-2xl border border-outline-variant/40">
-                  <div>
-                    <label className="block text-[11px] font-black text-primary mb-1">
-                      المصلحة الطالبة
-                    </label>
-                    <input
-                      type="text"
-                      value={docDepartment}
-                      onChange={(e) => setDocDepartment(e.target.value)}
-                      placeholder="مخبر العلوم الفيزيائية والطبيعية"
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-black text-primary mb-1">
-                      السنة الدراسية
-                    </label>
-                    <input
-                      type="text"
-                      value={docAcademicYear}
-                      onChange={(e) => setDocAcademicYear(e.target.value)}
-                      placeholder="2026 / 2027"
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-black text-primary mb-1">
-                      مكان التحرير
-                    </label>
-                    <input
-                      type="text"
-                      value={docLocation}
-                      onChange={(e) => setDocLocation(e.target.value)}
-                      placeholder="عين كرشة"
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Date & Reference */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-black text-primary mb-1">
-                      تاريخ تحرير الوثيقة
-                    </label>
-                    <input
-                      type="date"
-                      value={docDate}
-                      onChange={(e) => setDocDate(e.target.value)}
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-black text-primary mb-1">
-                      الرقم المرجعي (اختياري)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="مثال: مخ/2026/14"
-                      value={docRef}
-                      onChange={(e) => setDocRef(e.target.value)}
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Sender & Recipient */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-black text-primary mb-1">
-                      المرسِل / المحرر
-                    </label>
-                    <input
-                      type="text"
-                      value={docSender}
-                      onChange={(e) => setDocSender(e.target.value)}
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-black text-primary mb-1">
-                      المرسَل إليه (الجهة المعنية)
-                    </label>
-                    <input
-                      type="text"
-                      value={docRecipient}
-                      onChange={(e) => setDocRecipient(e.target.value)}
-                      className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                    />
-                  </div>
-                </div>
-
-                {/* Subject */}
-                <div>
-                  <label className="block text-xs font-black text-primary mb-1">
-                    موضوع المراسلة أو التقرير
-                  </label>
-                  <input
-                    type="text"
-                    value={docSubject}
-                    onChange={(e) => setDocSubject(e.target.value)}
-                    className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                  />
-                </div>
-
-                {/* Main Content Body */}
-                <div>
-                  <label className="block text-xs font-black text-primary mb-1">
-                    نص الوثيقة / العرض الإداري
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={docContent}
-                    onChange={(e) => setDocContent(e.target.value)}
-                    className="w-full bg-surface p-3 rounded-xl border border-outline-variant text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none leading-relaxed"
-                  />
-                </div>
-
-                {/* Items Table if applicable */}
-                {selectedTemplate.hasTable && (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-black text-primary">
-                        جدول التعيينات والوسائل المرفقة ({docRows.length} عناصر)
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleAddRow}
-                        className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                    <div className="flex-1 overflow-auto p-4 sm:p-6 flex justify-center items-start">
+                      <div
+                        style={{
+                          transform: `scale(${previewZoom})`,
+                          transformOrigin: 'top center',
+                          transition: 'transform 0.1s ease',
+                          width: paperOrientation === 'landscape' ? '1060px' : '780px',
+                          minHeight: paperOrientation === 'landscape' ? '750px' : '1050px'
+                        }}
+                        className="bg-white text-slate-900 shadow-2xl rounded-sm border border-slate-300 overflow-hidden flex flex-col shrink-0 mb-12"
                       >
-                        <Plus size={13} />
-                        <span>إضافة سطر</span>
-                      </button>
+                        <iframe
+                          srcDoc={generateOfficialHtml()}
+                          title="معاينة الوثيقة الإدارية كاملة"
+                          className="w-full flex-1 border-0"
+                          style={{
+                            minHeight: paperOrientation === 'landscape' ? '750px' : '1050px'
+                          }}
+                          sandbox="allow-same-origin"
+                        />
+                      </div>
                     </div>
+                  </div>
+                ) : (
+                  /* 📑 TABS 1 & 2 (EDIT & PAPER DETAILS) with optional Split Screen on Desktop */
+                  <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-hidden">
+                    {/* Primary Editor Pane */}
+                    <div className={`${showSplitPreview ? 'lg:col-span-7 xl:col-span-7 border-l border-outline-variant/40' : 'col-span-12'} overflow-y-auto p-4 sm:p-6 space-y-6 flex-1`}>
+                      {editorActiveTab === 'edit' && (
+                        /* TAB 1: FORM DATA & CONTENT */
+                        <div className="space-y-6">
+                          {/* Official Letterhead Banner */}
+                          <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/40 text-center space-y-1">
+                            <div className="text-xs font-black text-primary">
+                              {country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}
+                            </div>
+                            <div className="text-[11px] text-secondary font-bold">
+                              {ministry || 'وزارة التربية الوطنية'}
+                            </div>
+                            <div className="text-[11px] text-secondary font-medium">
+                              {directorate || 'مديرية التربية لولاية أم البواقي'} — {formattedSchool}
+                            </div>
+                          </div>
 
-                    <div className="border border-outline-variant rounded-2xl overflow-hidden shadow-xs">
-                      {(() => {
-                        const tableHeaders = selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'ملاحظات / مواصفات'];
-                        const hasCol5 = (tableHeaders.length >= 5) || docRows.some(r => r.col5 !== undefined);
+                          {/* Quick Format & Ladder Indicator */}
+                          <div className="p-3 bg-surface-container-low rounded-2xl border border-outline-variant/50 flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-primary">طبيعة الوثيقة الحالية:</span>
+                              <span className="text-xs font-bold px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                                {docFormatType === 'voucher_form' ? 'سند / استمارة إدارية' :
+                                 docFormatType === 'minutes_pv' ? 'محضر رسمي / معاينة' :
+                                 docFormatType === 'report' ? 'تقرير فني / إداري' :
+                                 docFormatType === 'circular_memo' ? 'مذكرة مصلحة / تعليمة' :
+                                 docFormatType === 'certificate' ? 'شهادة إدارية' : 'مراسلة إرسالية رسمية'}
+                              </span>
+                            </div>
 
-                        return (
-                          <table className="w-full text-xs text-right border-collapse">
-                            <thead className="bg-surface-container-high text-primary font-black">
-                              <tr>
-                                <th className="p-2.5 border-b border-outline-variant w-14 text-center">{tableHeaders[0] || 'الرقم'}</th>
-                                <th className="p-2.5 border-b border-outline-variant">{tableHeaders[1] || 'السجل / البيان'}</th>
-                                <th className="p-2.5 border-b border-outline-variant w-32">{tableHeaders[2] || 'المرجع / الرمز'}</th>
-                                <th className="p-2.5 border-b border-outline-variant w-24">{tableHeaders[3] || 'الكمية'}</th>
-                                {hasCol5 && (
-                                  <th className="p-2.5 border-b border-outline-variant w-40">{tableHeaders[4] || 'ملاحظات / مواصفات'}</th>
-                                )}
-                                <th className="p-2.5 border-b border-outline-variant w-10 text-center"></th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-outline-variant/40 bg-surface">
-                              {docRows.map((row, rIdx) => (
-                                <tr key={rIdx} className="hover:bg-surface-container-low/50">
-                                  <td className="p-2 text-center">
-                                    <input
-                                      type="text"
-                                      value={row.col1}
-                                      onChange={(e) => handleUpdateRow(rIdx, 'col1', e.target.value)}
-                                      className="w-full text-center bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="text"
-                                      placeholder="اسم السجل أو الوسيلة..."
-                                      value={row.col2}
-                                      onChange={(e) => handleUpdateRow(rIdx, 'col2', e.target.value)}
-                                      className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="text"
-                                      placeholder="المرجع / الرمز..."
-                                      value={row.col3}
-                                      onChange={(e) => handleUpdateRow(rIdx, 'col3', e.target.value)}
-                                      className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
-                                    />
-                                  </td>
-                                  <td className="p-2">
-                                    <input
-                                      type="text"
-                                      placeholder="الكمية..."
-                                      value={row.col4}
-                                      onChange={(e) => handleUpdateRow(rIdx, 'col4', e.target.value)}
-                                      className="w-full bg-transparent border-0 focus:ring-0 outline-none"
-                                    />
-                                  </td>
-                                  {hasCol5 && (
-                                    <td className="p-2">
-                                      <input
-                                        type="text"
-                                        placeholder="المواصفات / الملاحظات..."
-                                        value={row.col5 || ''}
-                                        onChange={(e) => handleUpdateRow(rIdx, 'col5', e.target.value)}
-                                        className="w-full bg-transparent border-0 focus:ring-0 outline-none"
-                                      />
-                                    </td>
-                                  )}
-                                  <td className="p-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setEditorActiveTab('paper_details')}
+                              className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                            >
+                              <SlidersHorizontal size={13} />
+                              <span>تغيير صيغة الورقة وتفاصيلها</span>
+                            </button>
+                          </div>
+
+                          {/* Administrative Routing Ladder Selector (السلم الإداري) */}
+                          <div className="bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60 space-y-3">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <Scale size={18} className="text-primary" />
+                                <span className="text-xs font-black text-primary">
+                                  مسار التوجيه الإداري (السلم الوظيفي):
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-secondary font-medium">
+                                يحدد صيغة "المرسل إليه" والتوقيعات الرسمية تلقائياً
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSetRouting('direct')}
+                                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                                  docRouting === 'direct'
+                                    ? 'bg-primary/10 border-primary text-primary font-bold shadow-xs'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-black flex items-center gap-1.5">
+                                    <span>🏢</span> المسؤول المباشر (المدير)
+                                  </span>
+                                  {docRouting === 'direct' && <CheckCircle2 size={16} className="text-primary" />}
+                                </div>
+                                <p className="text-[10px] text-secondary leading-relaxed">
+                                  موجهة مباشرة للمدير: [الملحق بالمخبر ↔ مدير المؤسسة]
+                                </p>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSetRouting('hierarchical_nazir')}
+                                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                                  docRouting === 'hierarchical_nazir'
+                                    ? 'bg-emerald-500/10 border-emerald-600 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-black flex items-center gap-1.5">
+                                    <span>🪜</span> السلم الإداري (تحت إشراف الناظر)
+                                  </span>
+                                  {docRouting === 'hierarchical_nazir' && <CheckCircle2 size={16} className="text-emerald-600" />}
+                                </div>
+                                <p className="text-[10px] text-secondary leading-relaxed">
+                                  تحت إشراف الناظر مع تأشيرة الناظر في التوقيعات
+                                </p>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSetRouting('hierarchical_cpe')}
+                                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                                  docRouting === 'hierarchical_cpe'
+                                    ? 'bg-amber-500/10 border-amber-600 text-amber-800 dark:text-amber-300 font-bold shadow-xs'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-black flex items-center gap-1.5">
+                                    <span>📋</span> تحت إشراف مستشار التربية
+                                  </span>
+                                  {docRouting === 'hierarchical_cpe' && <CheckCircle2 size={16} className="text-amber-600" />}
+                                </div>
+                                <p className="text-[10px] text-secondary leading-relaxed">
+                                  تحت إشراف المستشار الرئيسي للتربية (CPE)
+                                </p>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSetRouting('financial')}
+                                className={`p-3 rounded-xl border text-right transition-all flex flex-col justify-between ${
+                                  docRouting === 'financial'
+                                    ? 'bg-blue-500/10 border-blue-600 text-blue-800 dark:text-blue-300 font-bold shadow-xs'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container text-on-surface'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-black flex items-center gap-1.5">
+                                    <span>💰</span> المصالح الاقتصادية (المقتصد)
+                                  </span>
+                                  {docRouting === 'financial' && <CheckCircle2 size={16} className="text-blue-600" />}
+                                </div>
+                                <p className="text-[10px] text-secondary leading-relaxed">
+                                  عن طريق المقتصد (المسير المالي) للوسائل أو الصيانة
+                                </p>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Institution & Letterhead Metadata */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-surface-container-low p-3.5 rounded-2xl border border-outline-variant/40">
+                            <div>
+                              <label className="block text-[11px] font-black text-primary mb-1">
+                                المصلحة الطالبة
+                              </label>
+                              <input
+                                type="text"
+                                value={docDepartment}
+                                onChange={(e) => setDocDepartment(e.target.value)}
+                                placeholder="مخبر العلوم الفيزيائية والطبيعية"
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-black text-primary mb-1">
+                                السنة الدراسية
+                              </label>
+                              <input
+                                type="text"
+                                value={docAcademicYear}
+                                onChange={(e) => setDocAcademicYear(e.target.value)}
+                                placeholder="2026 / 2027"
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-black text-primary mb-1">
+                                مكان التحرير
+                              </label>
+                              <input
+                                type="text"
+                                value={docLocation}
+                                onChange={(e) => setDocLocation(e.target.value)}
+                                placeholder="عين كرشة"
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Date & Reference */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-black text-primary mb-1">
+                                تاريخ تحرير الوثيقة
+                              </label>
+                              <input
+                                type="date"
+                                value={docDate}
+                                onChange={(e) => setDocDate(e.target.value)}
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-black text-primary mb-1">
+                                الرقم المرجعي أو رقم السند (اختياري)
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="مثال: مخ/2026/14 أو سند رقم 03"
+                                value={docRef}
+                                onChange={(e) => setDocRef(e.target.value)}
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Sender & Recipient (with format reminder) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-black text-primary mb-1">
+                                المرسِل / المحرر (صفة مسؤول المخبر)
+                              </label>
+                              <input
+                                type="text"
+                                value={docSender}
+                                onChange={(e) => setDocSender(e.target.value)}
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-black text-primary mb-1">
+                                المرسَل إليه / الجهة المعنية
+                              </label>
+                              <input
+                                type="text"
+                                value={docRecipient}
+                                onChange={(e) => setDocRecipient(e.target.value)}
+                                className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Subject */}
+                          <div>
+                            <label className="block text-xs font-black text-primary mb-1">
+                              موضوع أو عنوان الوثيقة
+                            </label>
+                            <input
+                              type="text"
+                              value={docSubject}
+                              onChange={(e) => setDocSubject(e.target.value)}
+                              className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                            />
+                          </div>
+
+                          {/* Main Content Body */}
+                          <div>
+                            <label className="block text-xs font-black text-primary mb-1">
+                              نص الوثيقة / العرض الإداري أو الديباجة
+                            </label>
+                            <textarea
+                              rows={5}
+                              value={docContent}
+                              onChange={(e) => setDocContent(e.target.value)}
+                              className="w-full bg-surface p-3 rounded-xl border border-outline-variant text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none leading-relaxed"
+                            />
+                          </div>
+
+                          {/* Items Table if applicable */}
+                          {selectedTemplate.hasTable && (
+                            <div className="space-y-2.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-xs font-black text-primary">
+                                  جدول التعيينات والوسائل ({docRows.length} عناصر)
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={handleAddRow}
+                                  className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                                >
+                                  <Plus size={13} />
+                                  <span>إضافة سطر</span>
+                                </button>
+                              </div>
+
+                              <div className="border border-outline-variant rounded-2xl overflow-hidden shadow-xs">
+                                {(() => {
+                                  const tableHeaders = (docTableHeaders && docTableHeaders.length > 0)
+                                    ? docTableHeaders
+                                    : (selectedTemplate.tableHeaders || ['الرقم', 'البيان', 'المرجع / الرمز', 'الكمية', 'ملاحظات / مواصفات']);
+                                  const hasCol5 = (tableHeaders.length >= 5) || docRows.some(r => r.col5 !== undefined);
+
+                                  return (
+                                    <table className="w-full text-xs text-right border-collapse">
+                                      <thead className="bg-surface-container-high text-primary font-black">
+                                        <tr>
+                                          <th className="p-2.5 border-b border-outline-variant w-14 text-center">{tableHeaders[0] || 'الرقم'}</th>
+                                          <th className="p-2.5 border-b border-outline-variant">{tableHeaders[1] || 'السجل / البيان'}</th>
+                                          <th className="p-2.5 border-b border-outline-variant w-32">{tableHeaders[2] || 'المرجع / الرمز'}</th>
+                                          <th className="p-2.5 border-b border-outline-variant w-24">{tableHeaders[3] || 'الكمية'}</th>
+                                          {hasCol5 && (
+                                            <th className="p-2.5 border-b border-outline-variant w-40">{tableHeaders[4] || 'ملاحظات / مواصفات'}</th>
+                                          )}
+                                          <th className="p-2.5 border-b border-outline-variant w-10 text-center"></th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-outline-variant/40 bg-surface">
+                                        {docRows.map((row, rIdx) => (
+                                          <tr key={rIdx} className="hover:bg-surface-container-low/50">
+                                            <td className="p-2 text-center">
+                                              <input
+                                                type="text"
+                                                value={row.col1}
+                                                onChange={(e) => handleUpdateRow(rIdx, 'col1', e.target.value)}
+                                                className="w-full text-center bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                              />
+                                            </td>
+                                            <td className="p-2">
+                                              <input
+                                                type="text"
+                                                placeholder="اسم السجل أو الوسيلة..."
+                                                value={row.col2}
+                                                onChange={(e) => handleUpdateRow(rIdx, 'col2', e.target.value)}
+                                                className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                              />
+                                            </td>
+                                            <td className="p-2">
+                                              <input
+                                                type="text"
+                                                placeholder="المرجع / الرمز..."
+                                                value={row.col3}
+                                                onChange={(e) => handleUpdateRow(rIdx, 'col3', e.target.value)}
+                                                className="w-full bg-transparent border-0 font-bold focus:ring-0 outline-none"
+                                              />
+                                            </td>
+                                            <td className="p-2">
+                                              <input
+                                                type="text"
+                                                placeholder="الكمية..."
+                                                value={row.col4}
+                                                onChange={(e) => handleUpdateRow(rIdx, 'col4', e.target.value)}
+                                                className="w-full bg-transparent border-0 focus:ring-0 outline-none"
+                                              />
+                                            </td>
+                                            {hasCol5 && (
+                                              <td className="p-2">
+                                                <input
+                                                  type="text"
+                                                  placeholder="المواصفات / الملاحظات..."
+                                                  value={row.col5 || ''}
+                                                  onChange={(e) => handleUpdateRow(rIdx, 'col5', e.target.value)}
+                                                  className="w-full bg-transparent border-0 focus:ring-0 outline-none"
+                                                />
+                                              </td>
+                                            )}
+                                            <td className="p-2 text-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleRemoveRow(rIdx)}
+                                                className="p-1 text-error/60 hover:text-error rounded-lg"
+                                                title="حذف السطر"
+                                              >
+                                                <Trash2 size={14} />
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Notes box */}
+                          <div>
+                            <label className="block text-xs font-black text-primary mb-1">
+                              ملاحظات أو توصيات إضافية (اختياري)
+                            </label>
+                            <input
+                              type="text"
+                              value={docNotes}
+                              onChange={(e) => setDocNotes(e.target.value)}
+                              placeholder="ملاحظات تظهر أسفل الوثيقة..."
+                              className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none"
+                            />
+                          </div>
+
+                          {/* Release Location & Date preview */}
+                          <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center justify-between flex-wrap gap-2 text-xs text-primary font-bold">
+                            <span className="flex items-center gap-1.5">
+                              <Calendar size={14} className="text-secondary" />
+                              <span>صيغة مكان وتاريخ التحرير:</span>
+                            </span>
+                            <span className="bg-surface px-2.5 py-1 rounded-lg border border-outline-variant/40 font-black text-primary">
+                              حرر بـ : {docLocation || 'عين كرشة'} في : {docDate}
+                            </span>
+                          </div>
+
+                          {/* Signers list */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="block text-xs font-black text-primary">
+                                الموقعون والمصادقون على الوثيقة ({docSigners.length})
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => setDocSigners([...docSigners, 'موقع إضافي'])}
+                                className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                              >
+                                <Plus size={13} />
+                                <span>إضافة موقع</span>
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                              {docSigners.map((sig, sIdx) => (
+                                <div key={sIdx} className="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/40 flex items-center gap-2">
+                                  <UserCheck size={16} className="text-primary shrink-0" />
+                                  <input
+                                    type="text"
+                                    value={sig}
+                                    onChange={(e) => {
+                                      const newSigs = [...docSigners];
+                                      newSigs[sIdx] = e.target.value;
+                                      setDocSigners(newSigs);
+                                    }}
+                                    className="bg-transparent border-0 text-xs font-bold focus:ring-0 outline-none w-full"
+                                  />
+                                  {docSigners.length > 1 && (
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveRow(rIdx)}
-                                      className="p-1 text-error/60 hover:text-error rounded-lg"
-                                      title="حذف السطر"
+                                      onClick={() => setDocSigners(docSigners.filter((_, i) => i !== sIdx))}
+                                      className="text-error/60 hover:text-error p-1"
+                                      title="حذف هذا الموقع"
                                     >
-                                      <Trash2 size={14} />
+                                      <Trash2 size={13} />
                                     </button>
-                                  </td>
-                                </tr>
+                                  )}
+                                </div>
                               ))}
-                            </tbody>
-                          </table>
-                        );
-                      })()}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {editorActiveTab === 'paper_details' && (
+                        /* TAB 2: لوحة ضبط تفاصيل الورقة والصيغة */
+                        <div className="space-y-6">
+                          {/* Alert Notice */}
+                          <div className="p-4 bg-primary/5 rounded-2xl border border-primary/20 flex items-start gap-3">
+                            <Sparkles size={20} className="text-primary shrink-0 mt-0.5" />
+                            <div className="text-xs text-primary leading-relaxed">
+                              <strong className="font-black block mb-0.5">مرونة تحرير كاملة وتكييف إداري لكافة الوثائق:</strong>
+                              ليست كل طلبات المخبر عبارة عن مراسلات. يمكنك هنا تحويل الوثيقة إلى "سند طلب داخلي" أو "محضر إتلاف/استلام" أو "تقرير حادث" أو "مذكرة مصلحة"، وإخفاء أو إظهار جدول المراسلة (من/إلى)، وإضافة جدول تأشيرة المدير وقرار المصالح الاقتصادية، وضبط الهوامش والاتجاه بدقة متناهية.
+                            </div>
+                          </div>
+
+                          {/* SECTION 1: Drafting Format & Administrative Structure */}
+                          <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-3.5">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <LayoutTemplate size={18} className="text-primary" />
+                                <h4 className="text-xs sm:text-sm font-black text-primary">
+                                  1. صيغة التحرير والهيكل الإداري للوثيقة
+                                </h4>
+                              </div>
+                              <span className="text-[11px] text-secondary font-medium">
+                                اختر الصيغة المناسبة لتطبيق المعايير التوثيقية المعتمدة
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {/* 1. Correspondence */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('correspondence')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'correspondence'
+                                    ? 'bg-primary/10 border-primary shadow-xs ring-1 ring-primary'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                                      <FileText size={16} />
+                                      <span>مراسلة / إرسالية رسمية</span>
+                                    </span>
+                                    {docFormatType === 'correspondence' && <CheckCircle2 size={16} className="text-primary" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    مراسلة موجهة عبر السلم الإداري مع جدول المراسلة الرسمي (من: ... / إلى: ... والموضوع والمرجع).
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-primary/70 mt-2 block">
+                                  نموذج: طلبات تدخل، إرساليات، تقارير موجهة
+                                </span>
+                              </button>
+
+                              {/* 2. Voucher / Form */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('voucher_form')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'voucher_form'
+                                    ? 'bg-emerald-500/10 border-emerald-600 shadow-xs ring-1 ring-emerald-600'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                                      <FileSpreadsheet size={16} />
+                                      <span>سند / استمارة إدارية</span>
+                                    </span>
+                                    {docFormatType === 'voucher_form' && <CheckCircle2 size={16} className="text-emerald-600" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    سند طلب داخلي، إعارة تجهيزات، تسليم عتاد. بطاقة تعريف النموذج دون جدول المراسلة، مع جدول تأشيرة واعتماد الإدارة.
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mt-2 block">
+                                  نموذج: سند طلب مواد، استمارة إعارة، تسليم
+                                </span>
+                              </button>
+
+                              {/* 3. Minutes / PV */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('minutes_pv')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'minutes_pv'
+                                    ? 'bg-amber-500/10 border-amber-600 shadow-xs ring-1 ring-amber-600'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                                      <ScrollText size={16} />
+                                      <span>محضر رسمي / معاينة (P.V)</span>
+                                    </span>
+                                    {docFormatType === 'minutes_pv' && <CheckCircle2 size={16} className="text-amber-600" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    محضر إتلاف، استلام عتاد، جلسة تنسيق. ديباجة قانونية "في يوم... بمقر المؤسسة..." وجدول المواد وإمضاءات الأعضاء.
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 mt-2 block">
+                                  نموذج: محضر إسقاط عتاد، معاينة كسر، جرد
+                                </span>
+                              </button>
+
+                              {/* 4. Report */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('report')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'report'
+                                    ? 'bg-blue-500/10 border-blue-600 shadow-xs ring-1 ring-blue-600'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                                      <FileCheck2 size={16} />
+                                      <span>تقرير فني / إداري</span>
+                                    </span>
+                                    {docFormatType === 'report' && <CheckCircle2 size={16} className="text-blue-600" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    تقرير حادث، معاينة حالة المخبر، أو تقرير تقييمي دوري. منظم بعرض حال، الأسباب، والحلول والتوصيات المقترحة.
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-blue-700 dark:text-blue-400 mt-2 block">
+                                  نموذج: تقرير حادث مخبري، تقرير حالة العتاد
+                                </span>
+                              </button>
+
+                              {/* 5. Circular Memo */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('circular_memo')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'circular_memo'
+                                    ? 'bg-purple-500/10 border-purple-600 shadow-xs ring-1 ring-purple-600'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
+                                      <BadgeCheck size={16} />
+                                      <span>مذكرة مصلحة / تعليمة</span>
+                                    </span>
+                                    {docFormatType === 'circular_memo' && <CheckCircle2 size={16} className="text-purple-600" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    مذكرة تنظيمية داخلية موجهة لأساتذة المواد ومستعملي المخبر، مع حيز التأشير بالعلم والمتابعة.
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400 mt-2 block">
+                                  نموذج: تعليمات السلامة، تنظيم الاستعمال
+                                </span>
+                              </button>
+
+                              {/* 6. Certificate */}
+                              <button
+                                type="button"
+                                onClick={() => handleSelectFormatType('certificate')}
+                                className={`p-3.5 rounded-2xl border text-right transition-all flex flex-col justify-between ${
+                                  docFormatType === 'certificate'
+                                    ? 'bg-rose-500/10 border-rose-600 shadow-xs ring-1 ring-rose-600'
+                                    : 'bg-surface border-outline-variant/50 hover:bg-surface-container'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-xs font-black text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                                      <ShieldCheck size={16} />
+                                      <span>شهادة / إفادة إدارية</span>
+                                    </span>
+                                    {docFormatType === 'certificate' && <CheckCircle2 size={16} className="text-rose-600" />}
+                                  </div>
+                                  <p className="text-[11px] text-secondary leading-relaxed">
+                                    إفادة عمل مخبري، إبراء ذمة، شهادة استلام نهائي، مصممة بهيكل الشهادات الرسمية المعتمدة.
+                                  </p>
+                                </div>
+                                <span className="text-[10px] font-bold text-rose-700 dark:text-rose-400 mt-2 block">
+                                  نموذج: إبراء ذمة أستاذ، إفادة استلام
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* SECTION 2: Paper Elements & Structure Switches */}
+                          <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-3.5">
+                            <div className="flex items-center gap-2">
+                              <CheckSquare size={18} className="text-primary" />
+                              <h4 className="text-xs sm:text-sm font-black text-primary">
+                                2. عناصر وهوية الورقة المطبوعة (إظهار / إخفاء)
+                              </h4>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {/* Switch 1: showCorrespondenceMeta */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary">
+                                    جدول التوجيه الرسمي (من: ... / إلى: ...)
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    مستطيل المراسلة التقليدي. أوقفه للسندات والمحاضر والاستمارات.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showCorrespondenceMeta}
+                                  onChange={(e) => setShowCorrespondenceMeta(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+
+                              {/* Switch 2: showSubject */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary">
+                                    حيز الموضوع والهدف
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    إظهار سطر الموضوع بوضوح في رأس الوثيقة.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showSubject}
+                                  onChange={(e) => setShowSubject(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+
+                              {/* Switch 3: showReference */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary">
+                                    الرقم المرجعي والتسجيل الإداري
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    إظهار "المرجع: مخ/2026/..." أو رقم القيد الإداري.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showReference}
+                                  onChange={(e) => setShowReference(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+
+                              {/* Switch 4: showApprovalBox */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary">
+                                    جدول تأشيرة وقرار الإدارة والمصالح المالية
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    خانة رسمية لموافقة المدير، رأي المقتصد، والتحفظات الإدارية.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showApprovalBox}
+                                  onChange={(e) => setShowApprovalBox(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+
+                              {/* Switch 5: showStampSpace */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors sm:col-span-2">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary flex items-center gap-1.5">
+                                    <Stamp size={15} />
+                                    <span>حيز الختم الدائري الإداري الرسمي</span>
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    إطار دائري مخصص ودقيق للختم الرطب للمؤسسة والمخبر بجانب التوقيعات.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showStampSpace}
+                                  onChange={(e) => setShowStampSpace(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* SECTION 3: Orientation, Margins & Paper Size */}
+                          <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-4">
+                            <div className="flex items-center gap-2">
+                              <SlidersHorizontal size={18} className="text-primary" />
+                              <h4 className="text-xs sm:text-sm font-black text-primary">
+                                3. إعدادات الورقة، الاتجاه، والهوامش
+                              </h4>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              {/* Orientation */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  اتجاه الورقة (Orientation)
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaperOrientation('portrait')}
+                                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                      paperOrientation === 'portrait'
+                                        ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                        : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                    }`}
+                                  >
+                                    <span>📄 عمودي (Portrait)</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaperOrientation('landscape')}
+                                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                      paperOrientation === 'landscape'
+                                        ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                        : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                    }`}
+                                  >
+                                    <span>📑 أفقي (Landscape)</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Margins */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  هوامش الصفحة
+                                </label>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaperMargins('compact')}
+                                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
+                                      paperMargins === 'compact'
+                                        ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                        : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                    }`}
+                                    title="10 مم - للجداول الطويلة"
+                                  >
+                                    مضغوطة
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaperMargins('standard')}
+                                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
+                                      paperMargins === 'standard'
+                                        ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                        : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                    }`}
+                                    title="15 مم - قياسي معتمد"
+                                  >
+                                    قياسية
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPaperMargins('spacious')}
+                                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
+                                      paperMargins === 'spacious'
+                                        ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                        : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                    }`}
+                                    title="20 مم - للمراسلات الفخمة"
+                                  >
+                                    واسعة
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Paper Size */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  قياس الورقة
+                                </label>
+                                <select
+                                  value={paperSize}
+                                  onChange={(e) => setPaperSize(e.target.value as any)}
+                                  className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                >
+                                  <option value="A4">A4 قياسي (210 × 297 مم)</option>
+                                  <option value="A3">A3 قياس كبير (297 × 420 مم)</option>
+                                  <option value="Letter">Letter أمريكي</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* SECTION 4: Typography, Line Spacing, Borders & Colors */}
+                          <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-4">
+                            <div className="flex items-center gap-2">
+                              <Palette size={18} className="text-primary" />
+                              <h4 className="text-xs sm:text-sm font-black text-primary">
+                                4. الخط العربي، التنسيق، وتأطير الصفحة
+                              </h4>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                              {/* Font Family */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  الخط العربي (Font)
+                                </label>
+                                <select
+                                  value={fontFamily}
+                                  onChange={(e) => setFontFamily(e.target.value as any)}
+                                  className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                >
+                                  <option value="amiri">Amiri (أميري رسمي فخم)</option>
+                                  <option value="cairo">Cairo (كايرو حديث وأنيق)</option>
+                                  <option value="traditional">Traditional Arabic (عربي تقليدي إداري)</option>
+                                  <option value="system">System UI (خط النظام)</option>
+                                </select>
+                              </div>
+
+                              {/* Font Size Scale */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  حجم الخط (Scale)
+                                </label>
+                                <select
+                                  value={fontSizeScale}
+                                  onChange={(e) => setFontSizeScale(e.target.value as any)}
+                                  className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                >
+                                  <option value="compact">مدمج (12.5px / 10pt)</option>
+                                  <option value="standard">قياسي معتمد (14px / 11pt)</option>
+                                  <option value="large">مكبّر وواضح (15.5px / 12.5pt)</option>
+                                </select>
+                              </div>
+
+                              {/* Line Spacing */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  تباعد الأسطر (Line Spacing)
+                                </label>
+                                <select
+                                  value={lineSpacing}
+                                  onChange={(e) => setLineSpacing(e.target.value as any)}
+                                  className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                >
+                                  <option value="1.4">ضيق (1.4) - للوثائق الكثيفة</option>
+                                  <option value="1.6">عادي (1.6) - قياسي مريح</option>
+                                  <option value="1.8">مريح (1.8) - للمراسلات الملكية</option>
+                                </select>
+                              </div>
+
+                              {/* Border Style */}
+                              <div>
+                                <label className="block text-xs font-black text-primary mb-1.5">
+                                  إطار الورقة (Border)
+                                </label>
+                                <select
+                                  value={borderStyle}
+                                  onChange={(e) => setBorderStyle(e.target.value as any)}
+                                  className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                >
+                                  <option value="none">بدون إطار خارجي (None)</option>
+                                  <option value="subtle">إطار إداري رفيع (Subtle Line)</option>
+                                  <option value="official_double">إطار رسمي مزدوج (Official Double)</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {/* Accent Color Palette */}
+                            <div className="pt-2 border-t border-outline-variant/40">
+                              <label className="block text-xs font-black text-primary mb-1.5">
+                                لون الترويسة والتمييز الإداري
+                              </label>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setAccentColor('emerald')}
+                                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
+                                    accentColor === 'emerald'
+                                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                      : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                  }`}
+                                >
+                                  <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+                                  <span>زمردي إداري</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setAccentColor('slate')}
+                                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
+                                    accentColor === 'slate'
+                                      ? 'bg-slate-700 text-white border-slate-700 shadow-xs'
+                                      : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                  }`}
+                                >
+                                  <span className="w-3 h-3 rounded-full bg-slate-600 inline-block"></span>
+                                  <span>رمادي كلاسيكي</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setAccentColor('navy')}
+                                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
+                                    accentColor === 'navy'
+                                      ? 'bg-blue-900 text-white border-blue-900 shadow-xs'
+                                      : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                  }`}
+                                >
+                                  <span className="w-3 h-3 rounded-full bg-blue-900 inline-block"></span>
+                                  <span>كحلي ملكي</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setAccentColor('monochrome')}
+                                  className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 ${
+                                    accentColor === 'monochrome'
+                                      ? 'bg-black text-white border-black shadow-xs'
+                                      : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                  }`}
+                                >
+                                  <span className="w-3 h-3 rounded-full bg-black inline-block"></span>
+                                  <span>أبيض وأسود (B&W)</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* SECTION 5: Closing Formula */}
+                          <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-3">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-2">
+                                <ScrollText size={18} className="text-primary" />
+                                <h4 className="text-xs sm:text-sm font-black text-primary">
+                                  5. العبارة الختامية الرسمية
+                                </h4>
+                              </div>
+                              <span className="text-[11px] text-secondary">
+                                اختر عبارة جاهزة أو اكتب صيغة مخصصة
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                'تفضلوا بقبول أسمى عبارات التقدير والاحترام',
+                                'وتقبلوا منا فائق عبارات الاحترام والتقدير',
+                                'وفي انتظار ردكم الكريم، تقبلوا منا أصدق التحيات',
+                                'لأجل الإعلام والمتابعة وحسن التنفيذ',
+                                'بدون عبارة ختامية'
+                              ].map((formula, fIdx) => (
+                                <button
+                                  key={fIdx}
+                                  type="button"
+                                  onClick={() => setClosingFormula(formula)}
+                                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                                    closingFormula === formula
+                                      ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                      : 'bg-surface border-outline-variant/50 text-secondary hover:bg-surface-container'
+                                  }`}
+                                >
+                                  {formula}
+                                </button>
+                              ))}
+                            </div>
+
+                            <input
+                              type="text"
+                              value={closingFormula}
+                              onChange={(e) => setClosingFormula(e.target.value)}
+                              placeholder="أو اكتب العبارة الختامية المخصصة هنا..."
+                              className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                            />
+                          </div>
+
+                          {/* SECTION 6: Custom Table Column Headers (if hasTable) */}
+                          {selectedTemplate.hasTable && (
+                            <div className="bg-surface-container-low p-4 sm:p-5 rounded-3xl border border-outline-variant/60 space-y-3">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2">
+                                  <FileSpreadsheet size={18} className="text-primary" />
+                                  <h4 className="text-xs sm:text-sm font-black text-primary">
+                                    6. تخصيص مسميات أعمدة جدول التعيينات
+                                  </h4>
+                                </div>
+                                <span className="text-[11px] text-secondary">
+                                  يمكنك إعادة تسمية أي عمود ليلائم خصوصية المحضر أو السند
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                                {(docTableHeaders.length > 0 ? docTableHeaders : ['الرقم', 'البيان والتسمية', 'المرجع / الرمز', 'الكمية', 'ملاحظات']).map((hdr, hIdx) => (
+                                  <div key={hIdx}>
+                                    <label className="block text-[10px] font-black text-secondary mb-1">
+                                      العمود {hIdx + 1}
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={hdr}
+                                      onChange={(e) => {
+                                        const updated = [...(docTableHeaders.length > 0 ? docTableHeaders : ['الرقم', 'البيان والتسمية', 'المرجع / الرمز', 'الكمية', 'ملاحظات'])];
+                                        updated[hIdx] = e.target.value;
+                                        setDocTableHeaders(updated);
+                                      }}
+                                      className="w-full bg-surface px-2.5 py-1.5 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Split Screen Live A4 Simulator (Shown on large screens when split view is active) */}
+                    {showSplitPreview && (
+                      <div className="hidden lg:flex lg:col-span-5 xl:col-span-5 flex-col bg-slate-100 dark:bg-slate-900/80 overflow-hidden">
+                        <div className="p-3 bg-surface border-b border-outline-variant/50 flex items-center justify-between gap-2 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <Eye size={16} className="text-primary" />
+                            <span className="text-xs font-black text-primary">محاكاة فورية (A4)</span>
+                            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                              {paperOrientation === 'landscape' ? 'أفقي' : 'عمودي'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewZoom(prev => Math.max(0.4, +(prev - 0.05).toFixed(2)))}
+                              className="w-6 h-6 flex items-center justify-center hover:bg-surface-container rounded text-secondary text-xs font-bold border border-outline-variant/40"
+                              title="تصغير"
+                            >
+                              -
+                            </button>
+                            <span className="text-[11px] font-black text-secondary min-w-[36px] text-center">
+                              {Math.round(previewZoom * 100)}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewZoom(prev => Math.min(1.2, +(prev + 0.05).toFixed(2)))}
+                              className="w-6 h-6 flex items-center justify-center hover:bg-surface-container rounded text-secondary text-xs font-bold border border-outline-variant/40"
+                              title="تكبير"
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewZoom(0.75)}
+                              className="p-1 hover:bg-surface-container rounded text-secondary border border-outline-variant/40"
+                              title="ضبط الحجم"
+                            >
+                              <RefreshCw size={11} />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 overflow-auto p-3 flex justify-center items-start">
+                          <div
+                            style={{
+                              transform: `scale(${previewZoom})`,
+                              transformOrigin: 'top center',
+                              transition: 'transform 0.1s ease',
+                              width: paperOrientation === 'landscape' ? '1000px' : '720px',
+                              minHeight: paperOrientation === 'landscape' ? '700px' : '980px'
+                            }}
+                            className="bg-white text-slate-900 shadow-xl rounded-sm border border-slate-300 overflow-hidden flex flex-col shrink-0 mb-8"
+                          >
+                            <iframe
+                              srcDoc={generateOfficialHtml()}
+                              title="معاينة فورية مطابقة"
+                              className="w-full flex-1 border-0"
+                              style={{
+                                minHeight: paperOrientation === 'landscape' ? '700px' : '980px'
+                              }}
+                              sandbox="allow-same-origin"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {/* Notes box */}
-                <div>
-                  <label className="block text-xs font-black text-primary mb-1">
-                    ملاحظات أو توصيات إضافية (اختياري)
-                  </label>
-                  <input
-                    type="text"
-                    value={docNotes}
-                    onChange={(e) => setDocNotes(e.target.value)}
-                    placeholder="ملاحظات تظهر أسفل الوثيقة..."
-                    className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs focus:border-primary focus:ring-1 focus:ring-primary outline-none"
-                  />
-                </div>
-
-                {/* Release Location & Date preview */}
-                <div className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/40 flex items-center justify-between flex-wrap gap-2 text-xs text-primary font-bold">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar size={14} className="text-secondary" />
-                    <span>صيغة مكان وتاريخ التحرير:</span>
-                  </span>
-                  <span className="bg-surface px-2.5 py-1 rounded-lg border border-outline-variant/40 font-black text-primary">
-                    حرر بـ : {docLocation || 'عين كرشة'} في : {docDate}
-                  </span>
-                </div>
-
-                {/* Signers list */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-xs font-black text-primary">
-                      الموقعون والمصادقون على الوثيقة ({docSigners.length})
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setDocSigners([...docSigners, 'موقع إضافي'])}
-                      className="px-2.5 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                    >
-                      <Plus size={13} />
-                      <span>إضافة موقع</span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {docSigners.map((sig, sIdx) => (
-                      <div key={sIdx} className="bg-surface-container-low p-2.5 rounded-xl border border-outline-variant/40 flex items-center gap-2">
-                        <UserCheck size={16} className="text-primary shrink-0" />
-                        <input
-                          type="text"
-                          value={sig}
-                          onChange={(e) => {
-                            const newSigs = [...docSigners];
-                            newSigs[sIdx] = e.target.value;
-                            setDocSigners(newSigs);
-                          }}
-                          className="bg-transparent border-0 text-xs font-bold focus:ring-0 outline-none w-full"
-                        />
-                        {docSigners.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setDocSigners(docSigners.filter((_, i) => i !== sIdx))}
-                            className="text-error/60 hover:text-error p-1"
-                            title="حذف هذا الموقع"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* Modal Footer */}

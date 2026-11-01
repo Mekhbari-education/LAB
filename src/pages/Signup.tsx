@@ -38,6 +38,7 @@ import {
   AlertTriangle,
   FileText
 } from 'lucide-react';
+import { getWilayasList, getWilayaDetail } from '../services/schoolDirectoryService';
 import logo from '/ministry-logo.png';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
@@ -84,8 +85,8 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Institution State with Cascading Dropdowns (Matching Settings.tsx)
-  const [schoolsDb, setSchoolsDb] = useState<any>(null);
+  // Institution State with Cascading Dropdowns (Optimized on-demand Wilaya loading)
+  const [currentDirData, setCurrentDirData] = useState<any>(null);
   const [dirList, setDirList] = useState<{ id: string; name: string; wilayaNum: number }[]>([]);
   const [isLoadingSchools, setIsLoadingSchools] = useState(true);
 
@@ -96,37 +97,37 @@ export default function Signup() {
   const [customSchoolName, setCustomSchoolName] = useState('');
   const [isCustomSchool, setIsCustomSchool] = useState(false);
 
-  // Load Algerian Schools Database
+  // Load Algerian Schools Database (Lightweight Wilayas list first)
   useEffect(() => {
     let isMounted = true;
-    import('../data/schools').then(({ SCHOOL_DB }) => {
+    setIsLoadingSchools(true);
+    getWilayasList().then((list) => {
       if (!isMounted) return;
-      setSchoolsDb(SCHOOL_DB);
-
-      // Build sorted directorates list by official Wilaya numbering (01 to 58)
-      const list = Object.entries(SCHOOL_DB).map(([id, data]) => {
-        const wilayaNum = parseInt(id.slice(0, 2), 10) || 99;
-        return {
-          id,
-          name: data.name,
-          wilayaNum
-        };
-      }).sort((a, b) => a.wilayaNum - b.wilayaNum || a.name.localeCompare(b.name, 'ar'));
-
       setDirList(list);
       setIsLoadingSchools(false);
     }).catch(err => {
-      console.error('Failed to load schools database:', err);
+      console.error('Failed to load wilayas:', err);
       setIsLoadingSchools(false);
     });
 
     return () => { isMounted = false; };
   }, []);
 
-  // Current directorate data derived reactively from schoolsDb
-  const currentDirData = (schoolsDb && selectedDirectorate)
-    ? (schoolsDb[selectedDirectorate] || Object.values(schoolsDb).find((d: any) => d.name === selectedDirectorate || d.name.includes(selectedDirectorate)))
-    : null;
+  // When selectedDirectorate changes, load that wilaya on demand
+  useEffect(() => {
+    if (!selectedDirectorate) {
+      setCurrentDirData(null);
+      return;
+    }
+    let isMounted = true;
+    getWilayaDetail(selectedDirectorate).then(detail => {
+      if (!isMounted) return;
+      setCurrentDirData(detail);
+    }).catch(err => {
+      console.error('Failed to load wilaya details:', err);
+    });
+    return () => { isMounted = false; };
+  }, [selectedDirectorate]);
 
   // Communes list derived from current directorate
   const communesList = currentDirData?.communes

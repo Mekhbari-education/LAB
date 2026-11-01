@@ -6,12 +6,14 @@ import { defineString } from "firebase-functions/params";
 // Define the GEMINI_API_KEY as a parameter that can be provided from .env or Secret Manager
 const geminiApiKey = defineString('GEMINI_API_KEY');
 
+const ALLOWED_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+
 export const generateContent = onCall({ cors: true }, async (request) => {
   try {
-    // 1. Verify authentication (optional but recommended)
-    // if (!request.auth) {
-    //   throw new HttpsError('unauthenticated', 'User must be authenticated.');
-    // }
+    // 1. Enforce strict authentication
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated to invoke Gemini assistant.');
+    }
 
     const data = request.data;
     let { model, contents, config } = data;
@@ -20,15 +22,13 @@ export const generateContent = onCall({ cors: true }, async (request) => {
       throw new HttpsError('invalid-argument', 'Contents are required.');
     }
 
-    const deprecatedModels = [
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-2.0-flash',
-      'gemini-2.0-pro',
-      'gemini-2.0-flash-thinking',
-      'gemini-pro'
-    ];
-    if (!model || deprecatedModels.includes(model)) {
+    // Input size limit to prevent quota exhaustion attacks
+    const contentsStr = JSON.stringify(contents);
+    if (contentsStr.length > 25000) {
+      throw new HttpsError('invalid-argument', 'Payload exceeds maximum allowed length.');
+    }
+
+    if (!model || !ALLOWED_MODELS.includes(model)) {
       model = 'gemini-3.8-flash';
     }
 
@@ -54,7 +54,7 @@ export const generateContent = onCall({ cors: true }, async (request) => {
 
   } catch (error: any) {
     logger.error('Error calling Gemini API:', error);
-    // Be careful not to expose sensitive internal errors to the client
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError('internal', 'Failed to generate content', error?.message || '');
   }
 });

@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   Eye,
   Sliders,
+  SlidersHorizontal,
   X,
   Check,
   RotateCcw,
@@ -25,10 +26,17 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Edit3
+  Edit3,
+  Settings,
+  Droplet,
+  Stamp,
+  Copy,
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
+import * as XLSX from 'xlsx';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
@@ -37,8 +45,9 @@ import { useTranslation } from 'react-i18next';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import { updateEquipment } from '../lib/api/equipment';
 import { Equipment } from '../types/equipment';
-import { printInventoryCards } from '../services/inventoryCardPrintService';
+import { printInventoryCards, PrintColorMode } from '../services/inventoryCardPrintService';
 import InventoryCardPrintModal from '../components/InventoryCardPrintModal';
+import { usePrintSettings } from '../context/PrintSettingsContext';
 
 interface InventoryItem {
   id: string;
@@ -64,6 +73,7 @@ type PrintScope = 'single' | 'all' | 'table';
 export default function InventoryCardsRegistry() {
   const { t, i18n } = useTranslation();
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
+  const { openPrintSettingsModal, openPrintPreview } = usePrintSettings();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,13 +83,19 @@ export default function InventoryCardsRegistry() {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [printModalMode, setPrintModalMode] = useState<'filled' | 'blank'>('filled');
   const [selectedPreviewIndex, setSelectedPreviewIndex] = useState(0);
-  const [paperFormat, setPaperFormat] = useState<PaperFormat>('A4');
+  const [paperFormat, setPaperFormat] = useState<PaperFormat>('A5');
   const [printSides, setPrintSides] = useState<PrintSides>('both');
-  const [printScope, setPrintScope] = useState<PrintScope>('single');
+  const [printScope, setPrintScope] = useState<PrintScope>('all');
   const [previewCardSide, setPreviewCardSide] = useState<'front' | 'back'>('front');
   const [includeQrCode, setIncludeQrCode] = useState(true);
   const [includeStampBox, setIncludeStampBox] = useState(true);
+  const [includeSupervisorStamp, setIncludeSupervisorStamp] = useState(true);
   const [includeOfficialHeader, setIncludeOfficialHeader] = useState(true);
+  const [colorMode, setColorMode] = useState<PrintColorMode>('color');
+  const [copies, setCopies] = useState(1);
+  const [isPrintOptionsOpen, setIsPrintOptionsOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'functional' | 'maintenance' | 'broken'>('all');
+  const [selectedSingleItemId, setSelectedSingleItemId] = useState<string>('');
   const [isPrinting, setIsPrinting] = useState(false);
 
   // Sorting
@@ -183,10 +199,24 @@ export default function InventoryCardsRegistry() {
     broken: items.filter(i => i.status === 'عاطلة' || i.status === 'broken' || i.status === 'مفقودة').length
   };
 
+  // Filtered items based on search and optional status filter
+  const printableItems = React.useMemo(() => {
+    let result = filteredItems;
+    if (statusFilter === 'functional') {
+      result = result.filter(i => i.status === 'جيدة' || i.status === 'functional');
+    } else if (statusFilter === 'maintenance') {
+      result = result.filter(i => i.status === 'تحتاج صيانة' || i.status === 'maintenance' || i.status === 'في الإصلاح');
+    } else if (statusFilter === 'broken') {
+      result = result.filter(i => i.status === 'عاطلة' || i.status === 'broken' || i.status === 'مفقودة');
+    }
+    return result;
+  }, [filteredItems, statusFilter]);
+
   // Open the formatter & preview modal for a specific item
   const openPreviewForCard = (item: InventoryItem) => {
-    const idx = filteredItems.findIndex(i => i.id === item.id);
+    const idx = printableItems.findIndex(i => i.id === item.id);
     setSelectedPreviewIndex(idx >= 0 ? idx : 0);
+    setSelectedSingleItemId(item.id);
     setPrintingItem(item);
     setPrintScope('single');
     setPrintModalMode('filled');
@@ -220,13 +250,81 @@ export default function InventoryCardsRegistry() {
     setIsPreviewModalOpen(true);
   };
 
+  // Open unified Algerian official print preview modal
+  const handleOpenUnifiedPreview = () => {
+    openPrintPreview({
+      title: 'سجل بطاقات الجرد العام للوسائل والتجهيزات التعليمية',
+      subtitle: `${directorate} • ${formatSchoolWithCommune(schoolName, commune)} • السنة الدراسية: ${academicYear || '2025/2026'}`,
+      type: 'table',
+      headers: [
+        '#',
+        'رقم الجرد العام',
+        'تعيين الشيء / التجهيز',
+        'الجرد التأسيسي',
+        'المراجعة العشرية',
+        'الكمية',
+        'المصدر / الممون',
+        'الموقع والمقر',
+        'الحالة الوظيفية',
+        'ملاحظات'
+      ],
+      rows: printableItems.map((item, idx) => [
+        idx + 1,
+        item.serialNumber,
+        item.name,
+        item.foundationalInventory || '—',
+        item.decennialReview || '—',
+        item.totalQuantity,
+        item.supplier || '—',
+        item.location || 'مخبر الوسائل',
+        item.status,
+        item.notes || '—'
+      ]),
+      suggestedOrientation: 'landscape'
+    });
+  };
+
+  // Export to Excel
+  const handleExportExcel = () => {
+    try {
+      const dataToExport = printableItems.map((item, idx) => ({
+        'الرقم': idx + 1,
+        'رقم الجرد العام': item.serialNumber,
+        'تعيين الشيء': item.name,
+        'الجرد التأسيسي': item.foundationalInventory || '—',
+        'المراجعة العشرية': item.decennialReview || '—',
+        'الكمية': item.totalQuantity,
+        'المصدر / الممون': item.supplier || '—',
+        'مكان الحفظ والموقع': item.location || '—',
+        'الحالة الوظيفية': item.status,
+        'ملاحظات': item.notes || '—'
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      ws['!cols'] = [
+        { wch: 8 }, { wch: 16 }, { wch: 32 }, { wch: 16 }, 
+        { wch: 16 }, { wch: 10 }, { wch: 26 }, { wch: 22 }, 
+        { wch: 16 }, { wch: 28 }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'سجل بطاقات الجرد');
+      XLSX.writeFile(wb, `سجل_بطاقات_الجرد_${schoolName || 'المؤسسة'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) {
+      console.error('Excel export error:', e);
+    }
+  };
+
   // Direct print trigger with specific scope
-  const triggerPrint = async (scope: PrintScope, item?: InventoryItem) => {
+  const triggerPrint = async (scope: PrintScope = printScope, item?: InventoryItem) => {
     setPrintScope(scope);
     if (item) {
       setPrintingItem(item);
-    } else if (scope === 'single' && filteredItems[selectedPreviewIndex]) {
-      setPrintingItem(filteredItems[selectedPreviewIndex]);
+    } else if (scope === 'single' && selectedSingleItemId) {
+      const found = printableItems.find(i => i.id === selectedSingleItemId);
+      if (found) setPrintingItem(found);
+    } else if (scope === 'single' && printableItems[selectedPreviewIndex]) {
+      setPrintingItem(printableItems[selectedPreviewIndex]);
     } else {
       setPrintingItem(null);
     }
@@ -234,10 +332,25 @@ export default function InventoryCardsRegistry() {
     setIsPrinting(true);
     try {
       let targetItems: InventoryItem[] = [];
-      if (scope === 'table' || scope === 'all') {
-        targetItems = filteredItems;
+      if (printModalMode === 'blank') {
+        targetItems = [{
+          id: 'blank',
+          serialNumber: '',
+          name: '',
+          foundationalInventory: '',
+          decennialReview: '',
+          totalQuantity: 0,
+          supplier: '',
+          price: '',
+          location: '',
+          status: '',
+          notes: ''
+        }];
+      } else if (scope === 'table' || scope === 'all') {
+        targetItems = printableItems;
       } else {
-        const single = item || (filteredItems[selectedPreviewIndex] ? filteredItems[selectedPreviewIndex] : printingItem || filteredItems[0]);
+        const found = selectedSingleItemId ? printableItems.find(i => i.id === selectedSingleItemId) : null;
+        const single = item || found || (printableItems[selectedPreviewIndex] ? printableItems[selectedPreviewIndex] : printingItem || printableItems[0]);
         targetItems = single ? [single] : [];
       }
 
@@ -245,7 +358,7 @@ export default function InventoryCardsRegistry() {
         items: targetItems,
         paperFormat,
         printSides,
-        printScope: scope,
+        printScope: printModalMode === 'blank' ? 'single' : scope,
         directorate,
         schoolName,
         commune,
@@ -253,6 +366,10 @@ export default function InventoryCardsRegistry() {
         includeOfficialHeader,
         includeQrCode,
         includeStampBox,
+        includeSupervisorStamp,
+        colorMode,
+        isEconomical: colorMode === 'grayscale',
+        copies
       });
     } catch (err) {
       console.warn('Iframe print error, falling back to window.print():', err);
@@ -456,8 +573,8 @@ export default function InventoryCardsRegistry() {
             <div className="border-b-2 border-black pb-3 mb-4">
               <div className="flex justify-between items-start text-xs font-bold leading-tight">
                 <div>
-                  مديرية التربية لولاية: {directorate}<br />
-                  المؤسسة: {schoolName} ({commune})<br />
+                  {directorate}<br />
+                  {schoolName} ({commune})<br />
                   مخبر الوسائل التعليمية والعلوم
                 </div>
                 <div className="text-center">
@@ -676,11 +793,17 @@ export default function InventoryCardsRegistry() {
 
                       {/* Front Bottom Signature & Stamp Area */}
                       {includeStampBox && (
-                        <div className="grid grid-cols-2 gap-4 text-center text-[7pt] font-bold border-t border-black pt-1.5 mt-2">
+                        <div className={`grid ${includeSupervisorStamp ? 'grid-cols-3' : 'grid-cols-2'} gap-4 text-center text-[7pt] font-bold border-t border-black pt-1.5 mt-2`}>
                           <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
                             <span>تأشيرة وختم المقتصد / مسير المصالح الاقتصادية:</span>
                             <div className="h-9"></div>
                           </div>
+                          {includeSupervisorStamp && (
+                            <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
+                              <span>الناظر (التوقيع والختم):</span>
+                              <div className="h-9"></div>
+                            </div>
+                          )}
                           <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
                             <span>تأشيرة وختم رئيس المؤسسة (المدير):</span>
                             <div className="h-9"></div>
@@ -860,52 +983,81 @@ export default function InventoryCardsRegistry() {
         </div>
 
         {/* Action Toolbar */}
-        <div className="flex flex-wrap justify-between items-center gap-4 mb-8 no-print">
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6 no-print">
           <div className="flex flex-wrap items-center gap-3">
             <button 
               onClick={() => navigate(ROUTES.EQUIPMENT)}
-              className="group flex items-center gap-2.5 px-6 py-3.5 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm"
+              className="group flex items-center gap-2 px-5 py-3.5 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm cursor-pointer"
             >
               <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
               {t('inventory_cards.btn_add_equipment', 'إضافة تجهيز')}
             </button>
 
-            {/* PREVIEW & FORMAT BUTTON - PRIMARY ACTION */}
+            {/* DEDICATED PRINT OPTIONS BUTTON (PROMINENT TOGGLE) */}
+            <button 
+              onClick={() => setIsPrintOptionsOpen(prev => !prev)}
+              className={cn(
+                "group flex items-center gap-2.5 px-5 py-3.5 rounded-2xl font-black shadow-lg transition-all text-sm cursor-pointer border-2",
+                isPrintOptionsOpen 
+                  ? "bg-amber-600 text-white border-amber-500 shadow-amber-600/30 scale-[1.02]" 
+                  : "bg-surface-container-high hover:bg-surface-container-highest text-primary border-primary/20 hover:border-primary/40 shadow-sm"
+              )}
+              title="فتح وإغلاق لوحة خيارات وإعدادات الطباعة الرسمية"
+            >
+              <SlidersHorizontal size={18} className={cn("transition-transform duration-300", isPrintOptionsOpen && "rotate-90")} />
+              <span>خيارات الطباعة</span>
+              <span className={cn(
+                "text-[10px] px-2 py-0.5 rounded-full font-bold",
+                isPrintOptionsOpen ? "bg-white/25 text-white" : "bg-primary/10 text-primary"
+              )}>
+                {paperFormat} • {colorMode === 'color' ? 'ملون' : colorMode === 'grayscale' ? 'رمادي' : 'أبيض/أسود'}
+              </span>
+              <ChevronDown size={14} className={cn("transition-transform duration-300", isPrintOptionsOpen && "rotate-180")} />
+            </button>
+
+            {/* PREVIEW & FORMAT BUTTON */}
             <button 
               onClick={openBatchPreview}
-              className="flex items-center gap-2.5 px-6 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black shadow-lg shadow-amber-600/25 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-2xl font-black shadow-lg shadow-amber-600/25 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm cursor-pointer"
+              title="معاينة نموذج البطاقة وتنسيقها في نافذة مخصصة"
             >
-              <Sliders size={18} />
-              <span>معاينة وتنسيق نموذج الطباعة</span>
+              <Eye size={18} />
+              <span>معاينة نموذج الطباعة</span>
             </button>
 
             {/* DIRECT PRINT CARDS BUTTON */}
             <button 
-              onClick={openBatchPreview}
-              className="flex items-center gap-2.5 px-6 py-3.5 bg-secondary hover:bg-secondary-dim text-white rounded-2xl font-black shadow-lg shadow-secondary/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm cursor-pointer"
+              onClick={() => triggerPrint(printScope)}
+              disabled={isPrinting}
+              className="flex items-center gap-2 px-5 py-3.5 bg-secondary hover:bg-secondary-dim text-white rounded-2xl font-black shadow-lg shadow-secondary/20 hover:scale-[1.02] active:scale-[0.98] transition-all text-sm cursor-pointer disabled:opacity-50"
+              title="طباعة بطاقات الجرد مباشرة بالإعدادات المحددة"
             >
-              <Printer size={18} />
-              {t('inventory_cards.btn_print_cards', 'طباعة بطاقات الجرد')}
+              {isPrinting ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Printer size={18} />
+              )}
+              <span>{t('inventory_cards.btn_print_cards', 'طباعة بطاقات الجرد')}</span>
             </button>
 
             {/* BLANK FORM TEMPLATE BUTTON */}
             <button 
               onClick={openBlankPreview}
-              className="flex items-center gap-2.5 px-5 py-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-2xl font-black shadow-sm transition-all text-sm cursor-pointer"
+              className="flex items-center gap-2 px-4 py-3.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/30 rounded-2xl font-black shadow-sm transition-all text-xs cursor-pointer"
               title="طباعة استمارة بطاقة جرد فارغة للملء اليدوي"
             >
-              <Edit3 size={18} />
-              <span>استمارة فارغة (للملء اليدوي)</span>
+              <Edit3 size={16} />
+              <span>استمارة فارغة</span>
             </button>
 
             {/* PRINT REGISTRY TABLE BUTTON */}
             <button 
-              onClick={openTablePreview}
-              className="flex items-center gap-2.5 px-5 py-3.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-2xl font-black shadow transition-all text-sm cursor-pointer"
-              title="طباعة السجل الإجمالي كجدول رسمي A4 أفقي"
+              onClick={handleOpenUnifiedPreview}
+              className="flex items-center gap-2 px-4 py-3.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-2xl font-black shadow transition-all text-xs cursor-pointer"
+              title="معاينة وطباعة السجل الإجمالي كجدول رسمي A4 أفقي"
             >
-              <FileSpreadsheet size={18} />
-              <span>طباعة السجل كجدول</span>
+              <FileSpreadsheet size={16} />
+              <span>السجل كجدول</span>
             </button>
           </div>
 
@@ -923,6 +1075,396 @@ export default function InventoryCardsRegistry() {
             />
           </div>
         </div>
+
+        {/* =========================================================================
+            EXPANDABLE PRINT OPTIONS PANEL (لوحة خيارات الطباعة الرسمية)
+            ========================================================================= */}
+        <AnimatePresence>
+          {isPrintOptionsOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0, y: -10 }}
+              animate={{ opacity: 1, height: 'auto', y: 0 }}
+              exit={{ opacity: 0, height: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden mb-8 no-print"
+            >
+              <div className="bg-gradient-to-br from-surface-container-low to-surface-container p-5 md:p-6 rounded-3xl border-2 border-amber-500/30 shadow-xl space-y-6">
+                
+                {/* Header of Options Panel */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-outline/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-700 dark:text-amber-400 flex items-center justify-center border border-amber-500/25">
+                      <SlidersHorizontal size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-primary flex items-center gap-2">
+                        <span>لوحة خيارات وإعدادات طباعة بطاقات وسجل الجرد</span>
+                        <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                          النموذج الجزائري الرسمي المعتمد
+                        </span>
+                      </h3>
+                      <p className="text-xs text-on-surface/60 font-medium mt-0.5">
+                        تخصيص كامل للمقاس، الأوجه، الترويسة، الأختام، نمط الألوان والتوفير الاقتصادي للحبر
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openPrintSettingsModal}
+                      className="px-3.5 py-2 rounded-xl text-xs font-black bg-surface hover:bg-surface-container text-primary border border-primary/20 flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                      title="فتح إعدادات الطباعة العامة للمؤسسة والشعار"
+                    >
+                      <Settings size={14} />
+                      <span>إعدادات المؤسسة والشعار</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPrintOptionsOpen(false)}
+                      className="p-2 rounded-xl text-on-surface/50 hover:text-on-surface hover:bg-surface transition-colors cursor-pointer"
+                      title="إخفاء لوحة خيارات الطباعة"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Grid of Options Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  
+                  {/* Column 1: Print Scope & Filter */}
+                  <div className="p-4 bg-surface rounded-2xl border border-outline/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                        <Layers size={14} />
+                        <span>1. نطاق البطاقات المراد طباعتها:</span>
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-on-surface/60">
+                        {printableItems.length} تجهيز
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {[
+                        { id: 'all', label: `جميع البطاقات (${items.length})`, icon: Database },
+                        { id: 'table', label: 'سجل الجرد العام كجدول رسمي A4', icon: FileSpreadsheet },
+                        { id: 'single', label: 'بطاقة تجهيز مفردة', icon: FileText }
+                      ].map((sc) => (
+                        <button
+                          key={sc.id}
+                          type="button"
+                          onClick={() => {
+                            setPrintScope(sc.id as PrintScope);
+                            if (sc.id === 'table') setPaperFormat('A4');
+                            if (sc.id === 'single' && !selectedSingleItemId && printableItems[0]) {
+                              setSelectedSingleItemId(printableItems[0].id);
+                            }
+                          }}
+                          className={cn(
+                            "w-full p-2.5 rounded-xl text-right text-xs font-black border transition-all flex items-center justify-between cursor-pointer",
+                            printScope === sc.id
+                              ? "bg-primary text-white border-primary shadow-xs"
+                              : "bg-surface-container-low hover:bg-surface-container text-on-surface/80 border-transparent"
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <sc.icon size={14} />
+                            <span>{sc.label}</span>
+                          </div>
+                          {printScope === sc.id && <Check size={14} />}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Single card item selector dropdown */}
+                    {printScope === 'single' && (
+                      <div className="pt-2 border-t border-outline/10 space-y-1">
+                        <label className="text-[11px] font-bold text-on-surface/70 block">اختر التجهيز للطباعة:</label>
+                        <select
+                          value={selectedSingleItemId || (printableItems[0]?.id || '')}
+                          onChange={(e) => {
+                            setSelectedSingleItemId(e.target.value);
+                            const found = printableItems.find(i => i.id === e.target.value);
+                            if (found) setPrintingItem(found);
+                          }}
+                          className="w-full p-2 bg-surface-container-low rounded-xl border border-outline/15 text-xs font-bold outline-none focus:border-primary cursor-pointer"
+                        >
+                          {printableItems.map((it, idx) => (
+                            <option key={it.id || idx} value={it.id}>
+                              {it.serialNumber} — {it.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Filter by status */}
+                    <div className="pt-2 border-t border-outline/10 space-y-1.5">
+                      <span className="text-[11px] font-black text-on-surface/70 block">تصفية التجهيزات حسب الحالة:</span>
+                      <div className="grid grid-cols-2 gap-1 text-[10px]">
+                        {[
+                          { id: 'all', label: 'الكل' },
+                          { id: 'functional', label: 'جيدة فقط' },
+                          { id: 'maintenance', label: 'صيانة' },
+                          { id: 'broken', label: 'عاطلة / مفقودة' }
+                        ].map(st => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setStatusFilter(st.id as any)}
+                            className={cn(
+                              "py-1.5 px-2 rounded-lg font-bold border transition-all text-center cursor-pointer",
+                              statusFilter === st.id
+                                ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40"
+                                : "bg-surface-container-low hover:bg-surface-container border-transparent text-on-surface/60"
+                            )}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column 2: Paper Format & Orientation */}
+                  <div className="p-4 bg-surface rounded-2xl border border-outline/10 space-y-3">
+                    <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                      <FileText size={14} />
+                      <span>2. مقاس الورق والتخطيط:</span>
+                    </span>
+
+                    <div className="space-y-2">
+                      {[
+                        { id: 'A5', label: 'A5 قياسي (148×210 mm)', desc: 'النموذج الوزاري المعتمد لكل بطاقة' },
+                        { id: 'A4', label: 'A4 كامل (210×297 mm)', desc: 'صفحة كاملة لكل بطاقة بخط كبير' },
+                        { id: 'A4_DUAL', label: 'A4 مزدوج (بطاقتان في الورقة)', desc: 'يوفر 50% من الورق مع خط قص منقط' }
+                      ].map((fmt) => (
+                        <button
+                          key={fmt.id}
+                          type="button"
+                          onClick={() => setPaperFormat(fmt.id as PaperFormat)}
+                          className={cn(
+                            "w-full p-2.5 rounded-xl text-right border transition-all cursor-pointer",
+                            paperFormat === fmt.id
+                              ? "bg-primary/10 border-primary text-primary shadow-xs"
+                              : "bg-surface-container-low hover:bg-surface-container border-transparent text-on-surface/80"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black">{fmt.label}</span>
+                            {paperFormat === fmt.id && <Check size={14} />}
+                          </div>
+                          <p className="text-[10px] text-on-surface/50 font-medium mt-0.5">{fmt.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Sides selector */}
+                    {printScope !== 'table' && (
+                      <div className="pt-2 border-t border-outline/10 space-y-1.5">
+                        <span className="text-[11px] font-black text-on-surface/70 block">أوجه الطباعة:</span>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { id: 'both', label: 'الوجهان' },
+                            { id: 'front', label: 'أمامي' },
+                            { id: 'back', label: 'خلفي' }
+                          ].map(sd => (
+                            <button
+                              key={sd.id}
+                              type="button"
+                              onClick={() => setPrintSides(sd.id as PrintSides)}
+                              className={cn(
+                                "py-1.5 px-2 rounded-lg text-xs font-bold border transition-all text-center cursor-pointer",
+                                printSides === sd.id
+                                  ? "bg-primary text-white border-primary"
+                                  : "bg-surface-container-low border-transparent text-on-surface/70 hover:bg-surface-container"
+                              )}
+                            >
+                              {sd.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Column 3: Color Mode & Copies */}
+                  <div className="p-4 bg-surface rounded-2xl border border-outline/10 space-y-3">
+                    <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                      <Droplet size={14} />
+                      <span>3. نمط الألوان واستهلاك الحبر:</span>
+                    </span>
+
+                    <div className="space-y-2">
+                      {[
+                        { id: 'color', label: 'ملون رسمي', desc: 'ألوان متناسقة للوثائق الرسمية المميزة', badge: 'عالي الجودة' },
+                        { id: 'grayscale', label: 'تدرج رمادي لتوفير الحبر', desc: 'خلفيات رمادية ونصوص سوداء حادة لتوفير مسحوق الحبر', badge: 'اقتصادي (Eco)' },
+                        { id: 'bw', label: 'أبيض وأسود للنسخ', desc: 'أبيض وأسود عالي التباين مناسب لآلات النسخ والفاكس', badge: 'نسخ سريع' }
+                      ].map((cm) => (
+                        <button
+                          key={cm.id}
+                          type="button"
+                          onClick={() => setColorMode(cm.id as PrintColorMode)}
+                          className={cn(
+                            "w-full p-2.5 rounded-xl text-right border transition-all cursor-pointer",
+                            colorMode === cm.id
+                              ? "bg-amber-500/15 border-amber-600 text-amber-900 dark:text-amber-200 shadow-xs"
+                              : "bg-surface-container-low hover:bg-surface-container border-transparent text-on-surface/80"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black">{cm.label}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-outline/10 font-bold">{cm.badge}</span>
+                          </div>
+                          <p className="text-[10px] text-on-surface/50 font-medium mt-0.5">{cm.desc}</p>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Copies Counter */}
+                    <div className="pt-2 border-t border-outline/10 flex items-center justify-between">
+                      <span className="text-[11px] font-black text-on-surface/70">عدد النسخ:</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCopies(prev => Math.max(1, prev - 1))}
+                          className="w-7 h-7 rounded-lg bg-surface-container-low hover:bg-surface-container border border-outline/15 font-black text-xs cursor-pointer flex items-center justify-center"
+                        >
+                          -
+                        </button>
+                        <span className="w-8 text-center font-mono font-black text-xs">{copies}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCopies(prev => prev + 1)}
+                          className="w-7 h-7 rounded-lg bg-surface-container-low hover:bg-surface-container border border-outline/15 font-black text-xs cursor-pointer flex items-center justify-center"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Column 4: Official Documentation & Stamps */}
+                  <div className="p-4 bg-surface rounded-2xl border border-outline/10 space-y-3">
+                    <span className="text-xs font-black text-primary flex items-center gap-1.5">
+                      <Stamp size={14} />
+                      <span>4. عناصر التوثيق والأختام الرسمية:</span>
+                    </span>
+
+                    <div className="space-y-2 text-xs font-bold text-on-surface/80">
+                      <label className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer">
+                        <span>الترويسة الرسمية للجمهورية</span>
+                        <input
+                          type="checkbox"
+                          checked={includeOfficialHeader}
+                          onChange={(e) => setIncludeOfficialHeader(e.target.checked)}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer">
+                        <span className="flex items-center gap-1.5">
+                          <QrCode size={13} className="text-primary" />
+                          <span>رمز الاستجابة السريعة (QR)</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={includeQrCode}
+                          onChange={(e) => setIncludeQrCode(e.target.checked)}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-xl bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer">
+                        <span>خانات التأشيرات والأختام الرسمية</span>
+                        <input
+                          type="checkbox"
+                          checked={includeStampBox}
+                          onChange={(e) => setIncludeStampBox(e.target.checked)}
+                          className="rounded text-primary focus:ring-primary h-4 w-4"
+                        />
+                      </label>
+
+                      {includeStampBox && (
+                        <label className="flex items-center justify-between p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary transition-colors cursor-pointer">
+                          <span>خانة الناظر (التوقيع والختم)</span>
+                          <input
+                            type="checkbox"
+                            checked={includeSupervisorStamp}
+                            onChange={(e) => setIncludeSupervisorStamp(e.target.checked)}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Footer Action Buttons in Panel */}
+                <div className="pt-4 border-t border-outline/10 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Open interactive modal with current choices */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPreviewIndex(0);
+                        setIsPreviewModalOpen(true);
+                      }}
+                      className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-md shadow-amber-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <Eye size={15} />
+                      <span>معاينة وتنسيق نموذج الطباعة</span>
+                    </button>
+
+                    {/* Direct print now */}
+                    <button
+                      type="button"
+                      onClick={() => triggerPrint(printScope)}
+                      disabled={isPrinting}
+                      className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-white font-black text-xs shadow-md shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isPrinting ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <Printer size={15} />
+                      )}
+                      <span>طباعة فورية بالإعدادات الحالية</span>
+                    </button>
+
+                    {/* Open unified Algerian table preview */}
+                    <button
+                      type="button"
+                      onClick={handleOpenUnifiedPreview}
+                      className="px-4 py-2.5 rounded-xl bg-surface text-on-surface border border-outline/20 font-black text-xs hover:bg-surface-container hover:text-primary transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="معاينة وطباعة السجل كجدول رسمي A4 أفقي"
+                    >
+                      <FileSpreadsheet size={15} />
+                      <span>معاينة السجل الموحدة</span>
+                    </button>
+
+                    {/* Excel export */}
+                    <button
+                      type="button"
+                      onClick={handleExportExcel}
+                      className="px-4 py-2.5 rounded-xl bg-surface text-emerald-700 dark:text-emerald-400 border border-emerald-300/40 font-black text-xs hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="تصدير بيانات السجل إلى ملف Excel"
+                    >
+                      <Download size={15} />
+                      <span>تصدير Excel</span>
+                    </button>
+                  </div>
+
+                  <div className="text-xs font-bold text-on-surface/50">
+                    جاهز للطباعة: {printableItems.length} تجهيز • مقاس {paperFormat} • {colorMode === 'color' ? 'ملون' : colorMode === 'grayscale' ? 'تدرج رمادي' : 'أبيض/أسود'}
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 no-print">
@@ -1126,8 +1668,8 @@ export default function InventoryCardsRegistry() {
                         <Eye size={15} />
                       </button>
                       <button 
-                        onClick={() => openPreviewForCard(item)}
-                        title={t('inventory_cards.print_individual', 'معاينة وطباعة بطاقة هذا التجهيز')}
+                        onClick={() => triggerPrint('single', item)}
+                        title={t('inventory_cards.print_individual', 'طباعة فورية لبطاقة هذا التجهيز')}
                         className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors border border-primary/20 hover:border-primary/40 cursor-pointer"
                       >
                         <Printer size={15} />
@@ -1145,7 +1687,7 @@ export default function InventoryCardsRegistry() {
         <div className="mt-8 flex flex-wrap justify-between items-center text-xs font-black text-on-surface/40 no-print gap-4">
           <div className="flex items-center gap-2">
             <Database size={16} />
-            {t('inventory_cards.item_count', 'عدد التجهيزات في السجل: {{count}} من أصل {{total}}', { count: filteredItems.length, total: items.length })}
+            {t('inventory_cards.item_count', 'عدد التجهيزات في السجل: {{count}} من أصل {{total}}', { count: printableItems.length, total: items.length })}
           </div>
           <div className="italic text-[11pt] text-gray-500">
             {t('inventory_cards.official_notice', 'هذا السجل ونماذج بطاقات الجرد تعتبر وثائق رسمية لجرد الوسائل التعليمية المعتمدة')}
@@ -1157,10 +1699,18 @@ export default function InventoryCardsRegistry() {
       <InventoryCardPrintModal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
-        items={filteredItems}
-        initialItem={printingItem}
+        items={printableItems}
+        initialItem={selectedSingleItemId ? printableItems.find(i => i.id === selectedSingleItemId) || printingItem : printingItem}
         initialScope={printScope}
         initialMode={printModalMode}
+        initialPaperFormat={paperFormat}
+        initialPrintSides={printSides}
+        initialColorMode={colorMode}
+        initialIncludeHeader={includeOfficialHeader}
+        initialIncludeQr={includeQrCode}
+        initialIncludeStamp={includeStampBox}
+        initialIncludeSupervisorStamp={includeSupervisorStamp}
+        initialCopies={copies}
         schoolInfo={{
           directorate: directorate || "مديرية التربية لولاية أم البواقي",
           schoolName: schoolName || "متوسطة قطاف الطاهر",

@@ -304,8 +304,8 @@ export default function ActivityRequestPrintModal({
               isEconomical ? 'border-zinc-400' : 'border-[#c8d2c3]'
             }`}>
               <div className="text-right leading-relaxed">
-                <div>مديرية التربية: {schoolInfo.directorate}</div>
-                <div>المؤسسة: {formattedSchool}</div>
+                <div>{schoolInfo.directorate}</div>
+                <div>{formattedSchool}</div>
               </div>
               <div className="text-left leading-relaxed">
                 <div>السنة الدراسية: {schoolInfo.academicYear}</div>

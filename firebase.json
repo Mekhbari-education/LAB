@@ -11,10 +11,17 @@
     ],
     "rewrites": [
       {
+        "source": "/api/gemini",
+        "function": "generateContent"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ]
+  },
+  "storage": {
+    "rules": "storage.rules"
   },
   "firestore": [
     {

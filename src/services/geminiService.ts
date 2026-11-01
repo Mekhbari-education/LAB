@@ -1,5 +1,6 @@
 import { Type } from "@google/genai";
 import { logger } from './loggingService';
+import { auth } from '../firebase';
 
 // ── اسم الموديل في مكان واحد — غيّره هنا فقط إذا احتجت ─────────────────────
 const GEMINI_MODEL = "gemini-3.8-flash";
@@ -16,11 +17,27 @@ export async function callGeminiAPI(reqBody: any, retries = 2, delay = 1000) {
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
   const apiUrl = `${apiBase}/api/gemini`;
 
+  let token = '';
+  try {
+    if (auth?.currentUser) {
+      token = await auth.currentUser.getIdToken();
+    }
+  } catch (tErr) {
+    console.warn('Could not retrieve Firebase token for Gemini API:', tErr);
+  }
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(apiUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(reqBody)
       });
       if (!res.ok) {

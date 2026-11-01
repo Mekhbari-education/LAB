@@ -1,7 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // --- Helpers ---
+
+    // --- Global Helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -13,96 +14,142 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.admin == true ||
-        request.auth.token.email == 'faycalassoul@gmail.com'
+        (request.auth.token.email_verified == true && request.auth.token.email == 'faycalassoul@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
 
-    // --- User Documents ---
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(userId) || isAdmin();
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    match /users {
+
+    function hasUserDoc() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isSchoolMember(schoolId) {
+      return isSignedIn() && (
+        isAdmin() ||
+        (hasUserDoc() && getUserDoc().schoolId == schoolId) ||
+        (request.auth.uid == schoolId)
+      );
+    }
+
+    // --- Trusted Admin Directory ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- User Documents (PII Protection & Role Tamper Proofing) ---
+    match /users/{userId} {
+      // Profile can only be read by the owner user or verified admin
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      // Users cannot elevate themselves to admin or change their role/isAdmin flag
+      allow create: if isOwner(userId) && 
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+        (!('role' in request.resource.data) || request.resource.data.role != 'Admin' || isAdmin());
+
+      allow update: if (isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'role'])) || 
+        isAdmin();
+
+      allow delete: if isAdmin();
+    }
+
+    // --- Registered Schools Directory (School Registration & Verification) ---
+    match /registered_schools/{schoolId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSchoolMember(schoolId) || isAdmin();
+    }
+    match /registered_schools {
       allow list: if isSignedIn();
     }
 
-    // --- Registered Schools Directory (Multi-Tenant Linking) ---
-    match /registered_schools/{schoolId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /registered_schools {
-      allow list: if true;
-    }
-
-    // --- Shared School Data (all subcollections and documents) ---
+    // --- School-Scoped Isolated Data (All Subcollections: chemicals, equipment, etc.) ---
     match /schools/{schoolId}/{allPaths=**} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(schoolId);
     }
-    match /schools/{id} {
-      allow read, write: if isSignedIn();
-    }
-    
-    match /school_metadata/{allPaths=**} {
-      allow read: if true;
+    match /schools/{schoolId} {
+      allow read, write: if isSchoolMember(schoolId);
     }
 
-    // --- Settings Profile & Shared School Settings ---
+    match /school_metadata/{schoolId} {
+      allow read: if isSignedIn();
+      allow write: if isSchoolMember(schoolId) || isAdmin();
+    }
+
+    // --- Settings Profiles (School Settings & User Calibration) ---
+    // Strictly requires sign-in and school membership or owner verification
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isSignedIn();
+      allow read: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isAdmin());
+      allow write: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isAdmin()) &&
+        // Prevent setting-based admin privilege escalation
+        ((!('role' in request.resource.data) || request.resource.data.role != 'Admin' || isAdmin()) &&
+         (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || isAdmin()));
     }
     match /settings {
-      allow list: if true;
+      allow list: if isAdmin();
     }
 
     // --- Teachers Directory ---
     match /teachers/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || (resource != null && 'schoolId' in resource.data ? isSchoolMember(resource.data.schoolId) : true));
     }
     match /teachers {
       allow list: if isSignedIn();
     }
 
-    // Public National Legislation (Shared official decrees, circulars and laws across all schools)
+    // --- Public National Legislation (Read by authenticated school staff, write by Admin only) ---
     match /public_legislation/{id} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
     match /public_legislation {
       allow list: if isSignedIn();
     }
 
-    // Resilient file storage chunks for PDFs
-    match /stored_blobs/{allPaths=**} {
-      allow read, write: if isSignedIn();
+    // --- Resilient PDF File Storage Chunks ---
+    match /stored_blobs/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
     }
 
-    // User administrative documents & correspondence
+    // --- User Administrative Documents & Correspondence ---
     match /user_admin_documents/{id} {
-      allow read, write: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        (('schoolId' in resource.data) && isSchoolMember(resource.data.schoolId)) ||
+        isAdmin()
+      );
     }
     match /user_admin_documents {
       allow list: if isSignedIn();
     }
 
-    // Global Collections
+    // --- Support Tickets & Purchase Requests ---
     match /support_tickets/{id} {
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
     match /support_tickets {
-      allow list: if isAdmin();
+      allow list: if isAdmin() || isSignedIn();
     }
 
     match /purchase_requests/{id} {
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
     match /purchase_requests {
-      allow list: if isAdmin();
+      allow list: if isAdmin() || isSignedIn();
     }
 
-    // Connection Test
+    // --- Connection Test & Diagnostics ---
     match /_connection_test_/{id} {
       allow read, write: if isSignedIn();
     }
@@ -112,21 +159,21 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
-    // Root level data collections fallback for backward compatibility
+    // --- Fallback Root Collections (Scoped by school membership) ---
     match /chemicals/{id} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(id) || isAdmin();
     }
     match /equipment/{id} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(id) || isAdmin();
     }
     match /reports/{id} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(id) || isAdmin();
     }
     match /experiment_logs/{id} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(id) || isAdmin();
     }
     match /safety_incidents/{id} {
-      allow read, write: if isSignedIn();
+      allow read, write: if isSchoolMember(id) || isAdmin();
     }
   }
 }

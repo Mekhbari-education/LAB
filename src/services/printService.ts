@@ -1,6 +1,22 @@
 import { PrintSettings, PrintPreviewData, DEFAULT_PRINT_SETTINGS } from '../types/printSettings';
 import { formatSchoolWithCommune } from '../lib/utils';
 import logo from '/ministry-logo.png';
+import DOMPurify from 'dompurify';
+
+export function sanitizeHtml(rawHtml: string): string {
+  if (!rawHtml) return '';
+  return DOMPurify.sanitize(rawHtml, {
+    FORCE_BODY: false,
+    ADD_TAGS: ['style', 'head', 'body', 'html', 'title', 'link'],
+    ADD_ATTR: [
+      'target', 'style', 'class', 'align', 'valign', 'border', 
+      'cellpadding', 'cellspacing', 'dir', 'href', 'rel', 'width', 'height',
+      'colspan', 'rowspan', 'scope', 'id', 'name', 'nowrap'
+    ],
+    FORBID_TAGS: ['script', 'iframe', 'object', 'embed'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'formaction']
+  });
+}
 
 /**
  * Robust Printing Service for Lab Education DZ
@@ -163,10 +179,6 @@ export class PrintService {
    * incorporating the active PrintSettings.
    */
   static generateReportHtml(data: PrintPreviewData, settings: PrintSettings = DEFAULT_PRINT_SETTINGS): string {
-    if (data.customHtml && (data.customHtml.includes('<html') || data.customHtml.includes('<!DOCTYPE'))) {
-      return data.customHtml;
-    }
-
     const {
       title,
       subtitle,
@@ -175,11 +187,62 @@ export class PrintService {
       summaryCards = [],
       notes,
       suggestedOrientation,
-      customHtml
+      customHtml: rawCustomHtml
     } = data;
 
-    const orientation = suggestedOrientation || (settings.layout.orientation === 'auto' ? 'portrait' : settings.layout.orientation);
+    let extractedCustomBody = '';
+    let extractedCustomStyles = '';
+    if (rawCustomHtml) {
+      const styleMatches = rawCustomHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+      if (styleMatches) {
+        extractedCustomStyles = styleMatches
+          .map(tag => tag.replace(/<\/?style[^>]*>/gi, ''))
+          .join('\n');
+      }
+      const bodyMatch = rawCustomHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyMatch) {
+        extractedCustomBody = sanitizeHtml(bodyMatch[1]);
+      } else {
+        extractedCustomBody = sanitizeHtml(rawCustomHtml);
+      }
+    }
+
+    const hasBuiltInHeader = Boolean(
+      extractedCustomBody && (
+        extractedCustomBody.includes('republic-header') ||
+        extractedCustomBody.includes('official-header') ||
+        extractedCustomBody.includes('institution-bar') ||
+        extractedCustomBody.includes('title-banner') ||
+        extractedCustomBody.includes('inst-info')
+      )
+    );
+
+    const hasBuiltInSignatures = Boolean(
+      extractedCustomBody && (
+        extractedCustomBody.includes('signatures-grid') ||
+        extractedCustomBody.includes('signatures-section') ||
+        extractedCustomBody.includes('signatures-table') ||
+        extractedCustomBody.includes('sig-box')
+      )
+    );
+
+    const orientation = (settings.layout.orientation && settings.layout.orientation !== 'auto') 
+      ? settings.layout.orientation 
+      : (suggestedOrientation || 'portrait');
     const paperSize = settings.layout.paperSize || 'a4';
+
+    // Sheet dimensions in mm
+    const sheetWidth = paperSize === 'a3' 
+      ? (orientation === 'landscape' ? '420mm' : '297mm')
+      : paperSize === 'letter'
+      ? (orientation === 'landscape' ? '279.4mm' : '215.9mm')
+      : (orientation === 'landscape' ? '297mm' : '210mm');
+
+    const sheetMinHeight = paperSize === 'a3'
+      ? (orientation === 'landscape' ? '297mm' : '420mm')
+      : paperSize === 'letter'
+      ? (orientation === 'landscape' ? '215.9mm' : '279.4mm')
+      : (orientation === 'landscape' ? '210mm' : '297mm');
 
     // Margins mapping in mm
     let marginMm = 14;
@@ -190,24 +253,52 @@ export class PrintService {
     let scaleMultiplier = 1;
     if (settings.layout.fontSizeScale === 'small') scaleMultiplier = 0.88;
     if (settings.layout.fontSizeScale === 'large') scaleMultiplier = 1.15;
+    if (settings.layout.customScalePercent && settings.layout.customScalePercent !== 100) {
+      scaleMultiplier *= (settings.layout.customScalePercent / 100);
+    }
 
     // Color mode rules
     const isGrayscale = settings.appearance.colorMode === 'grayscale';
     const isBw = settings.appearance.colorMode === 'blackAndWhite';
 
-    const brandPrimary = isBw ? '#000000' : isGrayscale ? '#333333' : '#2b3d22';
-    const brandAccent = isBw ? '#333333' : isGrayscale ? '#555555' : '#415437';
-    const bgHeader = isBw ? '#ffffff' : isGrayscale ? '#e2e2e2' : '#2b3d22';
-    const textHeader = isBw ? '#000000' : isGrayscale ? '#111111' : '#ffffff';
+    const brandPrimary = isBw ? '#000000' : isGrayscale ? '#1a1a1a' : '#2b3d22';
+    const brandAccent = isBw ? '#333333' : isGrayscale ? '#444444' : '#415437';
+    const bgHeader = isBw ? '#000000' : isGrayscale ? '#e2e2e2' : '#2b3d22';
+    const textHeader = isBw ? '#ffffff' : isGrayscale ? '#000000' : '#ffffff';
     const rowZebraBg = settings.appearance.tableStriped
       ? (isBw ? '#ffffff' : isGrayscale ? '#f5f5f5' : '#f9faf7')
       : '#ffffff';
     const borderColor = isBw ? '#000000' : '#d2d8ce';
 
+    // Windows Print Settings additions
+    const gutterMm = settings.layout?.gutterMm || 0;
+    const lineHeightVal = settings.layout?.lineHeight === 'compact' ? '1.3' : settings.layout?.lineHeight === 'relaxed' ? '1.7' : '1.45';
+    const borderStyleVal = settings.appearance?.borderStyle || 'standard';
+    const tableBorderColor = (isBw || settings.appearance?.highContrastBorders || borderStyleVal === 'high_contrast') 
+      ? '#000000' 
+      : borderStyleVal === 'double_official' 
+      ? '#2b3d22' 
+      : borderColor;
+
+    // Watermark text
+    let watermarkText = '';
+    const wm = settings.appearance?.watermark;
+    if (wm === 'official') watermarkText = 'رسمي';
+    else if (wm === 'draft') watermarkText = 'مسودة';
+    else if (wm === 'confidential') watermarkText = 'سري للغاية';
+    else if (wm === 'certified') watermarkText = 'نسخة مصادق عليها';
+    else if (wm === 'lab_copy') watermarkText = 'خاص بالمخبر';
+    else if (wm === 'custom') watermarkText = settings.appearance?.customWatermarkText || '';
+
     const currentDate = new Date().toLocaleDateString('ar-DZ', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
+    });
+
+    const currentTime = new Date().toLocaleTimeString('ar-DZ', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
 
     const inst = settings.institution;
@@ -241,7 +332,7 @@ export class PrintService {
       color: #1a1a1a;
       background-color: #ffffff;
       font-size: ${11 * scaleMultiplier}pt;
-      line-height: 1.4;
+      line-height: ${lineHeightVal};
       direction: rtl;
     }
 
@@ -249,6 +340,8 @@ export class PrintService {
     .sheet {
       width: 100%;
       background: #ffffff;
+      padding-right: ${gutterMm}mm;
+      position: relative;
     }
 
     /* Official Ministry Header */
@@ -458,6 +551,387 @@ export class PrintService {
       color: #aaa;
     }
 
+    /* Algerian Laboratory & Custom Documents Formatting */
+    .republic-header {
+      text-align: center;
+      font-size: ${14 * scaleMultiplier}pt;
+      font-weight: 900;
+      color: ${brandPrimary};
+      margin-bottom: 2px;
+      font-family: 'Amiri', serif;
+      letter-spacing: 0.3px;
+      ${!settings.institution.showRepublicHeader || settings.institution.headerStyle === 'minimal' ? 'display: none !important;' : ''}
+    }
+    .ministry-header {
+      text-align: center;
+      font-size: ${12 * scaleMultiplier}pt;
+      font-weight: 700;
+      color: ${brandAccent};
+      margin-bottom: 5px;
+      font-family: 'Amiri', serif;
+      ${!settings.institution.showMinistry || settings.institution.headerStyle === 'minimal' ? 'display: none !important;' : ''}
+    }
+    .institution-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      font-size: ${10 * scaleMultiplier}pt;
+      font-weight: bold;
+      color: #32382c;
+      border-bottom: ${isBw ? '2px solid #000' : '1.5px solid #c8d2c3'};
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+      line-height: 1.5;
+      font-family: 'Amiri', serif;
+    }
+    .title-banner {
+      background-color: ${bgHeader};
+      color: ${textHeader};
+      border: ${isBw ? '2px solid #000' : 'none'};
+      border-radius: 4px;
+      padding: 7px 14px;
+      text-align: center;
+      margin: 6px 0 8px;
+    }
+    .title-banner h1 {
+      margin: 0;
+      font-size: ${15 * scaleMultiplier}pt;
+      font-weight: 800;
+      color: ${textHeader};
+      font-family: 'Cairo', sans-serif;
+    }
+    .title-banner .subtitle {
+      margin: 2px 0 0;
+      font-size: ${9.5 * scaleMultiplier}pt;
+      color: ${isBw ? '#222222' : isGrayscale ? '#222222' : '#e6f0dc'};
+      font-family: 'Amiri', serif;
+    }
+    .summary-cards {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .summary-card {
+      flex: 1;
+      background: ${isBw ? '#fff' : isGrayscale ? '#f2f2f2' : '#f5f8f2'};
+      border: 1px solid ${tableBorderColor};
+      border-radius: 4px;
+      padding: 5px 8px;
+      text-align: center;
+    }
+    .summary-card .label {
+      font-size: ${8.5 * scaleMultiplier}pt;
+      color: #64735f;
+      font-family: 'Amiri', serif;
+      margin-bottom: 1px;
+    }
+    .summary-card .value {
+      font-size: ${11.5 * scaleMultiplier}pt;
+      font-weight: bold;
+      color: ${brandPrimary};
+      font-family: 'Cairo', sans-serif;
+    }
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
+      font-size: ${10 * scaleMultiplier}pt;
+      ${borderStyleVal === 'double_official' ? 'border: 3px double #2b3d22 !important;' : ''}
+    }
+    table.data-table th {
+      background-color: ${bgHeader};
+      color: ${textHeader};
+      font-weight: bold;
+      border: 1px solid ${tableBorderColor};
+      padding: 6px 7px;
+      text-align: right;
+      font-family: 'Cairo', sans-serif;
+      font-size: ${9.5 * scaleMultiplier}pt;
+    }
+    table.data-table td {
+      border: 1px solid ${tableBorderColor};
+      padding: 5px 7px;
+      vertical-align: middle;
+      background-color: #ffffff;
+    }
+    ${settings.appearance.tableStriped ? `
+      table.data-table tbody tr:nth-child(even) td {
+        background-color: ${rowZebraBg};
+      }
+    ` : `
+      table.data-table tbody tr td {
+        background-color: #ffffff !important;
+      }
+    `}
+    table.observations-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0 4px;
+      font-size: ${9.5 * scaleMultiplier}pt;
+    }
+    table.observations-table th {
+      background-color: ${isBw ? '#f0f0f0' : isGrayscale ? '#e8e8e8' : '#f5f8f2'};
+      color: ${brandPrimary};
+      font-weight: bold;
+      border: 1px solid ${tableBorderColor};
+      padding: 4px 6px;
+      text-align: center;
+      font-family: 'Cairo', sans-serif;
+      font-size: ${9.5 * scaleMultiplier}pt;
+    }
+    table.observations-table td {
+      border: 1px solid ${tableBorderColor};
+      padding: 6px 8px;
+      vertical-align: top;
+      min-height: 48px;
+      line-height: 1.4;
+      background: #ffffff;
+    }
+    .release-line {
+      text-align: left;
+      margin: 6px 0 6px;
+      font-weight: bold;
+      font-size: ${10.5 * scaleMultiplier}pt;
+      color: ${brandPrimary};
+      font-family: 'Cairo', sans-serif;
+    }
+    .signatures-grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 6px;
+      text-align: center;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      ${!settings.signatures.showSignatures ? 'display: none !important;' : ''}
+    }
+    .sig-box {
+      flex: 1;
+      border: 1px solid ${tableBorderColor};
+      border-radius: 4px;
+      padding: 6px 8px;
+      background: #fefefd;
+      min-height: ${settings.signatures.reserveStampSpace ? '75px' : '60px'};
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    ${!settings.signatures.showNazir ? `
+      .signatures-grid .sig-box:nth-child(2),
+      .signatures-grid .sig-box-nazir {
+        display: none !important;
+      }
+    ` : ''}
+    ${settings.signatures.signersCount === 1 ? `
+      .signatures-grid .sig-box:nth-child(2),
+      .signatures-grid .sig-box:nth-child(3),
+      .signatures-grid .sig-box-nazir,
+      .signatures-grid .sig-box-principal {
+        display: none !important;
+      }
+    ` : ''}
+    .sig-title {
+      font-weight: bold;
+      font-size: ${10.5 * scaleMultiplier}pt;
+      color: ${brandPrimary};
+      font-family: 'Cairo', sans-serif;
+    }
+    .sig-content {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sig-placeholder {
+      color: #828c7d;
+      font-size: 8.5pt;
+      font-family: 'Amiri', serif;
+    }
+    /* Universal styling for all custom tables and forms */
+    .custom-report-content table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      margin: 6px 0 !important;
+    }
+    .custom-report-content table th,
+    .custom-report-content th {
+      background-color: ${bgHeader} !important;
+      color: ${textHeader} !important;
+      font-weight: bold !important;
+      border: 1px solid ${tableBorderColor} !important;
+      padding: 6px 8px !important;
+      text-align: center !important;
+      font-family: 'Cairo', sans-serif !important;
+      font-size: ${9.5 * scaleMultiplier}pt !important;
+    }
+    .custom-report-content table td,
+    .custom-report-content td {
+      border: 1px solid ${tableBorderColor} !important;
+      padding: 5px 8px !important;
+      vertical-align: middle !important;
+      background-color: #ffffff;
+    }
+    ${settings.appearance.tableStriped ? `
+      .custom-report-content table tbody tr:nth-child(even) td,
+      .custom-report-content table tr:nth-child(even) td {
+        background-color: ${rowZebraBg};
+      }
+    ` : ''}
+    .custom-report-content .paper-wrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      background: transparent !important;
+    }
+
+    /* Color mode filters on entire sheet */
+    ${isBw ? `
+      .sheet, .custom-report-content {
+        filter: grayscale(100%) contrast(150%) !important;
+      }
+    ` : isGrayscale ? `
+      .sheet, .custom-report-content {
+        filter: grayscale(100%) !important;
+      }
+    ` : ''}
+
+    /* Extracted custom styles if any */
+    ${extractedCustomStyles}
+
+    /* Media queries specifically optimizing for screen view and paper/PDF print */
+    @media screen {
+      html, body {
+        background-color: #f1f5f9 !important;
+        margin: 0 !important;
+        padding: 20px 12px !important;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .print-action-bar {
+        width: 100%;
+        max-width: ${sheetWidth};
+        background: #ffffff;
+        border: 1px solid #d2d8ce;
+        border-radius: 12px;
+        padding: 10px 18px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        position: sticky;
+        top: 10px;
+        z-index: 1000;
+        direction: rtl;
+        font-family: 'Cairo', sans-serif;
+      }
+
+      .sheet {
+        width: 100% !important;
+        max-width: ${sheetWidth} !important;
+        min-height: ${sheetMinHeight} !important;
+        background: #ffffff !important;
+        padding: ${marginMm}mm !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 4px;
+        margin: 0 auto;
+        box-sizing: border-box !important;
+      }
+    }
+
+    @media print {
+      @page {
+        size: ${paperSize} ${orientation};
+        margin: ${marginMm}mm;
+      }
+
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .no-print, .print-action-bar {
+        display: none !important;
+      }
+
+      .sheet {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+      }
+
+      .paper-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: auto !important;
+        box-shadow: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: transparent !important;
+      }
+
+      table {
+        page-break-inside: auto;
+        border-collapse: collapse !important;
+      }
+
+      tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+
+      thead {
+        display: table-header-group;
+      }
+
+      tfoot {
+        display: table-footer-group;
+      }
+
+      .signatures-section,
+      .signatures-grid,
+      .signature-card,
+      .sig-box,
+      .observations-table,
+      .notes-box,
+      .approval-box,
+      .closing-formula,
+      .release-line {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      .official-header,
+      .document-title-banner,
+      .republic-header,
+      .ministry-header,
+      .institution-bar,
+      .title-banner {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+    }
+
     /* Footer disclaimer */
     .document-footer {
       margin-top: 15px;
@@ -471,15 +945,38 @@ export class PrintService {
   </style>
 </head>
 <body>
+  <!-- Screen Floating Top Action Bar -->
+  <div class="print-action-bar no-print">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <strong style="color: #2b3d22; font-size: 14px;">${title}</strong>
+      <span style="font-size: 11px; background: #f0f3ed; color: #415437; padding: 2px 8px; border-radius: 6px; border: 1px solid #d2d8ce;">
+        ${paperSize.toUpperCase()} · ${orientation === 'landscape' ? 'أفقي' : 'عمودي'}
+      </span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button onclick="window.print()" style="background: #2b3d22; color: #ffffff; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 12px; display: flex; align-items: center; gap: 6px;">
+        <span>🖨️ طباعة فورية</span>
+      </button>
+      <button onclick="window.close()" style="background: #e2e8f0; color: #334155; border: none; padding: 6px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 12px;">
+        إغلاق
+      </button>
+    </div>
+  </div>
+
   <div class="sheet">
-    ${settings.institution.headerStyle !== 'minimal' ? `
+    ${watermarkText ? `
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 65pt; font-weight: 900; color: rgba(180, 190, 175, 0.16); border: 5px dashed rgba(180, 190, 175, 0.2); padding: 8px 36px; border-radius: 12px; pointer-events: none; z-index: 99; white-space: nowrap; letter-spacing: 4px; user-select: none;">
+      ${watermarkText}
+    </div>
+    ` : ''}
+    ${(!hasBuiltInHeader && settings.institution.headerStyle !== 'minimal') ? `
     <header class="official-header">
       ${inst.showRepublicHeader ? `<h2 class="republic-title">${inst.country}</h2>` : ''}
       ${inst.showMinistry ? `<h3 class="ministry-title">${inst.ministry}</h3>` : ''}
       
       <div class="header-details-grid">
         <div class="header-col-right">
-          <div><strong>مديرية التربية:</strong> ${inst.directorate}</div>
+          <div>${inst.directorate}</div>
           <div>${formatSchoolWithCommune(inst.school, inst.commune)}</div>
           <div><strong>المخبر:</strong> ${inst.laboratory}</div>
         </div>
@@ -499,12 +996,14 @@ export class PrintService {
     </header>
     ` : ''}
 
+    ${!hasBuiltInHeader ? `
     <div class="document-title-banner">
       <h1>${title}</h1>
       ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}
     </div>
+    ` : ''}
 
-    ${summaryCards.length > 0 ? `
+    ${summaryCards.length > 0 && !hasBuiltInHeader ? `
     <div class="summary-grid">
       ${summaryCards.map(c => `
         <div class="summary-card">
@@ -515,7 +1014,7 @@ export class PrintService {
     </div>
     ` : ''}
 
-    ${headers.length > 0 && rows.length > 0 ? `
+    ${(!extractedCustomBody && headers.length > 0 && rows.length > 0) ? `
     <table class="report-table">
       <thead>
         <tr>
@@ -532,26 +1031,36 @@ export class PrintService {
     </table>
     ` : ''}
 
-    ${customHtml ? `
+    ${extractedCustomBody ? `
     <div class="custom-report-content" dir="rtl">
-      ${customHtml}
+      ${extractedCustomBody}
     </div>
     ` : ''}
 
-    ${notes ? `
+    ${notes && !hasBuiltInHeader ? `
     <div class="notes-box">
       <strong>ملاحظات وإرشادات إدارية:</strong>
       <div>${notes}</div>
     </div>
     ` : ''}
 
-    ${sig.showSignatures ? `
+    ${(sig.showSignatures && !hasBuiltInSignatures) ? `
     <div class="signatures-section">
       ${sig.showLabManager ? `
       <div class="signature-card">
         <div>
           <div class="signature-card-title">${sig.labManagerTitle}</div>
           <div class="signature-card-subtitle">(الاسم، التوقيع والختم)</div>
+        </div>
+        ${sig.reserveStampSpace ? `<div class="stamp-circle-zone">موضع الختم</div>` : ''}
+      </div>
+      ` : ''}
+
+      ${sig.showNazir ? `
+      <div class="signature-card">
+        <div>
+          <div class="signature-card-title">${sig.nazirTitle || 'الناظر'}</div>
+          <div class="signature-card-subtitle">(التوقيع والختم)</div>
         </div>
         ${sig.reserveStampSpace ? `<div class="stamp-circle-zone">موضع الختم</div>` : ''}
       </div>
@@ -571,7 +1080,7 @@ export class PrintService {
       <div class="signature-card">
         <div>
           <div class="signature-card-title">${sig.inspectorTitle}</div>
-          <div class="signature-card-subtitle">(تأشيرة المفتش وتاريخ الزيارة)</div>
+          <div class="signature-card-subtitle">(ختم المفتش وتاريخ الزيارة)</div>
         </div>
         ${sig.reserveStampSpace ? `<div class="stamp-circle-zone">موضع الختم</div>` : ''}
       </div>
@@ -589,11 +1098,14 @@ export class PrintService {
     </div>
     ` : ''}
 
+    ${(Boolean(settings.appearance.showPrintDateTime) || Boolean(settings.appearance.showPageNumbers)) ? `
     <footer class="document-footer">
       <div>${sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
       <div>${formatSchoolWithCommune(inst.school, inst.commune)} — ${inst.laboratory}</div>
-      <div>صفحة 1 من 1</div>
+      ${settings.appearance.showPrintDateTime ? `<div>طُبع في: ${currentDate} ${currentTime}</div>` : ''}
+      ${settings.appearance.showPageNumbers ? `<div>صفحة 1 من 1</div>` : ''}
     </footer>
+    ` : ''}
   </div>
 </body>
 </html>
@@ -795,6 +1307,39 @@ export class PrintService {
       customHtml
     } = data;
 
+    let extractedCustomBody = '';
+    let extractedCustomStyles = '';
+    if (customHtml) {
+      const styleMatches = customHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
+      if (styleMatches) {
+        extractedCustomStyles = styleMatches
+          .map(tag => tag.replace(/<\/?style[^>]*>/gi, ''))
+          .join('\n');
+      }
+      const bodyMatch = customHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      extractedCustomBody = bodyMatch ? bodyMatch[1] : customHtml;
+    }
+
+    const hasBuiltInHeader = Boolean(
+      customHtml && (
+        customHtml.includes('republic-header') ||
+        customHtml.includes('republic-title') ||
+        customHtml.includes('official-header') ||
+        customHtml.includes('institution-bar') ||
+        customHtml.includes('title-banner') ||
+        customHtml.includes('inst-info')
+      )
+    );
+
+    const hasBuiltInSignatures = Boolean(
+      customHtml && (
+        customHtml.includes('signatures-grid') ||
+        customHtml.includes('signatures-section') ||
+        customHtml.includes('signatures-table') ||
+        customHtml.includes('sig-box')
+      )
+    );
+
     const orientation = suggestedOrientation || (settings.layout.orientation === 'auto' ? 'portrait' : settings.layout.orientation);
     const isLandscape = orientation === 'landscape';
     const inst = settings.institution;
@@ -910,14 +1455,15 @@ export class PrintService {
           }
           .card-label { font-size: 8.5pt; color: #555555; }
           .card-value { font-size: 11pt; font-weight: bold; color: #2b3d22; margin-top: 2pt; }
-          .data-table {
+          
+          .data-table, .custom-content table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 10pt;
             border: 1.5pt solid #2b3d22;
             direction: rtl;
           }
-          .data-table th {
+          .data-table th, .custom-content table th, .custom-content th {
             background-color: #2b3d22;
             color: #ffffff;
             border: 1pt solid #2b3d22;
@@ -927,13 +1473,21 @@ export class PrintService {
             text-align: center;
             font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
           }
-          .data-table td {
+          .data-table td, .custom-content table td, .custom-content td {
             border: 1pt solid #c2c9bc;
             padding: 5pt 6pt;
             font-size: 9pt;
             color: #1a1a1a;
             font-family: 'Traditional Arabic', 'Amiri', 'Arial', sans-serif;
           }
+          .custom-content .paper-wrapper {
+            width: 100%;
+            border: none;
+            padding: 0;
+            margin: 0;
+          }
+          ${extractedCustomStyles}
+
           .notes-table {
             width: 100%;
             border-collapse: collapse;
@@ -993,14 +1547,15 @@ export class PrintService {
       </head>
       <body lang="AR-DZ" dir="rtl">
         <div class="Section1">
+          ${!hasBuiltInHeader ? `
           <p class="republic-title">${inst.country || 'الجمهورية الجزائرية الديمقراطية الشعبية'}</p>
           <p class="ministry-title">${inst.ministry || 'وزارة التربية الوطنية'}</p>
 
           <table class="header-table" dir="rtl">
             <tr>
               <td style="text-align: right; width: 50%;">
-                <div><strong>مديرية التربية لولاية:</strong> ${directorate}</div>
-                <div><strong>المؤسسة التعليمية:</strong> ${formattedSchool}</div>
+                <div>${directorate}</div>
+                <div>${formattedSchool}</div>
                 <div><strong>المصلحة / المخبر:</strong> ${labName}</div>
               </td>
               <td style="text-align: left; width: 50%;" dir="rtl">
@@ -1031,10 +1586,11 @@ export class PrintService {
               </tr>
             </table>
           ` : ''}
+          ` : ''}
 
-          ${customHtml && headers.length === 0 ? `
+          ${extractedCustomBody ? `
             <div class="custom-content" dir="rtl">
-              ${customHtml}
+              ${extractedCustomBody}
             </div>
           ` : `
           <table class="data-table" dir="rtl">
@@ -1055,7 +1611,7 @@ export class PrintService {
           </table>
           `}
 
-          ${notes ? `
+          ${notes && !hasBuiltInHeader ? `
             <table class="notes-table" dir="rtl">
               <tr>
                 <td><strong>ملاحظات وتوجيهات:</strong> ${notes}</td>
@@ -1063,15 +1619,22 @@ export class PrintService {
             </table>
           ` : ''}
 
-          ${sig.showSignatures ? `
+          ${(sig.showSignatures && !hasBuiltInSignatures) ? `
             <table class="signatures-table" dir="rtl">
               <tr>
-                <td>
+                <td style="width: ${sig.showNazir ? '33.3%' : '50%'};">
                   <div class="sig-title">${sig.labManagerTitle || 'المسؤول عن المخبر'}</div>
                   <div class="sig-space">(الاسم، التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">حرر بتاريخ: ....................</div>
                 </td>
-                <td>
+                ${sig.showNazir ? `
+                <td style="width: 33.3%;">
+                  <div class="sig-title">${sig.nazirTitle || 'الناظر'}</div>
+                  <div class="sig-space">(التوقيع والختم)</div>
+                  <div style="font-size: 7.5pt; color: #777;">الختم ومصادقة</div>
+                </td>
+                ` : ''}
+                <td style="width: ${sig.showNazir ? '33.3%' : '50%'};">
                   <div class="sig-title">${sig.principalTitle || 'مدير(ة) المؤسسة'}</div>
                   <div class="sig-space">(التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">في: .............................</div>

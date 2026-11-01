@@ -139,7 +139,7 @@ export default function Layout() {
         : currentRole === 'teacher' 
         ? 'فضاء الأستاذ' 
         : currentRole === 'censor' 
-        ? 'فضاء ناظر الدروس' 
+        ? 'فضاء الناظر' 
         : currentRole === 'director' 
         ? 'فضاء مدير المؤسسة' 
         : 'فضاء المقتصد والمسير المالي',
@@ -160,7 +160,7 @@ export default function Layout() {
           { name: t('nav.scientific_hub', 'فضاء الموارد العلمية والمحاكاة'), path: ROUTES.SCIENTIFIC_HUB, icon: Atom },
         ] : []),
         ...(currentRole === 'censor' ? [
-          { name: 'فضاء ناظر الدروس (الرئيسي)', path: ROUTES.CENSOR_PORTAL, icon: FileCheck },
+          { name: 'فضاء الناظر (الرئيسي)', path: ROUTES.CENSOR_PORTAL, icon: FileCheck },
           { name: t('nav.pedagogical_dashboard', 'اللوحة البيداغوجية وتنسيق المخابر'), path: ROUTES.PEDAGOGICAL_DASHBOARD, icon: BookOpen },
           { name: t('nav.daily_report', 'تأشيرة التقارير اليومية'), path: ROUTES.DAILY_REPORT, icon: FileText },
         ] : []),

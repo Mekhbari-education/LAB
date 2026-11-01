@@ -70,39 +70,28 @@ export const storage = getStorage(app);
 export async function checkIsAdmin(user: any): Promise<boolean> {
   if (!user) return false;
   try {
-    // 1. Primary admin account check
-    if (user.email && (user.email === 'faycalassoul@gmail.com' || user.email.toLowerCase().includes('admin'))) {
+    // 1. Primary server-set custom claims check (authoritative)
+    const idTokenResult = await user.getIdTokenResult(true);
+    if (idTokenResult?.claims?.admin === true) {
       return true;
     }
 
-    // 2. Custom claims check
-    const idTokenResult = await user.getIdTokenResult();
-    if (idTokenResult?.claims?.admin) return true;
-
-    // 3. Firestore role check
-    const userDocRef = doc(db, 'users', user.uid);
-    const userSnap = await getDoc(userDocRef);
-    if (userSnap.exists()) {
-      const data = userSnap.data();
-      if (data?.role === 'Admin' || data?.role === 'admin' || data?.isAdmin === true) {
-        return true;
-      }
+    // 2. Primary root administrator email with email verification
+    if (user.email === 'faycalassoul@gmail.com' && user.emailVerified) {
+      return true;
     }
 
-    // 4. Settings check
-    const settingsDocRef = doc(db, 'settings', user.uid);
-    const settingsSnap = await getDoc(settingsDocRef);
-    if (settingsSnap.exists()) {
-      const sData = settingsSnap.data();
-      if (sData?.role === 'Admin' || sData?.role === 'admin' || sData?.isAdmin === true) {
-        return true;
-      }
+    // 3. Trusted server-protected admin document check (/admins/{uid})
+    // Regular users have write: if false; on /admins
+    const adminDocRef = doc(db, 'admins', user.uid);
+    const adminSnap = await getDoc(adminDocRef);
+    if (adminSnap.exists() && adminSnap.data()?.active === true) {
+      return true;
     }
 
     return false;
   } catch (error) {
-    if (user.email === 'faycalassoul@gmail.com') return true;
-    fbError("Error checking admin claim:", error);
+    fbError("Error verifying server admin authorization:", error);
     return false;
   }
 }

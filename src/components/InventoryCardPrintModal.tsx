@@ -37,6 +37,7 @@ import {
   PaperFormat, 
   PrintSides, 
   PrintScope,
+  PrintColorMode,
   printInventoryCards,
   generateInventoryCardsHtml
 } from '../services/inventoryCardPrintService';
@@ -50,6 +51,14 @@ interface InventoryCardPrintModalProps {
   initialItem?: InventoryItemForPrint | null;
   initialScope?: PrintScope;
   initialMode?: 'filled' | 'blank';
+  initialPaperFormat?: PaperFormat;
+  initialPrintSides?: PrintSides;
+  initialColorMode?: PrintColorMode;
+  initialIncludeHeader?: boolean;
+  initialIncludeQr?: boolean;
+  initialIncludeStamp?: boolean;
+  initialIncludeSupervisorStamp?: boolean;
+  initialCopies?: number;
   schoolInfo: {
     directorate: string;
     schoolName: string;
@@ -65,13 +74,21 @@ export default function InventoryCardPrintModal({
   initialItem,
   initialScope = 'all',
   initialMode = 'filled',
+  initialPaperFormat = 'A5',
+  initialPrintSides = 'both',
+  initialColorMode = 'color',
+  initialIncludeHeader = true,
+  initialIncludeQr = true,
+  initialIncludeStamp = true,
+  initialIncludeSupervisorStamp = true,
+  initialCopies = 1,
   schoolInfo
 }: InventoryCardPrintModalProps) {
   // Modal display modes
   const [mode, setMode] = useState<'filled' | 'blank'>(initialMode);
   const [printScope, setPrintScope] = useState<PrintScope>(initialScope);
-  const [paperFormat, setPaperFormat] = useState<PaperFormat>('A5');
-  const [printSides, setPrintSides] = useState<PrintSides>('both');
+  const [paperFormat, setPaperFormat] = useState<PaperFormat>(initialPaperFormat);
+  const [printSides, setPrintSides] = useState<PrintSides>(initialPrintSides);
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
 
   // Selected item index for single card preview / navigation
@@ -85,11 +102,13 @@ export default function InventoryCardPrintModal({
   const [showPrintTips, setShowPrintTips] = useState<boolean>(false);
 
   // Advanced print preferences
-  const [copies, setCopies] = useState<number>(1);
-  const [isEconomical, setIsEconomical] = useState<boolean>(false);
-  const [includeOfficialHeader, setIncludeOfficialHeader] = useState<boolean>(true);
-  const [includeQrCode, setIncludeQrCode] = useState<boolean>(true);
-  const [includeStampBox, setIncludeStampBox] = useState<boolean>(true);
+  const [copies, setCopies] = useState<number>(initialCopies);
+  const [colorMode, setColorMode] = useState<PrintColorMode>(initialColorMode);
+  const [isEconomical, setIsEconomical] = useState<boolean>(initialColorMode === 'grayscale');
+  const [includeOfficialHeader, setIncludeOfficialHeader] = useState<boolean>(initialIncludeHeader);
+  const [includeQrCode, setIncludeQrCode] = useState<boolean>(initialIncludeQr);
+  const [includeStampBox, setIncludeStampBox] = useState<boolean>(initialIncludeStamp);
+  const [includeSupervisorStamp, setIncludeSupervisorStamp] = useState<boolean>(initialIncludeSupervisorStamp);
   const [lineStyle, setLineStyle] = useState<'dotted' | 'solid'>('dotted');
   const [blankRowsCount, setBlankRowsCount] = useState<number>(6);
 
@@ -102,6 +121,15 @@ export default function InventoryCardPrintModal({
     if (isOpen) {
       setMode(initialMode);
       setPrintScope(initialScope);
+      setPaperFormat(initialPaperFormat);
+      setPrintSides(initialPrintSides);
+      setColorMode(initialColorMode);
+      setIsEconomical(initialColorMode === 'grayscale');
+      setIncludeOfficialHeader(initialIncludeHeader);
+      setIncludeQrCode(initialIncludeQr);
+      setIncludeStampBox(initialIncludeStamp);
+      setIncludeSupervisorStamp(initialIncludeSupervisorStamp);
+      setCopies(initialCopies);
       if (initialItem && items.length > 0) {
         const found = items.findIndex(i => i.id === initialItem.id || i.serialNumber === initialItem.serialNumber);
         setSelectedIndex(found >= 0 ? found : 0);
@@ -109,7 +137,21 @@ export default function InventoryCardPrintModal({
         setSelectedIndex(0);
       }
     }
-  }, [isOpen, initialItem, initialScope, initialMode, items]);
+  }, [
+    isOpen, 
+    initialItem, 
+    initialScope, 
+    initialMode, 
+    initialPaperFormat, 
+    initialPrintSides, 
+    initialColorMode, 
+    initialIncludeHeader, 
+    initialIncludeQr, 
+    initialIncludeStamp, 
+    initialIncludeSupervisorStamp, 
+    initialCopies, 
+    items
+  ]);
 
   // Current active item
   const currentItem: InventoryItemForPrint = useMemo(() => {
@@ -181,7 +223,11 @@ export default function InventoryCardPrintModal({
         academicYear: schoolInfo.academicYear || '2025/2026',
         includeOfficialHeader,
         includeQrCode,
-        includeStampBox
+        includeStampBox,
+        includeSupervisorStamp,
+        colorMode,
+        isEconomical: colorMode === 'grayscale' || isEconomical,
+        copies
       });
     } catch (e) {
       console.error('Print cards error:', e);
@@ -198,7 +244,11 @@ export default function InventoryCardPrintModal({
     schoolInfo, 
     includeOfficialHeader, 
     includeQrCode, 
-    includeStampBox
+    includeStampBox,
+    includeSupervisorStamp,
+    colorMode,
+    isEconomical,
+    copies
   ]);
 
   // Global Ctrl+P keyboard shortcut
@@ -650,16 +700,62 @@ export default function InventoryCardPrintModal({
                         />
                       </label>
 
-                      {/* Eco Mode */}
-                      <label className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-outline/10 cursor-pointer text-xs font-bold text-on-surface/80 hover:bg-surface-container-low transition-colors">
-                        <span>وضع التوفير الاقتصادي للحبر</span>
-                        <input
-                          type="checkbox"
-                          checked={isEconomical}
-                          onChange={(e) => setIsEconomical(e.target.checked)}
-                          className="rounded text-primary focus:ring-primary h-4 w-4"
-                        />
-                      </label>
+                      {/* Nazir Stamp toggle */}
+                      {includeStampBox && (
+                        <label className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-primary/20 cursor-pointer text-xs font-bold text-primary hover:bg-primary/5 transition-colors">
+                          <span>تضمين خانة الناظر (التوقيع والختم)</span>
+                          <input
+                            type="checkbox"
+                            checked={includeSupervisorStamp}
+                            onChange={(e) => setIncludeSupervisorStamp(e.target.checked)}
+                            className="rounded text-primary focus:ring-primary h-4 w-4"
+                          />
+                        </label>
+                      )}
+
+                      {/* Color Mode Selector */}
+                      <div className="p-2.5 rounded-xl bg-surface border border-outline/10 space-y-1.5">
+                        <span className="text-[11px] font-black text-on-surface/80 block">
+                          نمط الألوان واستهلاك الحبر:
+                        </span>
+                        <div className="grid grid-cols-3 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => { setColorMode('color'); setIsEconomical(false); }}
+                            className={`py-1.5 px-1.5 rounded-lg text-[10.5px] font-black border transition-all cursor-pointer text-center ${
+                              colorMode === 'color'
+                                ? 'bg-primary text-white border-primary shadow-xs'
+                                : 'bg-surface border-outline/15 text-on-surface/70 hover:bg-surface-container'
+                            }`}
+                          >
+                            ملون رسمي
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setColorMode('grayscale'); setIsEconomical(true); }}
+                            className={`py-1.5 px-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer text-center ${
+                              colorMode === 'grayscale'
+                                ? 'bg-zinc-800 text-white border-zinc-900 shadow-xs'
+                                : 'bg-surface border-outline/15 text-on-surface/70 hover:bg-surface-container'
+                            }`}
+                            title="تدرج رمادي لتوفير الحبر مع نصوص سوداء واضحة"
+                          >
+                            تدرج رمادي
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setColorMode('bw'); setIsEconomical(true); }}
+                            className={`py-1.5 px-1 rounded-lg text-[10px] font-black border transition-all cursor-pointer text-center ${
+                              colorMode === 'bw'
+                                ? 'bg-black text-white border-black shadow-xs'
+                                : 'bg-surface border-outline/15 text-on-surface/70 hover:bg-surface-container'
+                            }`}
+                            title="أبيض وأسود للنسخ والتصوير"
+                          >
+                            أبيض وأسود
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Blank mode line style */}
@@ -809,7 +905,8 @@ export default function InventoryCardPrintModal({
                   backgroundColor: '#ffffff',
                   color: '#000000',
                   boxShadow: '0 20px 40px -15px rgba(0,0,0,0.3)',
-                  border: '1px solid #d4d4d8'
+                  border: '1px solid #d4d4d8',
+                  filter: colorMode === 'grayscale' ? 'grayscale(100%)' : 'none'
                 }}
               >
                 {/* ── Scope A: TABLE REGISTRY VIEW ───────────────────────── */}
@@ -881,8 +978,8 @@ export default function InventoryCardPrintModal({
                           {includeOfficialHeader && (
                             <div className="border-b border-black pb-2 mb-2 flex items-start justify-between">
                               <div className="text-[7pt] leading-tight font-bold text-right">
-                                <div>مديرية التربية لولاية: {schoolInfo.directorate.replace('مديرية التربية لولاية ', '')}</div>
-                                <div>المؤسسة: {formattedSchool}</div>
+                                <div>{schoolInfo.directorate}</div>
+                                <div>{formattedSchool}</div>
                               </div>
                               <div className="text-center flex-1">
                                 <div className="text-[8pt] font-black tracking-tight">الجمهورية الجزائرية الديمقراطية الشعبية</div>
@@ -989,6 +1086,26 @@ export default function InventoryCardPrintModal({
                             </table>
                           </div>
                         </div>
+
+                        {/* Front Stamps Area */}
+                        {includeStampBox && (
+                          <div className={`grid ${includeSupervisorStamp ? 'grid-cols-3' : 'grid-cols-2'} gap-2 text-center text-[6.5pt] font-bold border-t border-black pt-1.5 mt-2`}>
+                            <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
+                              <span>تأشيرة وختم المقتصد:</span>
+                              <div className="h-6"></div>
+                            </div>
+                            {includeSupervisorStamp && (
+                              <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
+                                <span>الناظر (التوقيع والختم):</span>
+                                <div className="h-6"></div>
+                              </div>
+                            )}
+                            <div className="border border-black/40 p-1 rounded-sm bg-gray-50/50">
+                              <span>تأشيرة وختم رئيس المؤسسة:</span>
+                              <div className="h-6"></div>
+                            </div>
+                          </div>
+                        )}
 
                         {/* Front Bottom Notice */}
                         <div className="text-[6.5pt] text-gray-600 italic border-t border-black pt-1 mt-2 text-center">
