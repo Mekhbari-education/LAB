@@ -226,7 +226,8 @@ export function generateEquipmentStickersHtml(options: EquipmentStickerOptions):
 
     // QR Payload: structured compact JSON for scanner apps and smartphone cameras
     const qrPayload = JSON.stringify({
-      app: 'MANARA_LAB',
+      Application: 'الأرضية الرقمية - فضاء موظفوا المخابر',
+      app: 'الأرضية الرقمية - فضاء موظفوا المخابر',
       id: item.id,
       inv: serialNumber,
       name: itemName,

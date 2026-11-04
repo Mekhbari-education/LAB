@@ -1552,9 +1552,18 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
             onScan={(data) => {
               setIsQRScannerOpen(false);
               let actualId = data;
-              if (data.startsWith('APP_ID_')) {
-                const parts = data.split('_');
-                actualId = parts.slice(2, -1).join('_');
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.id) actualId = parsed.id;
+                else if (parsed.inv) {
+                  const bySerial = equipment.find(e => e.serialNumber === parsed.inv);
+                  if (bySerial) actualId = bySerial.id;
+                }
+              } catch {
+                if (data.startsWith('APP_ID_')) {
+                  const parts = data.split('_');
+                  actualId = parts.slice(2, -1).join('_');
+                }
               }
               setSearchTerm(actualId);
               // Find item and pre-fill AddModal (or just filter list)
