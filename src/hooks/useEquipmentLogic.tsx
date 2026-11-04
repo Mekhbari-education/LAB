@@ -15,6 +15,68 @@ import { Equipment, MaintenanceLog } from '../types/equipment';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { generateEquipmentStickersHtml } from '../services/equipmentStickerService';
 
+// Helpers for robust sorting
+export const getPriceNumeric = (val: any): number => {
+  if (val === undefined || val === null) return -1;
+  if (typeof val === 'number') return isNaN(val) ? -1 : val;
+  const str = String(val).replace(/,/g, '.');
+  const cleaned = str.replace(/[^\d.]/g, '');
+  if (!cleaned) return -1;
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? -1 : parsed;
+};
+
+export const getDateNumeric = (val: any): number => {
+  if (!val) return -1;
+  if (val instanceof Date) {
+    const t = val.getTime();
+    return isNaN(t) ? -1 : t;
+  }
+  const str = String(val).trim();
+  if (!str || str === '---' || str === '-' || str === 'لا شيء' || str === 'لا يوجد') return -1;
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+  if (dmyMatch) {
+    let day = parseInt(dmyMatch[1], 10);
+    let month = parseInt(dmyMatch[2], 10) - 1;
+    let year = parseInt(dmyMatch[3], 10);
+    if (year < 100) year += 2000;
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? -1 : d.getTime();
+  }
+
+  // YYYY-MM-DD
+  const ymdMatch = str.match(/^(\d{4})[\/\.-](\d{1,2})[\/\.-](\d{1,2})$/);
+  if (ymdMatch) {
+    const d = new Date(parseInt(ymdMatch[1], 10), parseInt(ymdMatch[2], 10) - 1, parseInt(ymdMatch[3], 10));
+    return isNaN(d.getTime()) ? -1 : d.getTime();
+  }
+
+  const parsed = Date.parse(str);
+  return isNaN(parsed) ? -1 : parsed;
+};
+
+export const getSerialNumeric = (val: any): number => {
+  if (val === undefined || val === null) return 99999999;
+  if (typeof val === 'number') return val;
+  const str = String(val).trim();
+  const digits = str.replace(/\D/g, '');
+  if (!digits) return 99999999;
+  const num = parseInt(digits, 10);
+  return isNaN(num) ? 99999999 : num;
+};
+
+export const normalizeArabicForSort = (str: any): string => {
+  return String(str || '')
+    .trim()
+    .replace(/[\u064B-\u065F]/g, '') // strip tashkeel
+    .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // alef variations -> bare alef
+    .replace(/\u0629/g, '\u0647') // ta marbuta -> heh
+    .replace(/\u0649/g, '\u064A') // alef maqsura -> yaa
+    .toLowerCase();
+};
+
 export function useEquipmentLogic(isNested = false) {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
   const { openPrintPreview, directPrint } = usePrintSettings();
@@ -33,7 +95,7 @@ export function useEquipmentLogic(isNested = false) {
   const [isSmartUpdating, setIsSmartUpdating] = useState(false);
   const [isSmartUpdateConfirmOpen, setIsSmartUpdateConfirmOpen] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
-  const [sortField, setSortField] = useState<keyof Equipment | 'none'>('none');
+  const [sortField, setSortField] = useState<keyof Equipment | 'none'>('serialNumber');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [qrCodeItem, setQrCodeItem] = useState<Equipment | null>(null);
   const [isQRModalOpen, setIsQRModalOpen] = useState(false);
@@ -176,13 +238,25 @@ export function useEquipmentLogic(isNested = false) {
       .replace(/\s+/g, ' ')
       .replace(/[\u06CC\u0649]/g, '\u064A') // Persian Yeh / Alef Maksura -> Arabic Yeh 'ي'
       .replace(/\u06A9/g, '\u0643') // Persian Kaf -> Arabic Kaf 'ك'
-      .replace(/[\u0622\u0623\u0625]/g, '\u0627') // Alef variations -> bare alef 'ا'
+      .replace(/[\u0622\u0623\u0625\u0671]/g, '\u0627') // Alef variations -> bare alef 'ا'
       .replace(/\u0629/g, '\u0647') // Teh Marbuta -> Heh
       .replace(/[\u064B-\u065F]/g, '') // Strip tashkeel
       .toLowerCase();
   };
 
-  const formatExcelCellValue = (val: any): string => {
+  const formatTextCell = (val: any): string => {
+    if (val === undefined || val === null) return '';
+    if (typeof val === 'number') return String(val).trim();
+    if (val instanceof Date) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      return `${d}/${m}/${y}`;
+    }
+    return String(val).trim();
+  };
+
+  const formatDateCell = (val: any): string => {
     if (val === undefined || val === null) return '';
     if (val instanceof Date) {
       const y = val.getFullYear();
@@ -190,7 +264,8 @@ export function useEquipmentLogic(isNested = false) {
       const d = String(val.getDate()).padStart(2, '0');
       return `${d}/${m}/${y}`;
     }
-    if (typeof val === 'number' && val > 20000 && val < 60000) {
+    // Only parse numbers as Excel date serial if strictly within valid date ranges
+    if (typeof val === 'number' && val > 1000 && val < 90000) {
       const date = new Date(Math.round((val - 25569) * 86400 * 1000));
       if (!isNaN(date.getTime())) {
         const y = date.getFullYear();
@@ -199,44 +274,106 @@ export function useEquipmentLogic(isNested = false) {
         return `${d}/${m}/${y}`;
       }
     }
-    return String(val).trim();
+    const str = String(val).trim();
+    if (!str || str === '-' || str === '---') return '';
+    // Format YYYY-MM-DD to DD/MM/YYYY
+    const ymd = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+    if (ymd) {
+      return `${ymd[3].padStart(2, '0')}/${ymd[2].padStart(2, '0')}/${ymd[1]}`;
+    }
+    return str;
   };
 
-  const getRowValue = (row: Record<string, any>, candidates: string[], excludeSubstring?: string): string => {
-    for (const cand of candidates) {
-      if (row[cand] !== undefined && row[cand] !== null) {
-        const formatted = formatExcelCellValue(row[cand]);
-        if (formatted !== '') return formatted;
-      }
+  const formatPriceCell = (val: any): string => {
+    if (val === undefined || val === null) return '';
+    if (typeof val === 'number') {
+      return val > 0 ? `${val.toFixed(2)} دج` : '0 دج';
+    }
+    const str = String(val).trim();
+    if (!str || str === '-' || str === '---') return '';
+    // If it's pure numbers, append currency
+    if (/^\d+(\.\d+)?$/.test(str)) {
+      return `${parseFloat(str).toFixed(2)} دج`;
+    }
+    return str;
+  };
+
+  const formatQuantityCell = (val: any): number => {
+    if (typeof val === 'number') {
+      return Math.max(1, Math.round(val));
+    }
+    const str = String(val || '').trim();
+    const digits = str.replace(/\D/g, '');
+    const parsed = parseInt(digits, 10);
+    return isNaN(parsed) || parsed < 1 ? 1 : parsed;
+  };
+
+  type FieldKey = 
+    | 'serialNumber'
+    | 'registrationDate'
+    | 'name'
+    | 'source'
+    | 'price'
+    | 'location'
+    | 'exitDate'
+    | 'notes'
+    | 'totalQuantity'
+    | 'status'
+    | 'type';
+
+  const matchHeaderToField = (headerText: string): FieldKey | null => {
+    const norm = normalizeHeaderKey(headerText);
+    if (!norm) return null;
+
+    // Disambiguation:
+    // 'تعيين الشيء' or contains 'شيء'/'جهاز'/'عتاد' -> name
+    if (norm.includes('شيء') || norm.includes('جهاز') || norm.includes('عتاد') || norm.includes('صنف') || norm.includes('اسم') || norm.includes('designation') || norm.includes('libelle')) {
+      return 'name';
     }
 
-    const normMap = new Map<string, any>();
-    for (const k of Object.keys(row)) {
-      normMap.set(normalizeHeaderKey(k), row[k]);
+    if (norm.includes('تكفل') || (norm.includes('تسجيل') && norm.includes('تاريخ')) || norm.includes('اقتناء') || norm.includes('دخول') || norm.includes('حيازه')) {
+      return 'registrationDate';
     }
 
-    for (const cand of candidates) {
-      const normCand = normalizeHeaderKey(cand);
-      if (normMap.has(normCand)) {
-        const val = normMap.get(normCand);
-        const formatted = formatExcelCellValue(val);
-        if (formatted !== '') return formatted;
-      }
+    if (norm.includes('خروج') || norm.includes('اسقاط') || norm.includes('شطب') || norm.includes('sortie') || norm.includes('reforme')) {
+      return 'exitDate';
     }
 
-    const normExclude = excludeSubstring ? normalizeHeaderKey(excludeSubstring) : null;
-    for (const cand of candidates) {
-      const normCand = normalizeHeaderKey(cand);
-      for (const [normKey, val] of normMap.entries()) {
-        if (normExclude && normKey.includes(normExclude)) continue;
-        if (normKey.includes(normCand) || normCand.includes(normKey)) {
-          const formatted = formatExcelCellValue(val);
-          if (formatted !== '') return formatted;
-        }
-      }
+    if (norm.includes('قيم') || norm.includes('قیم') || norm.includes('سعر') || norm.includes('مبلغ') || norm.includes('ثمن') || norm.includes('تكلف') || norm.includes('prix') || norm.includes('valeur') || norm.includes('montant') || norm.includes('price') || norm.includes('cost')) {
+      return 'price';
     }
 
-    return '';
+    if (norm.includes('كمي') || norm.includes('عدد') || norm.includes('quantite') || norm.includes('qty')) {
+      return 'totalQuantity';
+    }
+
+    if (norm.includes('مصدر') || norm.includes('مورد') || norm.includes('ممون') || norm.includes('ممول') || norm.includes('توريد') || norm.includes('source') || norm.includes('fournisseur') || norm.includes('supplier') || norm.includes('provenance')) {
+      return 'source';
+    }
+
+    if (norm.includes('ملاحظ') || norm.includes('remarque') || norm.includes('observation') || norm.includes('note') || norm.includes('تعليق')) {
+      return 'notes';
+    }
+
+    if (norm.includes('حال') || norm.includes('etat') || norm.includes('status')) {
+      return 'status';
+    }
+
+    if (norm.includes('نوع') || norm.includes('تصنيف') || norm.includes('type') || norm.includes('categorie')) {
+      return 'type';
+    }
+
+    // Location / Destination: 'التعيين' or 'مكان التواجد' or 'المخبر'
+    if (norm.includes('مكان') || norm.includes('موقع') || norm.includes('قاع') || norm.includes('مخبر') || norm.includes('مصلح') || norm.includes('حفظ') || norm.includes('تعيين') || norm.includes('affectation') || norm.includes('emplacement') || norm.includes('destination') || norm.includes('location')) {
+      return 'location';
+    }
+
+    // Serial / Registration number
+    if (norm.includes('تسجيل') || norm.includes('جرد') || norm.includes('رقم') || norm.includes('قيد') || norm.includes('تسلسل') || norm.startsWith('n') || norm.includes('serial') || norm.includes('code')) {
+      return 'serialNumber';
+    }
+
+    return null;
   };
 
   const handleImportXLS = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -271,48 +408,49 @@ export function useEquipmentLogic(isNested = false) {
       }
 
       // Locate Header Row by scoring the first 25 rows
-      const candidateHeaders = [
-        'رقم التسجيل', 'رقم الجرد', 'الرقم', 'n°', 'numero', 'serial', 'رقم',
-        'تاريخ التكفل', 'تاريخ التسجيل', 'تاريخ الدخول', 'تاريخ الاقتناء', 'date',
-        'تعيين الشيء', 'تعيين العتاد', 'تعيين الجهاز', 'اسم الجهاز', 'اسم الصنف', 'اسم الشيء', 'الاسم', 'designation', 'nom', 'libelle', 'العتاد',
-        'مصدره', 'المصدر', 'المورد', 'الممون', 'طريقة الاقتناء', 'جهة التوريد', 'provenance', 'source', 'fournisseur',
-        'قيمته', 'قیمته', 'القيمة', 'السعر', 'الثمن', 'المبلغ', 'التكلفة', 'valeur', 'prix', 'montant',
-        'التعيين', 'مكان التواجد', 'مكان التعيين', 'الموقع', 'المخبر', 'المصلحة', 'القاعة', 'affectation', 'emplacement', 'destination', 'location',
-        'خروجه', 'تاريخ الخروج', 'الخروج', 'الإسقاط', 'الشطب', 'sortie', 'reforme',
-        'ملاحظات', 'الملاحظات', 'ملاحظة', 'observations', 'remarques', 'notes',
-        'الكمية', 'العدد', 'إجمالي الكمية', 'quantite', 'qty',
-        'الحالة', 'الحالة التشغيلية', 'etat', 'status',
-        'النوع', 'نوع الصنف', 'type', 'categorie'
-      ];
-
       let headerRowIndex = -1;
       let maxMatches = 0;
+      let bestColMap: Record<number, FieldKey> = {};
 
       for (let r = 0; r < Math.min(25, rawRows.length); r++) {
         const row = rawRows[r];
         if (!Array.isArray(row)) continue;
+        const currentMap: Record<number, FieldKey> = {};
         let matches = 0;
-        for (const cell of row) {
-          const str = normalizeHeaderKey(String(cell || ''));
-          if (!str) continue;
-          if (candidateHeaders.some(cand => str.includes(normalizeHeaderKey(cand)) || normalizeHeaderKey(cand).includes(str))) {
+
+        row.forEach((cell, cIdx) => {
+          const str = String(cell || '').trim();
+          if (!str) return;
+          const matched = matchHeaderToField(str);
+          if (matched && !Object.values(currentMap).includes(matched)) {
+            currentMap[cIdx] = matched;
             matches++;
           }
-        }
+        });
+
         if (matches > maxMatches) {
           maxMatches = matches;
           headerRowIndex = r;
+          bestColMap = currentMap;
         }
       }
 
-      // If no strong header row found (less than 2 matches), fallback to 0
+      // If no strong header row found (less than 2 matches), fallback to standard 8 Algerian General Inventory columns
       if (maxMatches < 2) {
         headerRowIndex = 0;
+        bestColMap = {
+          0: 'serialNumber',
+          1: 'registrationDate',
+          2: 'name',
+          3: 'source',
+          4: 'price',
+          5: 'location',
+          6: 'exitDate',
+          7: 'notes'
+        };
       }
 
-      const headerRow = (rawRows[headerRowIndex] || []).map(h => String(h || '').trim());
       const dataRows = rawRows.slice(headerRowIndex + 1);
-
       if (dataRows.length === 0) {
         alert('لم يتم العثور على صفوف بيانات بعد رأس الجدول. يرجى التأكد من محتوى الملف.');
         return;
@@ -324,106 +462,40 @@ export function useEquipmentLogic(isNested = false) {
         const rowCells = dataRows[idx];
         if (!Array.isArray(rowCells) || rowCells.length === 0) continue;
 
-        // Build key-value row object using header names
-        const rowObj: Record<string, any> = {};
-        headerRow.forEach((h, colIdx) => {
-          if (h) {
-            rowObj[h] = rowCells[colIdx];
+        // Skip completely empty rows
+        const hasContent = rowCells.some(c => c !== undefined && c !== null && String(c).trim() !== '');
+        if (!hasContent) continue;
+
+        // Extract cells by mapped column index
+        const rowData: Partial<Record<FieldKey, any>> = {};
+        for (const [colIdxStr, field] of Object.entries(bestColMap)) {
+          const colIdx = Number(colIdxStr);
+          if (colIdx < rowCells.length) {
+            rowData[field] = rowCells[colIdx];
           }
-        });
-
-        // 1. رقم التسجيل
-        let regNum = getRowValue(rowObj, [
-          'رقم التسجيل', 'رقم_التسجيل', 'رقم الجرد', 'رقم_الجرد', 
-          'رقم التسجيل في سجل الجرد', 'رقم القيد', 'الرقم التسلسلي', 
-          'رقم الصنف', 'الرقم', 'رقم', 'N° d\'enregistrement', 
-          'N° inventaire', 'N° d\'inventaire', 'serialNumber', 'code', 'n°', 'no'
-        ]);
-        if (!regNum && rowCells[0] !== undefined) {
-          regNum = formatExcelCellValue(rowCells[0]);
         }
 
-        // 2. تاريخ التكفل بالتسجيل
-        let regDate = getRowValue(rowObj, [
-          'تاريخ التكفل بالتسجيل', 'تاريخ التكفل', 'التكفل بالتسجيل', 
-          'تاريخ التسجيل', 'تاريخ الدخول', 'تاريخ الاقتناء', 'تاريخ الحيازة', 
-          'الجرد التأسيسي', 'Date de prise en charge', 'Date d\'enregistrement', 
-          'Date d\'entrée', 'registrationDate', 'date', 'تاريخ الاستلام'
-        ]);
-        if (!regDate && rowCells[1] !== undefined && (typeof rowCells[1] === 'number' || String(rowCells[1]).includes('/'))) {
-          regDate = formatExcelCellValue(rowCells[1]);
+        // Formatted values:
+        const itemName = formatTextCell(rowData.name);
+        const regNum = formatTextCell(rowData.serialNumber) || (idx + 1).toString().padStart(2, '0');
+        const regDate = formatDateCell(rowData.registrationDate);
+        const itemSource = formatTextCell(rowData.source);
+        const itemPrice = formatPriceCell(rowData.price);
+        const itemLocation = formatTextCell(rowData.location);
+        const itemExit = formatDateCell(rowData.exitDate);
+        const itemNotes = formatTextCell(rowData.notes);
+        const totalQty = formatQuantityCell(rowData.totalQuantity);
+
+        // Skip summary or title rows if encountered in data
+        const combinedStr = Object.values(rowData).map(v => String(v || '')).join(' ');
+        if (combinedStr.includes('المجموع') || combinedStr.includes('التوقيع') || combinedStr.includes('حرر بـ') || combinedStr.startsWith('Page ')) {
+          continue;
         }
 
-        // 3. تعيين الشيء
-        let itemName = getRowValue(rowObj, [
-          'تعيين الشيء', 'تعيين الشيئ', 'تعيين العتاد', 'تعيين التجهيز', 'تعيين التجهيزات',
-          'اسم الشيء', 'اسم الجهاز', 'اسم الصنف', 'اسم العتاد', 'الاسم', 'Désignation', 
-          'Designation', 'name', 'libellé', 'المادة', 'العتاد', 'الجهاز', 'التجهيز'
-        ]);
-        if (!itemName && rowCells[2] !== undefined && typeof rowCells[2] === 'string' && rowCells[2].trim().length > 1) {
-          itemName = formatExcelCellValue(rowCells[2]);
+        // Must have at least a name, serial, or price
+        if (!itemName && !regNum && !itemPrice) {
+          continue;
         }
-
-        // 4. مصدره
-        let itemSource = getRowValue(rowObj, [
-          'مصدره', 'المصدر', 'مصدر العتاد', 'المورد', 'الممون', 
-          'طريقة الاقتناء', 'جهة التوريد', 'Provenance', 'Source', 
-          'Fournisseur', 'supplier', 'الممول'
-        ]);
-        if (!itemSource && rowCells[3] !== undefined && typeof rowCells[3] === 'string') {
-          itemSource = formatExcelCellValue(rowCells[3]);
-        }
-
-        // 5. قیمته (supports Persian 'ی' and Arabic 'ي')
-        let itemPrice = getRowValue(rowObj, [
-          'قیمته', 'قيمته', 'القيمة', 'قيمة الشيء', 'السعر', 'الثمن', 
-          'المبلغ', 'التكلفة', 'Valeur', 'Prix', 'Montant', 'price', 
-          'cost', 'value'
-        ]);
-        if (!itemPrice && rowCells[4] !== undefined) {
-          itemPrice = formatExcelCellValue(rowCells[4]);
-        }
-
-        // 6. التعيين (جهة التعيين والمكان - excluding 'الشيء' so it doesn't match 'تعيين الشيء')
-        let itemAssignment = getRowValue(rowObj, [
-          'التعيين', 'جهة التعيين', 'مكان التعيين', 'الموقع', 
-          'مكان التواجد', 'المكان', 'المخبر', 'المصلحة', 'القاعة', 
-          'Affectation', 'Destination', 'Emplacement', 'location', 'assignment'
-        ], 'الشيء');
-        if (!itemAssignment && rowCells[5] !== undefined && typeof rowCells[5] === 'string') {
-          itemAssignment = formatExcelCellValue(rowCells[5]);
-        }
-
-        // 7. خروجه
-        let itemExit = getRowValue(rowObj, [
-          'خروجه', 'تاريخ خروجه', 'الخروج', 'تاريخ الخروج', 'الإسقاط', 
-          'تاريخ الإسقاط', 'الشطب', 'سند الخروج', 'سبب الخروج', 
-          'Sortie', 'Date de sortie', 'Réforme', 'exitDate', 'exit'
-        ]);
-        if (!itemExit && rowCells[6] !== undefined) {
-          itemExit = formatExcelCellValue(rowCells[6]);
-        }
-
-        // 8. ملاحظات
-        let itemNotes = getRowValue(rowObj, [
-          'ملاحظات', 'الملاحظات', 'ملاحظة', 'Observations', 
-          'Remarques', 'Notes', 'notes', 'comments'
-        ]);
-        if (!itemNotes && rowCells[7] !== undefined) {
-          itemNotes = formatExcelCellValue(rowCells[7]);
-        }
-
-        // Skip completely empty or summary/footer lines
-        const joinedValues = Object.values(rowObj).map(v => String(v || '').trim()).join(' ');
-        if (!joinedValues || joinedValues.replace(/\s+/g, '').length === 0) continue;
-        if (joinedValues.includes('المجموع') || joinedValues.includes('التوقيع') || joinedValues.includes('حرر بـ') || joinedValues.startsWith('Page ')) continue;
-        if (!itemName && !regNum && !itemPrice) continue;
-
-        // Quantity detection
-        const totalQtyRaw = getRowValue(rowObj, [
-          'الكمية', 'إجمالي الكمية', 'العدد', 'Quantité', 'totalQuantity', 'qty'
-        ]);
-        const totalQty = totalQtyRaw ? (Math.max(1, parseInt(totalQtyRaw, 10) || 1)) : 1;
 
         // Exit status check
         const hasExited = itemExit !== '' && 
@@ -433,10 +505,7 @@ export function useEquipmentLogic(isNested = false) {
                           itemExit !== 'لا يوجد' &&
                           itemExit !== 'سليم';
 
-        const statusRaw = getRowValue(rowObj, [
-          'الحالة', 'الحالة التشغيلية', 'État', 'Status', 'status'
-        ]).toLowerCase();
-
+        const statusRaw = formatTextCell(rowData.status).toLowerCase();
         let status: Equipment['status'] = 'functional';
         if (hasExited) {
           status = 'broken';
@@ -450,7 +519,7 @@ export function useEquipmentLogic(isNested = false) {
         const brokenQty = hasExited ? totalQty : 0;
 
         // Type auto-classification
-        const typeRaw = getRowValue(rowObj, ['النوع', 'نوع الصنف', 'Type', 'type', 'catégorie']).toLowerCase();
+        const typeRaw = formatTextCell(rowData.type).toLowerCase();
         let equipType: Equipment['type'] = 'other';
         if (typeRaw.includes('زجاج') || typeRaw.includes('glass')) {
           equipType = 'glassware';
@@ -471,15 +540,15 @@ export function useEquipmentLogic(isNested = false) {
 
         itemsToCreate.push({
           name: itemName || fallbackName,
-          serialNumber: regNum || '',
-          registrationDate: regDate || '',
-          foundationalInventory: regDate || '',
-          source: itemSource || '',
-          supplier: itemSource || '',
-          price: itemPrice || '',
-          location: itemAssignment || '',
-          exitDate: itemExit || '',
-          notes: itemNotes || '',
+          serialNumber: regNum,
+          registrationDate: regDate,
+          foundationalInventory: regDate,
+          source: itemSource,
+          supplier: itemSource,
+          price: itemPrice,
+          location: itemLocation,
+          exitDate: itemExit,
+          notes: itemNotes,
           type: equipType,
           status,
           totalQuantity: totalQty,
@@ -496,18 +565,18 @@ export function useEquipmentLogic(isNested = false) {
       const { createEquipmentBulk } = await import('../lib/api/equipment');
       const savedItems = await createEquipmentBulk(itemsToCreate);
 
-      // Immediately update local UI state with the new items
+      // Immediately update local UI state with the new items in exact file sequence
       setEquipment(prev => {
         const existingIds = new Set(prev.map(e => e.id));
         const newOnes = (savedItems || itemsToCreate).filter((item: any) => !existingIds.has(item.id)) as Equipment[];
-        return [...newOnes, ...prev];
+        return [...prev, ...newOnes];
       });
 
       await logActivity(schoolId, LogAction.CREATE, LogModule.EQUIPMENT, `استيراد ${itemsToCreate.length} عتاد من سجل الجرد العام (XLS)`);
 
       alert(
-        `✅ تم استيراد ${itemsToCreate.length} صنف بنجاح وفق سجل الجرد العام للمؤسسة!\n\n` +
-        `• الحقول المعالجة: رقم التسجيل، تاريخ التكفل بالتسجيل، تعيين الشيء، مصدره، قیمته، التعيين، خروجه، ملاحظات.`
+        `✅ تم استيراد ${itemsToCreate.length} صنف بنجاح وبترتيب سليم وفق سجل الجرد العام!\n\n` +
+        `• الأعمدة المعالجة: رقم التسجيل، تاريخ التكفل، تعيين الشيء، المصدر، القيمة، التعيين، الخروج، الملاحظات.`
       );
     } catch (error) {
       console.error('Error importing XLS:', error);
@@ -1127,10 +1196,15 @@ export function useEquipmentLogic(isNested = false) {
 
   const handleSort = (field: keyof Equipment) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      // For price, dates, totalQuantity: default to 'desc' on first click ("من الأكبر إلى الأصغر" / "الأحدث أولاً")
+      if (field === 'price' || field === 'totalQuantity' || field === 'registrationDate' || field === 'exitDate' || field === 'foundationalInventory') {
+        setSortDirection('desc');
+      } else {
+        setSortDirection('asc');
+      }
     }
   };
 
@@ -1288,21 +1362,63 @@ export function useEquipmentLogic(isNested = false) {
       .sort((a, b) => {
         if (sortField === 'none') return 0;
         
-        const aValue = a[sortField];
-        const bValue = b[sortField];
-
-        if (aValue === undefined || bValue === undefined) return 0;
-
-        if (typeof aValue === 'number' && typeof bValue === 'number') {
-          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        // 1. Price numeric comparison
+        if (sortField === 'price') {
+          const aPrice = getPriceNumeric(a.price);
+          const bPrice = getPriceNumeric(b.price);
+          // Items with missing or invalid price placed at the bottom
+          if (aPrice < 0 && bPrice < 0) return 0;
+          if (aPrice < 0) return 1;
+          if (bPrice < 0) return -1;
+          return sortDirection === 'desc' ? bPrice - aPrice : aPrice - bPrice;
         }
 
-        const aStr = String(aValue).toLowerCase();
-        const bStr = String(bValue).toLowerCase();
+        // 2. Dates comparison (registrationDate, exitDate, foundationalInventory)
+        if (sortField === 'registrationDate' || sortField === 'exitDate' || sortField === 'foundationalInventory') {
+          const aDate = getDateNumeric(a[sortField]);
+          const bDate = getDateNumeric(b[sortField]);
+          // Items with missing or invalid date placed at the bottom
+          if (aDate < 0 && bDate < 0) return 0;
+          if (aDate < 0) return 1;
+          if (bDate < 0) return -1;
+          return sortDirection === 'desc' ? bDate - aDate : aDate - bDate;
+        }
 
-        if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
-        if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
+        // 3. Serial Number natural numeric comparison (1, 2, 3... 10, 11)
+        if (sortField === 'serialNumber') {
+          const aSerial = getSerialNumeric(a.serialNumber);
+          const bSerial = getSerialNumeric(b.serialNumber);
+          if (aSerial !== bSerial) {
+            return sortDirection === 'asc' ? aSerial - bSerial : bSerial - aSerial;
+          }
+          return sortDirection === 'asc' 
+            ? String(a.serialNumber || '').localeCompare(String(b.serialNumber || ''), undefined, { numeric: true })
+            : String(b.serialNumber || '').localeCompare(String(a.serialNumber || ''), undefined, { numeric: true });
+        }
+
+        // 4. Quantity numeric comparison
+        if (sortField === 'totalQuantity' || sortField === 'availableQuantity' || sortField === 'brokenQuantity') {
+          const aQty = Number(a[sortField]) || 0;
+          const bQty = Number(b[sortField]) || 0;
+          return sortDirection === 'desc' ? bQty - aQty : aQty - bQty;
+        }
+
+        // 5. Name (Arabic localized comparison with normalized characters)
+        if (sortField === 'name') {
+          const aName = normalizeArabicForSort(a.smartNameAr || a.name);
+          const bName = normalizeArabicForSort(b.smartNameAr || b.name);
+          const comp = aName.localeCompare(bName, 'ar', { numeric: true, sensitivity: 'base' });
+          return sortDirection === 'asc' ? comp : -comp;
+        }
+
+        // 6. Generic string comparison (source, supplier, location, status, notes)
+        const aVal = String(a[sortField] || '').trim();
+        const bVal = String(b[sortField] || '').trim();
+        if (!aVal && !bVal) return 0;
+        if (!aVal) return 1;
+        if (!bVal) return -1;
+        const comp = aVal.localeCompare(bVal, 'ar', { numeric: true, sensitivity: 'base' });
+        return sortDirection === 'asc' ? comp : -comp;
       });
   }, [equipment, searchTerm, filterType, filterStatus, filterExitStatus, sortField, sortDirection]);
 
@@ -1344,7 +1460,9 @@ export function useEquipmentLogic(isNested = false) {
     isSmartUpdateConfirmOpen, setIsSmartUpdateConfirmOpen,
     bulkProgress,
     sortField,
+    setSortField,
     sortDirection,
+    setSortDirection,
     qrCodeItem, setQrCodeItem,
     isQRModalOpen, setIsQRModalOpen,
     isQRScannerOpen, setIsQRScannerOpen,

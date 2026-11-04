@@ -78,7 +78,9 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     isSmartUpdateConfirmOpen, setIsSmartUpdateConfirmOpen,
     bulkProgress,
     sortField,
+    setSortField,
     sortDirection,
+    setSortDirection,
     qrCodeItem, setQrCodeItem,
     isQRModalOpen, setIsQRModalOpen,
     isQRScannerOpen, setIsQRScannerOpen,
@@ -418,6 +420,33 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 <option value="exited">المواد المشطوبة / الخارجة</option>
               </select>
             </div>
+
+            {/* Quick Sort Dropdown (زر الفرز السريع) */}
+            <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-2xl border border-primary/20 shadow-sm bg-primary/[0.03]" title="فرز وتنسيق الجدول حسب القيمة أو التسمية أو التاريخ أو الكمية أو رقم التسجيل">
+              <ArrowUpDown size={15} className="text-primary" />
+              <select 
+                className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer py-1"
+                value={`${sortField}_${sortDirection}`}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const [field, dir] = val.split('_') as [keyof Equipment | 'none', 'asc' | 'desc'];
+                  setSortField(field);
+                  setSortDirection(dir);
+                }}
+              >
+                <option value="serialNumber_asc">الترتيب: رقم التسجيل (تصاعدي 1 ← 99)</option>
+                <option value="serialNumber_desc">الترتيب: رقم التسجيل (تنازلي 99 ← 1)</option>
+                <option value="price_desc">الترتيب: القيمة (من الأكبر إلى الأصغر)</option>
+                <option value="price_asc">الترتيب: القيمة (من الأصغر إلى الأكبر)</option>
+                <option value="name_asc">الترتيب: التسمية (أبجدياً أ ← ي)</option>
+                <option value="name_desc">الترتيب: التسمية (أبجدياً ي ← أ)</option>
+                <option value="registrationDate_desc">الترتيب: تاريخ التكفل (الأحدث أولاً)</option>
+                <option value="registrationDate_asc">الترتيب: تاريخ التكفل (الأقدم أولاً)</option>
+                <option value="totalQuantity_desc">الترتيب: الكمية (من الأكبر إلى الأصغر)</option>
+                <option value="totalQuantity_asc">الترتيب: الكمية (من الأصغر إلى الأكبر)</option>
+                <option value="exitDate_desc">الترتيب: تاريخ الخروج (الأحدث أولاً)</option>
+              </select>
+            </div>
           </div>
 
           {/* Quick Actions & View Toggles */}
@@ -497,76 +526,76 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     {selectedIds.length === filteredEquipment.length && filteredEquipment.length > 0 && <CheckCircle size={10} />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('serialNumber')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24", sortField === 'serialNumber' && "text-primary font-black")} onClick={() => handleSort('serialNumber')} title="انقر للترتيب حسب رقم التسجيل">
                   <div className="flex items-center justify-center gap-1">
                     <span>رقم التسجيل</span>
                     {sortField === 'serialNumber' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-24" : "w-28")} onClick={() => handleSort('registrationDate')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-24" : "w-28", sortField === 'registrationDate' && "text-primary font-black")} onClick={() => handleSort('registrationDate')} title="انقر للترتيب حسب تاريخ التكفل (الأحدث أولاً / الأقدم)">
                   <div className="flex items-center justify-center gap-1">
                     <span>تاريخ التكفل</span>
                     {sortField === 'registrationDate' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-2 text-start", isFitScreen ? "w-[22%]" : "w-64")} onClick={() => handleSort('name')}>
+                <th className={cn("py-3 cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-2 text-start", isFitScreen ? "w-[22%]" : "w-64", sortField === 'name' && "text-primary font-black")} onClick={() => handleSort('name')} title="انقر للترتيب أبجدياً حسب التسمية (أ ← ي / ي ← أ)">
                   <div className="flex items-center gap-1">
                     <span>تعيين الشيء</span>
                     {sortField === 'name' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-14" : "w-16")} onClick={() => handleSort('totalQuantity')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-14" : "w-16", sortField === 'totalQuantity' && "text-primary font-black")} onClick={() => handleSort('totalQuantity')} title="انقر للترتيب حسب الكمية (من الأكبر إلى الأصغر)">
                   <div className="flex items-center justify-center gap-1">
                     <span>الكمية</span>
                     {sortField === 'totalQuantity' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[11%]" : "w-28")} onClick={() => handleSort('source')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[11%]" : "w-28", (sortField === 'source' || sortField === 'supplier') && "text-primary font-black")} onClick={() => handleSort('source')} title="انقر للترتيب حسب مصدر العتاد">
                   <div className="flex items-center justify-center gap-1">
                     <span>مصدره</span>
                     {sortField === 'source' || sortField === 'supplier' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('price')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24", sortField === 'price' && "text-primary font-black")} onClick={() => handleSort('price')} title="انقر للترتيب حسب القيمة (من الأكبر إلى الأصغر / من الأصغر إلى الأكبر)">
                   <div className="flex items-center justify-center gap-1">
                     <span>قیمته</span>
                     {sortField === 'price' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[10%]" : "w-28")} onClick={() => handleSort('location')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-[10%]" : "w-28", sortField === 'location' && "text-primary font-black")} onClick={() => handleSort('location')} title="انقر للترتيب حسب مكان التعيين">
                   <div className="flex items-center justify-center gap-1">
                     <span>التعيين</span>
                     {sortField === 'location' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('status')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24", sortField === 'status' && "text-primary font-black")} onClick={() => handleSort('status')} title="انقر للترتيب حسب الحالة">
                   <div className="flex items-center justify-center gap-1">
                     <span>الحالة</span>
                     {sortField === 'status' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24")} onClick={() => handleSort('exitDate')}>
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24", sortField === 'exitDate' && "text-primary font-black")} onClick={() => handleSort('exitDate')} title="انقر للترتيب حسب تاريخ الخروج (الأحدث أولاً)">
                   <div className="flex items-center justify-center gap-1">
                     <span>خروجه</span>
                     {sortField === 'exitDate' ? (
-                      sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
-                    ) : <ArrowUpDown size={12} className="opacity-20" />}
+                      sortDirection === 'asc' ? <ArrowUp size={13} className="text-primary stroke-[2.5]" /> : <ArrowDown size={13} className="text-primary stroke-[2.5]" />
+                    ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
                 <th className={cn("py-3 text-center whitespace-nowrap px-1", isFitScreen ? "w-[11%]" : "w-32")}>ملاحظات</th>
