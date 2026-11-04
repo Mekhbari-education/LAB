@@ -51,7 +51,7 @@ import { db, getUserCollection } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import SmartDocumentGeneratorModal from '../components/SmartDocumentGeneratorModal';
 
-export type DocCategory = 'all' | 'requests' | 'reports' | 'minutes' | 'forms' | 'saved';
+export type DocCategory = 'all' | 'stamps' | 'requests' | 'reports' | 'minutes' | 'forms' | 'saved';
 export type RoutingType = 'direct' | 'hierarchical_nazir' | 'hierarchical_cpe' | 'financial';
 export type DocFormatType = 'correspondence' | 'voucher_form' | 'minutes_pv' | 'report' | 'certificate' | 'circular_memo';
 
@@ -70,6 +70,8 @@ export interface AdminTemplateItem {
   title: string;
   subTitle: string;
   tag: string;
+  isStamp?: boolean;
+  keywords?: string[];
   routingType?: RoutingType;
   recipientDefault: string;
   senderDefault: string;
@@ -120,16 +122,130 @@ export interface SavedAdminDoc {
   showStampSpace?: boolean;
   paperOrientation?: 'portrait' | 'landscape';
   paperMargins?: 'compact' | 'standard' | 'spacious';
-  fontFamily?: 'amiri' | 'cairo' | 'traditional' | 'system';
+  paperSize?: 'A4' | 'A3' | 'A5' | 'Letter';
+  fontFamily?: 'amiri' | 'cairo' | 'manara' | 'ManaraDocs' | 'traditional' | 'system';
   fontSizeScale?: 'compact' | 'standard' | 'large';
   lineSpacing?: '1.4' | '1.6' | '1.8';
   borderStyle?: 'none' | 'subtle' | 'official_double';
   accentColor?: 'emerald' | 'slate' | 'navy' | 'monochrome';
+  showBottomReleaseDate?: boolean;
+  showTopHeaderDate?: boolean;
   createdAt: any;
 }
 
 const TEMPLATES: AdminTemplateItem[] = [
   // --- 1. الطلبات الإدارية (Requests) ---
+  {
+    id: 'req-signature-griffe-and-service-stamp',
+    category: 'requests',
+    formatType: 'correspondence',
+    title: 'طلب إعداد وتوفير ختم الإمضاء (Griffe) وختم المصلحة المستطيل',
+    subTitle: 'طلب موجه للسيد المدير عن طريق المقتصد لصنع ختم الإمضاء الشخصي وختم المصلحة المستطيل للمخبر',
+    tag: 'أختام إدارية ومصلحية',
+    isStamp: true,
+    keywords: ['أختام', 'اختام', 'ختم', 'إمضاء', 'امضاء', 'مصلحة', 'مستطيل', 'griffe', 'cachet', 'طابع', 'توقيع', 'المقتصد', 'المصالح الاقتصادية', 'trodat'],
+    routingType: 'financial',
+    recipientDefault: 'السيد: مدير المؤسسة — عن طريق السيد: المقتصد (المسير المالي والمادي)',
+    senderDefault: 'الملحق الرئيس بالمخابر / مسير المخبر',
+    departmentDefault: 'مخبر العلوم الفيزيائية والطبيعية',
+    academicYearDefault: '2026 / 2027',
+    locationDefault: 'عين كرشة',
+    subjectDefault: 'طلب إعداد وتوفير ختم الإمضاء الشخصي (Griffe) وختم المصلحة المستطيل الخاص بالمخبر',
+    contentDefault: `يشرفني أن أتوجه إلى سيادتكم المحترمة بهذا الطلب قصد التكرم بالموافقة على إعداد وتوفير الأختام الإدارية الموضحة في الجدول أدناه، والمتمثلة في:
+1. ختم الإمضاء الشخصي (Griffe de signature) الخاص بالتأشير الفردي على السجلات والوثائق.
+2. ختم المصلحة المستطيل (Cachet rectangulaire du service) الخاص بمخبر العلوم لتثبيت الصفة المصلحية للوثائق الصادرة عن المخبر.
+
+وذلك استجابة لمتطلبات التنظيم الإداري وحسن تسيير وحماية الوسائل المخبرية، وتمكيناً لنا من التأشير القانوني والمصادقة الدقيقة على:
+- التقارير اليومية.
+- بطاقات الجرد و المتابعة الفردية للأجهزة والمواد الكيميائية.
+- بطاقات المخزون و المتابعة للمواد الكيميائية.
+- طلبات النشاطات التطبيقية.
+- استمارات الإعارة الداخلية، ومحاضر الاستلام والإتلاف والكسر.
+
+تجدون أسفله البيانات والنصوص الدقيقة المقترحة للنقش والمقاييس المعيارية المعتمدة لكل ختم.`,
+    notesDefault: 'ملاحظة: يرجى التكرم بإحالة الطلب إلى المصالح الاقتصادية لاعتماد النفقة والتكفل بصنع الأختام لدى المطبعة / المورد المعتمد.',
+    closingFormulaDefault: 'وفي انتظار تفضلكم بالموافقة والتوجيه، تقبلوا منا فائق عبارات التقدير والاحترام.',
+    hasTable: true,
+    tableHeaders: ['الرقم', 'نوع الختم المطلوب', 'البيانات والنصوص المقترح نقشها', 'المقاس المعتمد', 'ملاحظات ونوع الختم'],
+    defaultRows: [
+      {
+        col1: '01',
+        col2: 'ختم الإمضاء الشخصي (Griffe de signature)',
+        col3: 'السطر 1: الملحق الرئيس بالمخابر\nالسطر 2: عسول فيصل',
+        col4: '38 × 14 مم',
+        col5: 'ختم أوتوماتيكي محبر ذاتياً (الرتبة والاسم فقط — حبر أزرق إداري)'
+      },
+      {
+        col1: '02',
+        col2: 'ختم المصلحة المستطيل (Cachet rectangulaire)',
+        col3: 'السطر 1: متوسطة قطاف الطاهر - عين كرشة\nالسطر 2: مخبر العلوم الفيزيائية والطبيعية',
+        col4: '47 × 18 مم',
+        col5: 'إطار مستطيل رسمي مزدوج (اسم المؤسسة والبلدية + اسم المخبر فقط)'
+      }
+    ],
+    signers: ['المعني بالطلب (صاحب الختم)', 'المصالح الاقتصادية (المقتصد)', 'تأشيرة وموافقة السيد المدير']
+  },
+  {
+    id: 'req-signature-griffe',
+    category: 'requests',
+    formatType: 'correspondence',
+    title: 'طلب إنجاز ختم الإمضاء الشخصي (Griffe de signature)',
+    subTitle: 'طلب فردي موجه لمدير المؤسسة والمقتصد لإعداد ختم الإمضاء الوظيفي (الرتبة والاسم فقط)',
+    tag: 'ختم الإمضاء الشخصي',
+    isStamp: true,
+    keywords: ['أختام', 'اختام', 'ختم', 'إمضاء', 'امضاء', 'شخصي', 'griffe', 'signature', 'توقيع', 'المقتصد', 'رتبة', '38x14'],
+    routingType: 'financial',
+    recipientDefault: 'السيد: مدير المؤسسة — عن طريق السيد: المقتصد (المسير المالي)',
+    senderDefault: 'عسول فيصل / الملحق الرئيس بالمخابر',
+    departmentDefault: 'مخبر العلوم الفيزيائية والطبيعية',
+    academicYearDefault: '2026 / 2027',
+    locationDefault: 'عين كرشة',
+    subjectDefault: 'طلب صنع وتوفير ختم الإمضاء الإداري الشخصي (Griffe de signature)',
+    contentDefault: `أتشرف بأن أتقدم إلى سيادتكم المحترمة بهذا الطلب قصد التكرم بالموافقة على إنجاز ختم الإمضاء الإداري الخاص بي (Griffe de signature).
+
+نحيطكم علماً بأن هذا الختم يقتصر حصراً وفق التنظيم الإداري المعمول به على سطرين: الرتبة والاسم فقط (الملحق الرئيس بالمخابر / عسول فيصل) بمقاس 38 × 14 مم، وتستلزم مهامنا التقنية والإدارية اليومية بالمخبر توظيفه للتأشير والمصادقة على السجلات الرسمية والوثائق الدورية (كبطاقات جرد العتاد، كشوفات استهلاك المحاليل، وسندات تحضير الحصص المخبرية) لتفادي أي التباس وتأكيد الصفة القانونية.`,
+    notesDefault: 'ملاحظة: يحتوي الختم حصراً على الرتبة والاسم فقط بمقاس معتمد 38 × 14 مم (دون أي عبارات أو أسطر إضافية).',
+    closingFormulaDefault: 'وتقبلوا منا، سيدي المدير، فائق التقدير والاحترام وعظيم الامتنان.',
+    hasTable: true,
+    tableHeaders: ['الرقم', 'عنصر البيانات', 'النص المطلوب نقشه على الختم', 'المواصفة والنوع'],
+    defaultRows: [
+      { col1: '01', col2: 'الرتبة والصفة (السطر 1)', col3: 'الملحق الرئيس بالمخابر', col4: 'خط واضح' },
+      { col1: '02', col2: 'الاسم واللقب (السطر 2)', col3: 'عسول فيصل', col4: 'خط واضح عريض' },
+      { col1: '03', col2: 'المقاس ونوع الجهاز', col3: '38 × 14 مم', col4: 'أوتوماتيكي مع وسادة حبر مدمجة (Trodat / Colop)' },
+      { col1: '04', col2: 'لون الحبر والمواصفة', col3: 'أزرق إداري كلاسيكي (Bleu)', col4: 'يحتوي على الرتبة والاسم فقط' }
+    ],
+    signers: ['الموظف صاحب الطلب', 'المقتصد (المصالح المالية)', 'موافقة وختم السيد المدير']
+  },
+  {
+    id: 'req-service-rectangular-stamp',
+    category: 'requests',
+    formatType: 'correspondence',
+    title: 'طلب إنجاز وتجديد ختم المصلحة المستطيل الخاص بمخبر العلوم',
+    subTitle: 'طلب رسمي لاعتماد وتوفير ختم المصلحة المستطيل (إسم المؤسسة والبلدية + إسم المخبر فقط)',
+    tag: 'ختم المصلحة المستطيل',
+    isStamp: true,
+    keywords: ['أختام', 'اختام', 'ختم', 'مصلحة', 'مستطيل', 'cachet', 'service', 'rectangulaire', 'طابع', 'إطار مزدوج', '47x18'],
+    routingType: 'financial',
+    recipientDefault: 'السيد: مدير المؤسسة — عن طريق السيد: المقتصد (المسير المالي والمادي)',
+    senderDefault: 'الملحق الرئيس بالمخابر / مسير المخبر',
+    departmentDefault: 'مخبر العلوم الفيزيائية والطبيعية',
+    academicYearDefault: '2026 / 2027',
+    locationDefault: 'عين كرشة',
+    subjectDefault: 'طلب اعتماد وصنع ختم المصلحة المستطيل (Cachet de service rectangulaire) الخاص بالمخبر',
+    contentDefault: `يشرفنا أن نعرض على أنظار سيادتكم المحترمة حاجة مخبر العلوم بالمؤسسة إلى اعتماد وصنع "ختم مصلحة مستطيل" (Cachet rectangulaire de service) يحمل حصراً إسم المؤسسة والبلدية واسم المصلحة/المخبر بمقاس معتمد 47 × 18 مم.
+
+إن هذا الختم يعتبر أداة تنظيمية بالغة الأهمية لوضع بصمة المصلحة على مختلف المحررات التقنية، بطاقات السلامة، جداول المناوبة واستغلال القاعات المتخصصة، بطاقات حركة الأجهزة والمحاليل، ومحاضر الجرد الدورية، بما يضفي عليها الحجية القانونية والتوثيق المصلحي المعتمد.`,
+    notesDefault: 'ملاحظة: يحتوي ختم المصلحة المستطيل حصراً على إسم المؤسسة والبلدية واسم المصلحة / المخبر فقط بمقاس 47 × 18 مم.',
+    closingFormulaDefault: 'شاكرين لسيادتكم حسن تعاونكم الدائم لما فيه صالح المؤسسة وسير المرافق البيداغوجية.',
+    hasTable: true,
+    tableHeaders: ['السطر', 'البيان المطلوب نقشه', 'النص المحدد للختم', 'المقاس والشكل'],
+    defaultRows: [
+      { col1: 'السطر 1', col2: 'اسم المؤسسة والبلدية فقط', col3: 'متوسطة قطاف الطاهر - عين كرشة', col4: 'إطار مستطيل رسمي مزدوج — خط بارز' },
+      { col1: 'السطر 2', col2: 'اسم المصلحة / المخبر', col3: 'مخبر العلوم الفيزيائية والطبيعية', col4: 'خط واضح مميز — مقاس: 47 × 18 مم' },
+      { col1: 'ملاحظة', col2: 'الشكل ونوع الحبر', col3: 'ختم أوتوماتيكي محبر ذاتياً (أزرق إداري)', col4: 'حبر أزرق عالي الثبات' }
+    ],
+    signers: ['مسؤول المخبر / الأستاذ المنسق', 'المصالح الاقتصادية', 'قرار ومصادقة السيد المدير']
+  },
   {
     id: 'req-inventory-registers-cards',
     category: 'requests',
@@ -422,6 +538,45 @@ const TEMPLATES: AdminTemplateItem[] = [
 
   // --- 4. الاستمارات وبطاقات التسيير (Forms & Management Cards) ---
   {
+    id: 'form-stamps-technical-sheet',
+    category: 'forms',
+    formatType: 'voucher_form',
+    title: 'بطاقة تقنية وسند طلب إنجاز الأختام الإدارية (ختم الإمضاء + ختم المصلحة)',
+    subTitle: 'بطاقة مواصفات موجهة للمورد / المطبعة المعتمدة تتضمن النصوص والقياسات والخطوط الدقيقة',
+    tag: 'بطاقة تقنية للأختام',
+    isStamp: true,
+    keywords: ['أختام', 'اختام', 'ختم', 'بطاقة تقنية', 'سند طلب', 'صانع الأختام', 'المطبعة', 'مورد', 'المقتصد', 'griffe', 'cachet', '38x14', '47x18'],
+    routingType: 'financial',
+    recipientDefault: 'المصالح الاقتصادية للمؤسسة (المقتصد) / المورد المعتمد لصنع الأختام',
+    senderDefault: 'مصلحة تسيير المخابر / المعني بالختم',
+    departmentDefault: 'مخبر العلوم الفيزيائية والطبيعية',
+    academicYearDefault: '2026 / 2027',
+    locationDefault: 'عين كرشة',
+    subjectDefault: 'سند وبطاقة المواصفات الفنية لإنجاز ختم إمضاء (Griffe) وختم مصلحة مستطيل',
+    contentDefault: `تحدد هذه البطاقة التقنية المواصفات الدقيقة، النصوص، والقياسات المعتمدة لصنع الأختام الإدارية لفائدة مخبر العلوم وطاقمه، طبقاً للمقاييس المعمول بها في الإدارة المدرسية:`,
+    notesDefault: 'تنبيه للمورد: يجب مراجعة النصوص بدقة مع تجنب الأخطاء الإملائية واستخدام حبر أزرق إداري عالي الثبات.',
+    closingFormulaDefault: 'بدون عبارة ختامية',
+    hasTable: true,
+    tableHeaders: ['الرقم', 'التعيين والنوع', 'النص الكامل المطلوب نقشه بالختم', 'القياس الدقيق (مم)', 'الكمية والشكل'],
+    defaultRows: [
+      {
+        col1: '01',
+        col2: 'ختم الإمضاء الشخصي (Griffe de signature)',
+        col3: 'السطر 1: الملحق الرئيس بالمخابر\nالسطر 2: عسول فيصل',
+        col4: '38 × 14 مم',
+        col5: '01 جهاز أوتوماتيكي محبر ذاتياً (الرتبة والاسم فقط)'
+      },
+      {
+        col1: '02',
+        col2: 'ختم المصلحة المستطيل (Cachet rectangulaire)',
+        col3: 'السطر 1: متوسطة قطاف الطاهر - عين كرشة\nالسطر 2: مخبر العلوم الفيزيائية والطبيعية',
+        col4: '47 × 18 مم',
+        col5: '01 ختم بإطار مستطيل رسمي مزدوج (اسم المؤسسة والبلدية + اسم المخبر فقط)'
+      }
+    ],
+    signers: ['صاحب الختم / مسؤول المخبر', 'المقتصد (تأشيرة الاعتماد وسند الطلب)', 'تأشيرة وختم مدير المؤسسة (أمر بالصرف)']
+  },
+  {
     id: 'form-equipment-loan',
     category: 'forms',
     title: 'استمارة إعارة واسترجاع عتاد مخبري لأستاذ المادة',
@@ -529,8 +684,10 @@ export default function AdministrativeDocuments() {
   const [showStampSpace, setShowStampSpace] = useState(true);
   const [paperOrientation, setPaperOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [paperMargins, setPaperMargins] = useState<'compact' | 'standard' | 'spacious'>('standard');
-  const [paperSize, setPaperSize] = useState<'A4' | 'A3' | 'Letter'>('A4');
-  const [fontFamily, setFontFamily] = useState<'amiri' | 'cairo' | 'traditional' | 'system'>('amiri');
+  const [paperSize, setPaperSize] = useState<'A4' | 'A3' | 'A5' | 'Letter'>('A4');
+  const [showBottomReleaseDate, setShowBottomReleaseDate] = useState<boolean>(true);
+  const [showTopHeaderDate, setShowTopHeaderDate] = useState<boolean>(false);
+  const [fontFamily, setFontFamily] = useState<'amiri' | 'cairo' | 'manara' | 'ManaraDocs' | 'traditional' | 'system'>('amiri');
   const [fontSizeScale, setFontSizeScale] = useState<'compact' | 'standard' | 'large'>('standard');
   const [lineSpacing, setLineSpacing] = useState<'1.4' | '1.6' | '1.8'>('1.6');
   const [borderStyle, setBorderStyle] = useState<'none' | 'subtle' | 'official_double'>('subtle');
@@ -540,6 +697,13 @@ export default function AdministrativeDocuments() {
   const [editorActiveTab, setEditorActiveTab] = useState<'edit' | 'paper_details' | 'preview'>('edit');
   const [showSplitPreview, setShowSplitPreview] = useState<boolean>(true);
   const [previewZoom, setPreviewZoom] = useState<number>(0.9);
+
+  // Stamp Customization & Visual Diagram States
+  const [stampGriffeName, setStampGriffeName] = useState<string>('عسول فيصل');
+  const [stampGriffeGrade, setStampGriffeGrade] = useState<string>('الملحق الرئيس بالمخابر');
+  const [stampServiceSchool, setStampServiceSchool] = useState<string>('');
+  const [stampServiceDept, setStampServiceDept] = useState<string>('مخبر العلوم الفيزيائية والطبيعية');
+  const [includeStampVisualDiagram, setIncludeStampVisualDiagram] = useState<boolean>(true);
 
   const handleSelectFormatType = (fmt: DocFormatType) => {
     setDocFormatType(fmt);
@@ -698,12 +862,34 @@ export default function AdministrativeDocuments() {
     setShowStampSpace(template.showStampSpace !== undefined ? template.showStampSpace : true);
     setPaperOrientation(template.orientationDefault || 'portrait');
     setPaperMargins('standard');
+    setPaperSize('A4');
+    setShowBottomReleaseDate(true);
+    setShowTopHeaderDate(false);
     setFontFamily('amiri');
     setFontSizeScale('standard');
     setLineSpacing('1.6');
     setBorderStyle(fmt === 'minutes_pv' || fmt === 'voucher_form' ? 'official_double' : 'subtle');
     setAccentColor('emerald');
     setClosingFormula(template.closingFormulaDefault || (fmt === 'correspondence' ? 'تفضلوا بقبول أسمى عبارات التقدير والاحترام' : 'بدون عبارة ختامية'));
+    
+    // Initialize stamp visual parameters
+    if (template.id.includes('stamp') || template.id.includes('griffe') || template.subjectDefault.includes('ختم')) {
+      const rawSender = template.senderDefault || '';
+      const namePart = rawSender.includes('/') ? rawSender.split('/')[0].trim() : rawSender;
+      const baseName = namePart && !namePart.includes('الملحق') && !namePart.includes('الموظف') && !namePart.includes('المسؤول') ? namePart : 'عسول فيصل';
+      setStampGriffeName(baseName);
+      setStampGriffeGrade('الملحق الرئيس بالمخابر');
+      setStampServiceSchool(formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة');
+      setStampServiceDept(template.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية');
+      setIncludeStampVisualDiagram(true);
+    } else {
+      setStampGriffeName(template.senderDefault ? template.senderDefault.split('/')[0].trim() : '');
+      setStampGriffeGrade('الملحق الرئيس بالمخابر');
+      setStampServiceSchool(formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة');
+      setStampServiceDept(template.departmentDefault || 'مخبر العلوم الفيزيائية والطبيعية');
+      setIncludeStampVisualDiagram(false);
+    }
+
     setEditorActiveTab('edit');
     setIsEditorOpen(true);
   };
@@ -758,12 +944,34 @@ export default function AdministrativeDocuments() {
     setShowStampSpace(savedDoc.showStampSpace !== undefined ? savedDoc.showStampSpace : true);
     setPaperOrientation(savedDoc.paperOrientation || 'portrait');
     setPaperMargins(savedDoc.paperMargins || 'standard');
+    setPaperSize(savedDoc.paperSize || 'A4');
+    setShowBottomReleaseDate(savedDoc.showBottomReleaseDate !== undefined ? savedDoc.showBottomReleaseDate : true);
+    setShowTopHeaderDate(savedDoc.showTopHeaderDate !== undefined ? savedDoc.showTopHeaderDate : false);
     setFontFamily(savedDoc.fontFamily || 'amiri');
     setFontSizeScale(savedDoc.fontSizeScale || 'standard');
     setLineSpacing(savedDoc.lineSpacing || '1.6');
     setBorderStyle(savedDoc.borderStyle || 'subtle');
     setAccentColor(savedDoc.accentColor || 'emerald');
     setClosingFormula(savedDoc.closingFormula || 'بدون عبارة ختامية');
+
+    // Initialize stamp visual parameters for saved document
+    if (savedDoc.templateId.includes('stamp') || savedDoc.templateId.includes('griffe') || (savedDoc.subject && savedDoc.subject.includes('ختم'))) {
+      const rawSender = savedDoc.sender || '';
+      const namePart = rawSender.includes('/') ? rawSender.split('/')[0].trim() : rawSender;
+      const baseName = namePart && !namePart.includes('الملحق') && !namePart.includes('الموظف') && !namePart.includes('المسؤول') ? namePart : 'عسول فيصل';
+      setStampGriffeName(baseName);
+      setStampGriffeGrade('الملحق الرئيس بالمخابر');
+      setStampServiceSchool(formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة');
+      setStampServiceDept(savedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية');
+      setIncludeStampVisualDiagram(true);
+    } else {
+      setStampGriffeName(savedDoc.sender ? savedDoc.sender.split('/')[0].trim() : '');
+      setStampGriffeGrade('الملحق الرئيس بالمخابر');
+      setStampServiceSchool(formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة');
+      setStampServiceDept(savedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية');
+      setIncludeStampVisualDiagram(false);
+    }
+
     setEditorActiveTab('edit');
     setIsEditorOpen(true);
   };
@@ -841,11 +1049,14 @@ export default function AdministrativeDocuments() {
         showStampSpace,
         paperOrientation,
         paperMargins,
+        paperSize,
         fontFamily,
         fontSizeScale,
         lineSpacing,
         borderStyle,
         accentColor,
+        showBottomReleaseDate,
+        showTopHeaderDate,
         createdAt: new Date().toISOString()
       };
 
@@ -891,6 +1102,8 @@ export default function AdministrativeDocuments() {
     // Font family definition
     const fontCss = fontFamily === 'cairo' 
       ? "'Cairo', 'Segoe UI', Tahoma, sans-serif" 
+      : fontFamily === 'manara' || (fontFamily as string) === 'ManaraDocs'
+      ? "'ManaraDocs', 'ManaraDocsAmatti', 'Amiri', serif"
       : fontFamily === 'traditional'
       ? "'Traditional Arabic', 'Amiri', serif"
       : fontFamily === 'system'
@@ -932,7 +1145,7 @@ export default function AdministrativeDocuments() {
             <div><strong>المصلحة / المخبر:</strong> ${docDepartment || 'مخبر العلوم'}</div>
             <div><strong>المحرر / المسؤول:</strong> ${docSender || 'الملحق بالمخبر'}</div>
             <div><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
-            <div><strong>تاريخ الطلب:</strong> ${docDate}</div>
+            ${(!showBottomReleaseDate || showTopHeaderDate) && docDate ? `<div><strong>تاريخ الطلب:</strong> ${docDate}</div>` : ''}
             ${showReference && docRef ? `<div style="grid-column: span 2;"><strong>سند رقم:</strong> ${docRef}</div>` : ''}
             ${showSubject ? `<div style="grid-column: span 2; color: ${colors.primary}; font-weight: bold;"><strong>الغرض / الموضوع:</strong> ${docSubject}</div>` : ''}
           </div>
@@ -960,7 +1173,7 @@ export default function AdministrativeDocuments() {
           <div style="font-size: 12.5px; color: #475569; display: flex; gap: 16px; flex-wrap: wrap;">
             <div><strong>المُعِدّ:</strong> ${docSender}</div>
             <div><strong>الموجّه إليه:</strong> ${docRecipient}</div>
-            <div><strong>التاريخ:</strong> ${docDate}</div>
+            ${(!showBottomReleaseDate || showTopHeaderDate) && docDate ? `<div><strong>التاريخ:</strong> ${docDate}</div>` : ''}
           </div>
           ${showSubject ? `<div style="margin-top: 6px; font-weight: bold; color: ${colors.dark};"><strong>موضوع التقرير:</strong> ${docSubject}</div>` : ''}
         </div>
@@ -1049,7 +1262,7 @@ export default function AdministrativeDocuments() {
         ${docSigners.map(sig => `
           <div style="flex: 1; margin: 0 10px; border-top: 1px dashed #94a3b8; padding-top: 8px;">
             <div style="font-weight: bold; font-size: 13px; color: #1e293b;">${sig}</div>
-            <div style="height: 25px; margin-top: 4px; color: #64748b; font-size: 11px;">(التوقيع والصفة)</div>
+            <div style="height: 25px; margin-top: 4px; color: #64748b; font-size: 11px;">(التوقيع والختم)</div>
             ${showStampSpace ? `
               <div style="width: 72px; height: 72px; margin: 6px auto 0; border: 1.5px dashed #cbd5e1; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9.5px; color: #94a3b8; line-height: 1.2;">
                 موضع الختم الرسمي
@@ -1060,6 +1273,44 @@ export default function AdministrativeDocuments() {
       </div>
     `;
 
+    // Visual Blueprint / Diagram for Stamps Request
+    const isStampDoc = Boolean(
+      selectedTemplate.id.includes('stamp') || 
+      selectedTemplate.id.includes('griffe') || 
+      docSubject.includes('ختم') || 
+      docSubject.includes('أختام') ||
+      selectedTemplate.tag.includes('ختم')
+    );
+
+    const stampVisualDiagramHtml = (includeStampVisualDiagram && isStampDoc) ? `
+      <div class="stamp-spec-diagram" style="margin: 18px 0; padding: 14px 18px; border: 2px dashed #0284c7; background-color: #f8fafc; border-radius: 8px; page-break-inside: avoid;">
+        <div style="font-weight: bold; font-size: 13px; color: #0369a1; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 6px;">
+          <span>📌 نموذج ومخطط النقش المعتمد للأختام الإدارية المطلوبة (Spécimen conforme des cachets à confectionner):</span>
+          <span style="font-size: 11px; color: #64748b; font-weight: normal;">خاص بالمطبعة والمصالح الاقتصادية</span>
+        </div>
+        <div style="display: flex; gap: 24px; justify-content: space-around; align-items: center; flex-wrap: wrap;">
+          <!-- 1. ختم الإمضاء الشخصي: الرتبة والاسم فقط -->
+          <div style="text-align: center; margin: 6px 0;">
+            <div style="font-size: 11px; font-weight: bold; color: #475569; margin-bottom: 5px;">1. ختم الإمضاء الشخصي (Griffe de signature) — قياس: 38×14 مم</div>
+            <div style="display: inline-flex; flex-direction: column; justify-content: center; align-items: center; width: 220px; height: 68px; border: 1.5px solid #1d4ed8; border-radius: 4px; padding: 6px 10px; color: #1e40af; font-family: 'Cairo', 'Segoe UI', sans-serif; text-align: center; box-shadow: 0 1px 3px rgba(37,99,235,0.1); background-color: #eff6ff;">
+              <div style="font-size: 12px; font-weight: bold; color: #1d4ed8; line-height: 1.3;">${stampGriffeGrade || 'الملحق الرئيس بالمخابر'}</div>
+              <div style="font-size: 14px; font-weight: 900; line-height: 1.3; margin-top: 3px; color: #1e3a8a;">${stampGriffeName || 'عسول فيصل'}</div>
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 3px;">الرتبة والاسم فقط (38×14 مم — طابع أوتوماتيكي محبر ذاتياً)</div>
+          </div>
+          <!-- 2. ختم المصلحة المستطيل: اسم المؤسسة والبلدية فقط + اسم المصلحة/المخبر -->
+          <div style="text-align: center; margin: 6px 0;">
+            <div style="font-size: 11px; font-weight: bold; color: #475569; margin-bottom: 5px;">2. ختم المصلحة المستطيل (Cachet rectangulaire) — قياس: 47×18 مم</div>
+            <div style="display: inline-flex; flex-direction: column; justify-content: center; align-items: center; width: 270px; height: 78px; border: 3px double #1d4ed8; border-radius: 4px; padding: 6px 10px; color: #1e40af; font-family: 'Amiri', 'Cairo', serif; text-align: center; box-shadow: 0 1px 3px rgba(37,99,235,0.1); background-color: #eff6ff;">
+              <div style="font-size: 13px; font-weight: 900; line-height: 1.3; color: #1e3a8a;">${stampServiceSchool || formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة'}</div>
+              <div style="font-size: 12px; font-weight: bold; margin-top: 5px; border-top: 1px solid #1d4ed8; padding-top: 3px; color: #1d4ed8; width: 100%;">${stampServiceDept || docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}</div>
+            </div>
+            <div style="font-size: 10px; color: #64748b; margin-top: 3px;">إسم المؤسسة والبلدية فقط واسم المصلحة / المخبر (47×18 مم)</div>
+          </div>
+        </div>
+      </div>
+    ` : '';
+
     return `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
@@ -1067,9 +1318,39 @@ export default function AdministrativeDocuments() {
         <meta charset="utf-8">
         <title>${selectedTemplate.title} - ${formattedSchool}</title>
         <style>
+          @font-face {
+            font-family: 'ManaraDocs';
+            src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+          }
+          @font-face {
+            font-family: 'ManaraDocsAmatti';
+            src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+          }
           @page {
-            size: A4 ${paperOrientation};
+            size: ${paperSize} ${paperOrientation} !important;
             margin: ${marginMm};
+          }
+          @media print {
+            @page {
+              size: ${paperSize} ${paperOrientation} !important;
+              margin: ${marginMm};
+            }
+            html, body {
+              width: 100% !important;
+              height: auto !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .paper-wrapper {
+              box-shadow: none !important;
+              border-radius: 0 !important;
+            }
           }
           body {
             font-family: ${fontCss};
@@ -1141,7 +1422,7 @@ export default function AdministrativeDocuments() {
             </div>
             <div style="text-align: left;" dir="ltr">
               <div style="font-size: 13px;"><strong>السنة الدراسية:</strong> ${docAcademicYear || '2026 / 2027'}</div>
-              <div>التاريخ: ${docDate}</div>
+              ${(!showBottomReleaseDate || showTopHeaderDate) && docDate ? `<div>التاريخ: ${docDate}</div>` : ''}
               ${showReference && docRef ? `<div>المرجع: ${docRef}</div>` : ''}
             </div>
           </div>
@@ -1152,15 +1433,19 @@ export default function AdministrativeDocuments() {
 
           ${tableHtml}
 
+          ${stampVisualDiagramHtml}
+
           ${docNotes ? `<div class="notes-box"><strong>ملاحظة هامة:</strong> ${docNotes}</div>` : ''}
 
           ${(closingFormula && closingFormula !== 'بدون عبارة ختامية') ? `<div class="closing-formula">${closingFormula}</div>` : ''}
 
           ${approvalBoxHtml}
 
-          <div style="text-align: left; margin: 20px 0 10px; font-weight: bold; font-size: 13px; color: #1e293b;">
-            حرر بـ : ${docLocation || 'عين كرشة'} في : ${docDate}
-          </div>
+          ${showBottomReleaseDate ? `
+            <div style="text-align: left; margin: 20px 0 10px; font-weight: bold; font-size: 13px; color: #1e293b;">
+              حرر بـ : ${docLocation || 'عين كرشة'} في : ${docDate}
+            </div>
+          ` : ''}
 
           ${signaturesHtml}
         </div>
@@ -1178,6 +1463,7 @@ export default function AdministrativeDocuments() {
       subtitle: `${selectedTemplate?.subTitle || ''} · ${schoolName}`,
       type: 'custom',
       suggestedOrientation: paperOrientation,
+      suggestedPaperSize: paperSize.toLowerCase() as any,
       customHtml: html
     });
   };
@@ -1206,6 +1492,9 @@ export default function AdministrativeDocuments() {
     const showStmp = customData?.showStampSpace !== undefined ? customData.showStampSpace : showStampSpace;
     const orient = customData?.paperOrientation || paperOrientation;
     const margins = customData?.paperMargins || paperMargins;
+    const size = customData?.paperSize || paperSize;
+    const bottomRelease = customData?.showBottomReleaseDate !== undefined ? customData.showBottomReleaseDate : showBottomReleaseDate;
+    const topDate = customData?.showTopHeaderDate !== undefined ? customData.showTopHeaderDate : showTopHeaderDate;
     const closeForm = customData?.closingFormula || closingFormula;
 
     try {
@@ -1234,8 +1523,11 @@ export default function AdministrativeDocuments() {
         showApprovalBox: showAppr,
         showStampSpace: showStmp,
         orientation: orient,
+        paperSize: size,
         margins: margins,
         fontSizeScale: fontSizeScale,
+        showBottomReleaseDate: bottomRelease,
+        showTopHeaderDate: topDate,
         schoolInfo: {
           country,
           ministry,
@@ -1282,6 +1574,9 @@ export default function AdministrativeDocuments() {
     const showStmp = customData?.showStampSpace !== undefined ? customData.showStampSpace : showStampSpace;
     const orient = customData?.paperOrientation || paperOrientation;
     const margins = customData?.paperMargins || paperMargins;
+    const size = customData?.paperSize || paperSize;
+    const bottomRelease = customData?.showBottomReleaseDate !== undefined ? customData.showBottomReleaseDate : showBottomReleaseDate;
+    const topDate = customData?.showTopHeaderDate !== undefined ? customData.showTopHeaderDate : showTopHeaderDate;
     const closeForm = customData?.closingFormula || closingFormula;
 
     try {
@@ -1310,8 +1605,11 @@ export default function AdministrativeDocuments() {
         showApprovalBox: showAppr,
         showStampSpace: showStmp,
         orientation: orient,
+        paperSize: size,
         margins: margins,
         fontSizeScale: fontSizeScale,
+        showBottomReleaseDate: bottomRelease,
+        showTopHeaderDate: topDate,
         schoolInfo: {
           country,
           ministry,
@@ -1353,6 +1651,9 @@ export default function AdministrativeDocuments() {
     const closeForm = customData?.closingFormula || closingFormula;
     const orient = customData?.paperOrientation || paperOrientation;
     const margins = customData?.paperMargins || paperMargins;
+    const size = customData?.paperSize || paperSize;
+    const bottomRelease = customData?.showBottomReleaseDate !== undefined ? customData.showBottomReleaseDate : showBottomReleaseDate;
+    const topDate = customData?.showTopHeaderDate !== undefined ? customData.showTopHeaderDate : showTopHeaderDate;
 
     const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ["الرقم", "البيان والتسمية", "الكمية", "الملاحظات"]);
 
@@ -1382,8 +1683,11 @@ export default function AdministrativeDocuments() {
         showApprovalBox: showAppr,
         showStampSpace: showStmp,
         orientation: orient,
+        paperSize: size,
         margins: margins,
         fontSizeScale: fontSizeScale,
+        showBottomReleaseDate: bottomRelease,
+        showTopHeaderDate: topDate,
         schoolInfo: {
           country,
           ministry,
@@ -1426,16 +1730,51 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
     showNotification('تم نسخ نص النموذج إلى الحافظة بنجاح!', 'success');
   };
 
+  // Resilient Arabic and multilingual search normalizer
+  const normalizeSearch = (str: string) => {
+    return (str || '')
+      .toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/[\u064B-\u065F]/g, '') // remove Arabic tashkeel / diacritics
+      .trim();
+  };
+
   // Filter templates
   const filteredTemplates = useMemo(() => {
+    const normQuery = normalizeSearch(searchQuery);
+    const queryTokens = normQuery.split(/\s+/).filter(Boolean);
+
     return TEMPLATES.filter(t => {
-      const matchesCategory = activeTab === 'all' || t.category === activeTab;
-      const matchesSearch = 
-        t.title.includes(searchQuery) || 
-        t.subTitle.includes(searchQuery) || 
-        t.subjectDefault.includes(searchQuery) ||
-        t.tag.includes(searchQuery);
-      return matchesCategory && matchesSearch;
+      // Category filter
+      let matchesCategory = false;
+      if (activeTab === 'all') {
+        matchesCategory = true;
+      } else if (activeTab === 'stamps') {
+        matchesCategory = Boolean(t.isStamp || t.id.includes('stamp') || t.id.includes('griffe') || t.tag.includes('أختام') || t.tag.includes('ختم'));
+      } else {
+        matchesCategory = t.category === activeTab;
+      }
+
+      if (!matchesCategory) return false;
+      if (queryTokens.length === 0) return true;
+
+      // Build rich searchable text with Arabic normalization
+      const searchable = normalizeSearch([
+        t.title,
+        t.subTitle,
+        t.subjectDefault,
+        t.tag,
+        t.id,
+        t.recipientDefault,
+        t.senderDefault,
+        t.contentDefault,
+        ...(t.keywords || [])
+      ].join(' '));
+
+      // Match all search tokens
+      return queryTokens.every(token => searchable.includes(token));
     });
   }, [activeTab, searchQuery]);
 
@@ -1547,6 +1886,22 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
           >
             <span>جميع النماذج</span>
             <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/15 font-mono">{TEMPLATES.length}</span>
+          </button>
+
+          {/* DEDICATED STAMPS TAB */}
+          <button
+            onClick={() => setActiveTab('stamps')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
+              activeTab === 'stamps'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30'
+            }`}
+          >
+            <Stamp size={14} className={activeTab === 'stamps' ? 'text-white' : 'text-blue-600 dark:text-blue-400'} />
+            <span>أختام الإدارة والمصلحة (Griffe & Cachet)</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/15 font-mono">
+              {TEMPLATES.filter(t => t.isStamp || t.id.includes('stamp') || t.id.includes('griffe') || t.tag.includes('ختم')).length}
+            </span>
           </button>
 
           <button
@@ -1797,8 +2152,147 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
           )}
         </div>
       ) : (
-        // Templates Grid
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {/* FEATURED STAMPS SHOWCASE (Visible on 'stamps', or on 'all'/'requests' without search) */}
+          {(activeTab === 'stamps' || ((activeTab === 'all' || activeTab === 'requests') && !searchQuery)) && (
+            <div className="bg-gradient-to-br from-blue-950/10 via-indigo-950/5 to-blue-900/10 border-2 border-blue-600/30 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-blue-200/40 dark:border-blue-900/40 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Stamp size={26} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-black text-blue-950 dark:text-blue-100">
+                        نماذج وطلبات أختام الإدارة والمصلحة الرسمية
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-800 dark:text-blue-300 text-[11px] font-black border border-blue-600/30">
+                        Griffe & Cachet de service
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 text-[10.5px] font-bold">
+                        السلم المالي (المقتصد)
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-900/80 dark:text-blue-200/80 mt-1 max-w-3xl leading-relaxed">
+                      نماذج إدارية مقننة موجهة للسيد مدير المؤسسة عن طريق السيد المقتصد لإعداد وصنع ختم الإمضاء الشخصي (Griffe de signature) 38×14 مم وختم المصلحة المستطيل 47×18 مم، مع بطاقة المواصفات الفنية للمطبعة/المورد.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = TEMPLATES.find(x => x.id === 'req-signature-griffe-and-service-stamp');
+                      if (t) handleOpenTemplate(t, 'financial');
+                    }}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all"
+                  >
+                    <FileText size={15} />
+                    <span>فتح الطلب الشامل (الختمين معاً)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('stamps')}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                      activeTab === 'stamps' 
+                        ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-950 dark:text-blue-100 border-blue-400' 
+                        : 'bg-surface text-blue-700 dark:text-blue-300 border-blue-300/50 hover:bg-blue-50'
+                    }`}
+                  >
+                    عرض النماذج الـ 4
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Visual Grid for the 4 Official Stamp Templates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {TEMPLATES.filter(t => t.isStamp).map((stampTpl) => (
+                  <div
+                    key={stampTpl.id}
+                    onClick={() => handleOpenTemplate(stampTpl, stampTpl.routingType || 'financial')}
+                    className="bg-white/90 dark:bg-slate-900/90 rounded-2xl p-4 border border-blue-200 dark:border-blue-900/70 hover:border-blue-500 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group space-y-3"
+                  >
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800">
+                          {stampTpl.tag}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {stampTpl.id.includes('sheet') ? 'بطاقة تقنية' : 'طلب مالي'}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors leading-snug line-clamp-2">
+                        {stampTpl.title}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                        {stampTpl.subTitle}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1 text-[11px]">
+                      <span className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1 group-hover:underline">
+                        <FileText size={12} />
+                        تعديل وطباعة
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadWord(stampTpl);
+                        }}
+                        className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-bold"
+                        title="تحميل كملف Word"
+                      >
+                        Word
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty search state */}
+          {filteredTemplates.length === 0 && (
+            <div className="bg-surface rounded-3xl p-12 text-center border border-dashed border-outline-variant max-w-xl mx-auto space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center mx-auto">
+                <Search size={28} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-lg font-black text-primary">لم يتم العثور على أي نموذج مطابق لبحثك</h4>
+                <p className="text-xs text-secondary leading-relaxed">
+                  جرّب البحث بكلمات أخرى، أو اضغط أدناه لعرض نماذج أختام الإدارة والمصلحة أو جميع النماذج.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveTab('stamps');
+                  }}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
+                >
+                  <Stamp size={14} />
+                  <span>عرض نماذج أختام الإدارة والمصلحة (4)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveTab('all');
+                  }}
+                  className="px-4 py-2.5 bg-surface-container hover:bg-surface-container-high text-primary rounded-xl text-xs font-bold transition-all"
+                >
+                  عرض جميع النماذج
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Templates Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTemplates.map((template, idx) => {
             const isCopied = copiedId === template.id;
 
@@ -1945,6 +2439,7 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
               </motion.div>
             );
           })}
+        </div>
         </div>
       )}
 
@@ -2111,9 +2606,9 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                       <div className="flex items-center gap-2">
                         <Eye size={18} className="text-primary" />
                         <div>
-                          <span className="text-xs font-black text-primary block leading-none">معاينة ورقة A4 الرسمية المطابقة للطباعة</span>
+                          <span className="text-xs font-black text-primary block leading-none">معاينة ورقة {paperSize} الرسمية المطابقة للطباعة</span>
                           <span className="text-[10px] text-secondary">
-                            الاتجاه: {paperOrientation === 'landscape' ? 'أفقي (Landscape)' : 'عمودي (Portrait)'} | الهوامش: {paperMargins === 'compact' ? 'مضغوطة (10 مم)' : paperMargins === 'spacious' ? 'واسعة (20 مم)' : 'قياسية (15 مم)'}
+                            الحجم: {paperSize} | الاتجاه: {paperOrientation === 'landscape' ? 'أفقي (Landscape)' : 'عمودي (Portrait)'} | الهوامش: {paperMargins === 'compact' ? 'مضغوطة (10 مم)' : paperMargins === 'spacious' ? 'واسعة (20 مم)' : 'قياسية (15 مم)'}
                           </span>
                         </div>
                       </div>
@@ -2155,8 +2650,20 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                           transform: `scale(${previewZoom})`,
                           transformOrigin: 'top center',
                           transition: 'transform 0.1s ease',
-                          width: paperOrientation === 'landscape' ? '1060px' : '780px',
-                          minHeight: paperOrientation === 'landscape' ? '750px' : '1050px'
+                          width: paperSize === 'A3' 
+                            ? (paperOrientation === 'landscape' ? '1380px' : '980px')
+                            : paperSize === 'A5'
+                            ? (paperOrientation === 'landscape' ? '760px' : '540px')
+                            : paperSize === 'Letter'
+                            ? (paperOrientation === 'landscape' ? '1040px' : '800px')
+                            : (paperOrientation === 'landscape' ? '1060px' : '780px'),
+                          minHeight: paperSize === 'A3'
+                            ? (paperOrientation === 'landscape' ? '980px' : '1380px')
+                            : paperSize === 'A5'
+                            ? (paperOrientation === 'landscape' ? '540px' : '760px')
+                            : paperSize === 'Letter'
+                            ? (paperOrientation === 'landscape' ? '780px' : '1020px')
+                            : (paperOrientation === 'landscape' ? '750px' : '1050px')
                         }}
                         className="bg-white text-slate-900 shadow-2xl rounded-sm border border-slate-300 overflow-hidden flex flex-col shrink-0 mb-12"
                       >
@@ -2165,7 +2672,13 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                           title="معاينة الوثيقة الإدارية كاملة"
                           className="w-full flex-1 border-0"
                           style={{
-                            minHeight: paperOrientation === 'landscape' ? '750px' : '1050px'
+                            minHeight: paperSize === 'A3' 
+                              ? (paperOrientation === 'landscape' ? '980px' : '1380px')
+                              : paperSize === 'A5'
+                              ? (paperOrientation === 'landscape' ? '540px' : '760px')
+                              : paperSize === 'Letter'
+                              ? (paperOrientation === 'landscape' ? '780px' : '1020px')
+                              : (paperOrientation === 'landscape' ? '750px' : '1050px')
                           }}
                           sandbox="allow-same-origin"
                         />
@@ -2383,6 +2896,38 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                             </div>
                           </div>
 
+                          {/* Release Date Formula Info & Toggle */}
+                          <div className="bg-surface-container-low p-3.5 rounded-2xl border border-outline-variant/50 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <Calendar size={16} />
+                              </div>
+                              <div>
+                                <div className="text-xs font-black text-primary flex items-center gap-2 flex-wrap">
+                                  <span>صيغة مكان وتاريخ التحرير بالأسفل: حرر بـ : {docLocation || 'عين كرشة'} في : {docDate}</span>
+                                  {showBottomReleaseDate && (
+                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-500/20">
+                                      تم إلغاء كتابة التاريخ في الرويسة العلوية منعاً للتكرار
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-secondary mt-0.5">
+                                  {showBottomReleaseDate 
+                                    ? 'المعلومة تظهر بأسفل الوثيقة فقط عند التوقيع، وتلقائياً تم حذف التاريخ من الرويسة العلوية لتفادي تكرار المعلومات.'
+                                    : 'الصيغة السفلية معطلة؛ سيتم إظهار التاريخ في الرويسة العلوية.'}
+                                </p>
+                              </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={showBottomReleaseDate}
+                                onChange={(e) => setShowBottomReleaseDate(e.target.checked)}
+                                className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                              />
+                            </label>
+                          </div>
+
                           {/* Sender & Recipient (with format reminder) */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -2435,6 +2980,154 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                               className="w-full bg-surface p-3 rounded-xl border border-outline-variant text-xs font-medium focus:border-primary focus:ring-1 focus:ring-primary outline-none leading-relaxed"
                             />
                           </div>
+
+                          {/* Stamp Customization & Live Inked Simulator */}
+                          {Boolean(
+                            selectedTemplate.id.includes('stamp') || 
+                            selectedTemplate.id.includes('griffe') || 
+                            docSubject.includes('ختم') || 
+                            docSubject.includes('أختام') ||
+                            selectedTemplate.tag.includes('ختم')
+                          ) && (
+                            <div className="bg-gradient-to-l from-blue-50/80 via-indigo-50/50 to-sky-50/80 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-sky-950/40 border-2 border-blue-500/40 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md">
+                                    <Stamp size={20} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="text-sm font-black text-blue-950 dark:text-blue-200">
+                                        محاكي ومصمم الأختام الإدارية (معاينة حية لشكل الختمين)
+                                      </h4>
+                                      <span className="px-2 py-0.5 rounded-full bg-blue-600/15 text-blue-800 dark:text-blue-300 text-[10px] font-black border border-blue-600/30">
+                                        نموذج للمطبعة
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80">
+                                      تخصيص أسطر ختم الإمضاء الشخصي وختم المصلحة المستطيل ومعاينتها باللون والقياس الإداري المعتمد.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-blue-300 dark:border-blue-700 text-xs font-bold text-blue-950 dark:text-blue-200 shadow-2xs">
+                                  <input
+                                    type="checkbox"
+                                    checked={includeStampVisualDiagram}
+                                    onChange={(e) => setIncludeStampVisualDiagram(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                  />
+                                  <span>تضمين المخطط البصري للختمين في المطبوعة</span>
+                                </label>
+                              </div>
+
+                              {/* Live Visual Inked Stamps Display */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/90 dark:bg-slate-900/90 p-4 rounded-2xl border border-blue-200 dark:border-blue-900 shadow-inner">
+                                {/* 1. ختم الإمضاء الشخصي: الرتبة والاسم فقط */}
+                                <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/30">
+                                  <span className="text-[11px] font-black text-blue-950 dark:text-blue-300 mb-2.5 flex items-center gap-1.5">
+                                    <span>🔏</span>
+                                    <span>1. ختم الإمضاء الشخصي (Griffe de signature) — 38×14 مم</span>
+                                  </span>
+                                  <div className="w-56 h-18 rounded border-2 border-blue-700 p-2 flex flex-col justify-center items-center text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/50 shadow-xs select-none gap-0.5">
+                                    <span className="font-bold text-xs text-blue-700 dark:text-blue-400">{stampGriffeGrade || 'الملحق الرئيس بالمخابر'}</span>
+                                    <span className="font-black text-sm leading-none text-blue-950 dark:text-blue-100">{stampGriffeName || 'عسول فيصل'}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 mt-1.5 font-mono">الرتبة والاسم فقط (38×14 مم — محبر ذاتياً)</span>
+                                </div>
+
+                                {/* 2. ختم المصلحة المستطيل: اسم المؤسسة والبلدية + اسم المصلحة/المخبر */}
+                                <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/30">
+                                  <span className="text-[11px] font-black text-blue-950 dark:text-blue-300 mb-2.5 flex items-center gap-1.5">
+                                    <span>🏛️</span>
+                                    <span>2. ختم المصلحة المستطيل (Cachet rectangulaire) — 47×18 مم</span>
+                                  </span>
+                                  <div className="w-64 h-20 rounded border-[3px] border-double border-blue-700 p-2 flex flex-col justify-center items-center text-blue-800 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/50 shadow-xs select-none gap-1">
+                                    <span className="font-black text-xs text-blue-950 dark:text-blue-100">{stampServiceSchool || formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة'}</span>
+                                    <span className="font-bold text-[11px] border-t border-blue-600 w-full text-center pt-1 text-blue-700 dark:text-blue-300">{stampServiceDept || docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 mt-1.5 font-mono">المؤسسة والبلدية + المصلحة/المخبر (47×18 مم)</span>
+                                </div>
+                              </div>
+
+                              {/* Stamp Customization Fields */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                                <div>
+                                  <label className="block text-[11px] font-black text-blue-950 dark:text-blue-200 mb-1">
+                                    رتبة صاحب الختم (السطر 1)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={stampGriffeGrade}
+                                    onChange={(e) => setStampGriffeGrade(e.target.value)}
+                                    placeholder="الملحق الرئيس بالمخابر"
+                                    className="w-full bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-950 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-black text-blue-950 dark:text-blue-200 mb-1">
+                                    اسم صاحب ختم الإمضاء (السطر 2)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={stampGriffeName}
+                                    onChange={(e) => setStampGriffeName(e.target.value)}
+                                    placeholder="عسول فيصل"
+                                    className="w-full bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-950 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-black text-blue-950 dark:text-blue-200 mb-1">
+                                    اسم المؤسسة والبلدية فقط (السطر 1)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={stampServiceSchool}
+                                    onChange={(e) => setStampServiceSchool(e.target.value)}
+                                    placeholder={formattedSchool || "متوسطة قطاف الطاهر - عين كرشة"}
+                                    className="w-full bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-950 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+
+                                <div>
+                                  <label className="block text-[11px] font-black text-blue-950 dark:text-blue-200 mb-1">
+                                    اسم المصلحة / المخبر (السطر 2)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={stampServiceDept}
+                                    onChange={(e) => setStampServiceDept(e.target.value)}
+                                    placeholder={docDepartment || "مخبر العلوم الفيزيائية والطبيعية"}
+                                    className="w-full bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800 text-xs font-bold text-blue-950 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-blue-200/60 dark:border-blue-900/60">
+                                <span className="text-[11px] text-blue-700 dark:text-blue-300">
+                                  💡 يمكنك مزامنة هذه البيانات فورياً مع جدول الوثيقة الإدارية لنقل النصوص بدقة إلى جدول المطبوعة.
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newRows = [...docRows];
+                                    if (newRows.length >= 2) {
+                                      newRows[0].col3 = `السطر 1: ${stampGriffeGrade || 'الملحق الرئيس بالمخابر'}\nالسطر 2: ${stampGriffeName || 'عسول فيصل'}`;
+                                      newRows[1].col3 = `السطر 1: ${stampServiceSchool || formattedSchool || 'متوسطة قطاف الطاهر - عين كرشة'}\nالسطر 2: ${stampServiceDept || docDepartment || 'مخبر العلوم الفيزيائية والطبيعية'}`;
+                                      setDocRows(newRows);
+                                      showNotification('تم تحديث نصوص الأختام في جدول الوثيقة بنجاح!', 'success');
+                                    }
+                                  }}
+                                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>تطبيق النصوص على جدول الطلب</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           {/* Items Table if applicable */}
                           {selectedTemplate.hasTable && (
@@ -2888,7 +3581,7 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                               </label>
 
                               {/* Switch 5: showStampSpace */}
-                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors sm:col-span-2">
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
                                 <div className="space-y-0.5">
                                   <div className="text-xs font-black text-primary flex items-center gap-1.5">
                                     <Stamp size={15} />
@@ -2902,6 +3595,25 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                                   type="checkbox"
                                   checked={showStampSpace}
                                   onChange={(e) => setShowStampSpace(e.target.checked)}
+                                  className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
+                                />
+                              </label>
+
+                              {/* Switch 6: showBottomReleaseDate */}
+                              <label className="flex items-center justify-between p-3.5 bg-surface rounded-2xl border border-outline-variant/50 cursor-pointer hover:bg-surface-container transition-colors">
+                                <div className="space-y-0.5">
+                                  <div className="text-xs font-black text-primary flex items-center gap-1.5">
+                                    <Calendar size={15} />
+                                    <span>صيغة مكان وتاريخ التحرير بالأسفل (حرر بـ : ... في : ...)</span>
+                                  </div>
+                                  <div className="text-[11px] text-secondary">
+                                    عند التفعيل، تظهر الصيغة بأسفل الوثيقة ويُلغى تلقائياً التاريخ من الرويسة العلوية منعاً لتكرار المعلومة.
+                                  </div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={showBottomReleaseDate}
+                                  onChange={(e) => setShowBottomReleaseDate(e.target.checked)}
                                   className="w-5 h-5 text-primary rounded-lg focus:ring-primary"
                                 />
                               </label>
@@ -2996,18 +3708,25 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
 
                               {/* Paper Size */}
                               <div>
-                                <label className="block text-xs font-black text-primary mb-1.5">
-                                  قياس الورقة
+                                <label className="block text-xs font-black text-primary mb-1.5 flex items-center justify-between">
+                                  <span>قياس الورقة (Paper Size)</span>
+                                  <span className="text-[10px] text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                                    إجبار الطباعة المباشرة @page
+                                  </span>
                                 </label>
                                 <select
                                   value={paperSize}
                                   onChange={(e) => setPaperSize(e.target.value as any)}
                                   className="w-full bg-surface px-3 py-2 rounded-xl border border-outline-variant text-xs font-bold focus:border-primary outline-none"
                                 >
-                                  <option value="A4">A4 قياسي (210 × 297 مم)</option>
+                                  <option value="A4">A4 قياسي معتمد (210 × 297 مم)</option>
                                   <option value="A3">A3 قياس كبير (297 × 420 مم)</option>
-                                  <option value="Letter">Letter أمريكي</option>
+                                  <option value="A5">A5 قياس نصفي (148 × 210 مم)</option>
+                                  <option value="Letter">Letter أمريكي (216 × 279 مم)</option>
                                 </select>
+                                <p className="text-[10px] text-secondary mt-1">
+                                  يتم ضبط أبعاد الصفحة والطابعة تلقائياً على هذا القياس بدقة.
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -3034,6 +3753,7 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                                 >
                                   <option value="amiri">Amiri (أميري رسمي فخم)</option>
                                   <option value="cairo">Cairo (كايرو حديث وأنيق)</option>
+                                  <option value="manara">خط وثائق المنارة المدمج (ManaraDocs)</option>
                                   <option value="traditional">Traditional Arabic (عربي تقليدي إداري)</option>
                                   <option value="system">System UI (خط النظام)</option>
                                 </select>
@@ -3284,8 +4004,20 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                               transform: `scale(${previewZoom})`,
                               transformOrigin: 'top center',
                               transition: 'transform 0.1s ease',
-                              width: paperOrientation === 'landscape' ? '1000px' : '720px',
-                              minHeight: paperOrientation === 'landscape' ? '700px' : '980px'
+                              width: paperSize === 'A3'
+                                ? (paperOrientation === 'landscape' ? '1280px' : '900px')
+                                : paperSize === 'A5'
+                                ? (paperOrientation === 'landscape' ? '700px' : '500px')
+                                : paperSize === 'Letter'
+                                ? (paperOrientation === 'landscape' ? '980px' : '740px')
+                                : (paperOrientation === 'landscape' ? '1000px' : '720px'),
+                              minHeight: paperSize === 'A3'
+                                ? (paperOrientation === 'landscape' ? '900px' : '1280px')
+                                : paperSize === 'A5'
+                                ? (paperOrientation === 'landscape' ? '500px' : '700px')
+                                : paperSize === 'Letter'
+                                ? (paperOrientation === 'landscape' ? '740px' : '960px')
+                                : (paperOrientation === 'landscape' ? '700px' : '980px')
                             }}
                             className="bg-white text-slate-900 shadow-xl rounded-sm border border-slate-300 overflow-hidden flex flex-col shrink-0 mb-8"
                           >
@@ -3294,7 +4026,13 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
                               title="معاينة فورية مطابقة"
                               className="w-full flex-1 border-0"
                               style={{
-                                minHeight: paperOrientation === 'landscape' ? '700px' : '980px'
+                                minHeight: paperSize === 'A3'
+                                  ? (paperOrientation === 'landscape' ? '900px' : '1280px')
+                                  : paperSize === 'A5'
+                                  ? (paperOrientation === 'landscape' ? '500px' : '700px')
+                                  : paperSize === 'Letter'
+                                  ? (paperOrientation === 'landscape' ? '740px' : '960px')
+                                  : (paperOrientation === 'landscape' ? '700px' : '980px')
                               }}
                               sandbox="allow-same-origin"
                             />
@@ -3309,7 +4047,7 @@ ${template.notesDefault ? `ملاحظة: ${template.notesDefault}` : ''}
               {/* Modal Footer */}
               <div className="p-4 sm:p-5 bg-surface-container-low border-t border-outline-variant/50 flex items-center justify-between shrink-0">
                 <span className="text-xs text-secondary font-medium">
-                  جاهزة للطباعة بحجم A4 قياسي وفق مواصفات مراسلات وزارة التربية الوطنية.
+                  جاهزة للطباعة بحجم {paperSize} ({paperOrientation === 'landscape' ? 'أفقي' : 'عمودي'}) وتطبيق قواعد التحرير الإداري بدقة.
                 </span>
 
                 <div className="flex items-center gap-2 flex-wrap">

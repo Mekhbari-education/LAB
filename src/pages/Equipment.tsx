@@ -42,13 +42,15 @@ import {
   Eye,
   SlidersHorizontal,
   Table as TableIcon,
-  Coins
+  Coins,
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
 import { getEquipmentIntelligence, ensureApiKey } from '../services/geminiService';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import QRScanner from '../components/QRScanner';
+import EquipmentStickerModal from '../components/EquipmentStickerModal';
 
 import type { Equipment, MaintenanceLog } from '../types/equipment';
 import { useEquipmentLogic } from '../hooks/useEquipmentLogic';
@@ -106,6 +108,10 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
     handleExportXLS,
     handlePrintList,
     handlePrintInventoryCards,
+    isStickerModalOpen,
+    setIsStickerModalOpen,
+    stickerModalItem,
+    setStickerModalItem,
     handleExportPDF,
     handleExportWord,
     handleSmartUpdate,
@@ -195,11 +201,12 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               {t('equipment.btn_inventory_cards', 'سجل بطاقات الجرد')}
             </button>
             <button 
-              onClick={handlePrintInventoryCards}
+              onClick={() => handlePrintInventoryCards()}
               className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 hover:border-primary transition-all shadow-xl active:scale-95"
+              title="طباعة بطاقات وملصقات الجرد للصقها فوق الأجهزة لتعريفها وجردها"
             >
-              <QrCode size={20} />
-              {t('equipment.btn_print_cards', 'طباعة بطاقات الجرد')}
+              <Tag size={20} />
+              {t('equipment.btn_print_cards', 'طباعة بطاقات / ملصقات الجرد')}
             </button>
             <button 
               onClick={handlePrintList}
@@ -899,6 +906,15 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                               <QrCode size={13} />
                             </button>
 
+                            {/* Print Inventory Sticker */}
+                            <button 
+                              onClick={() => handlePrintInventoryCards(e)}
+                              className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-md transition-colors"
+                              title="طباعة ملصق الجرد والتعريف لهذا الجهاز"
+                            >
+                              <Tag size={13} />
+                            </button>
+
                             {/* Print Card */}
                             <button 
                               onClick={() => handlePrint(e)}
@@ -1402,25 +1418,14 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 <button 
                   onClick={() => {
                     if (qrCodeItem) {
-                      openPrintPreview({
-                        title: `ملصق رمز الاستجابة السريعة (QR) - ${qrCodeItem.name}`,
-                        subtitle: `المؤسسة: ${schoolName} · النوع: عتاد ومعدات المخبر`,
-                        type: 'stickers',
-                        stickers: [{
-                          id: qrCodeItem.id,
-                          name: qrCodeItem.name,
-                          qrValue: JSON.stringify({ id: qrCodeItem.id, type: 'equipment', name: qrCodeItem.name }),
-                          category: qrCodeItem.type === 'glassware' ? 'زجاجيات' : 'عتاد وأجهزة تقنية',
-                          location: qrCodeItem.location || '—',
-                          code: qrCodeItem.serialNumber || qrCodeItem.id
-                        }]
-                      });
+                      handlePrintInventoryCards(qrCodeItem);
+                      setIsQRModalOpen(false);
                     }
                   }}
                   className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
                 >
-                  <Printer size={18} />
-                  معاينة وطباعة الملصق
+                  <Tag size={18} />
+                  معاينة وطباعة ملصق الجرد للجهاز
                 </button>
                 <button 
                   onClick={() => setIsQRModalOpen(false)}
@@ -1703,6 +1708,20 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
           </div>
         )}
       </AnimatePresence>
+
+      {/* Equipment Identification & Inventory Sticker Printing Modal */}
+      <EquipmentStickerModal
+        isOpen={isStickerModalOpen}
+        onClose={() => setIsStickerModalOpen(false)}
+        equipment={filteredEquipment}
+        selectedItem={stickerModalItem}
+        selectedIds={selectedIds}
+        schoolInfo={{
+          schoolName,
+          commune,
+          directorate
+        }}
+      />
     </div>
   );
 }

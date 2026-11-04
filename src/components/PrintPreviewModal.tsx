@@ -83,6 +83,7 @@ export default function PrintPreviewModal() {
   const [localShowNazir, setLocalShowNazir] = useState<boolean | null>(null);
   const [localShowTeacher, setLocalShowTeacher] = useState<boolean | null>(null);
   const [localShowInspector, setLocalShowInspector] = useState<boolean | null>(null);
+  const [localFontFamily, setLocalFontFamily] = useState<'Cairo' | 'Amiri' | 'ManaraDocs' | 'system' | null>(null);
 
   // Operation States
   const [isPrinting, setIsPrinting] = useState(false);
@@ -103,10 +104,10 @@ export default function PrintPreviewModal() {
   useEffect(() => {
     if (previewData) {
       setLocalOrientation(previewData.suggestedOrientation || null);
+      setLocalPaperSize(previewData.suggestedPaperSize || null);
       setLocalColorMode(null);
       setLocalMargins(null);
       setLocalScale(null);
-      setLocalPaperSize(null);
       setLocalShowHeader(null);
       setLocalShowSignatures(null);
       setLocalHeaderStyle(null);
@@ -126,6 +127,7 @@ export default function PrintPreviewModal() {
       setLocalShowNazir(null);
       setLocalShowTeacher(null);
       setLocalShowInspector(null);
+      setLocalFontFamily(null);
       setZoom(100);
       setCopiedHtml(false);
     }
@@ -133,10 +135,11 @@ export default function PrintPreviewModal() {
 
   // Determine active effective options
   const orientation = localOrientation || previewData?.suggestedOrientation || globalSettings.layout.orientation || 'portrait';
-  const paperSize = localPaperSize || globalSettings.layout.paperSize || 'a4';
+  const paperSize = localPaperSize || previewData?.suggestedPaperSize || globalSettings.layout.paperSize || 'a4';
   const colorMode = localColorMode || globalSettings.appearance.colorMode || 'color';
   const margins = localMargins || globalSettings.layout.margins || 'standard';
   const scale = localScale || globalSettings.layout.fontSizeScale || 'normal';
+  const fontFamily = localFontFamily || globalSettings.layout.fontFamily || 'Cairo';
   const showHeader = localShowHeader !== null ? localShowHeader : globalSettings.institution.headerStyle !== 'minimal';
   const showSignatures = localShowSignatures !== null ? localShowSignatures : globalSettings.signatures.showSignatures;
   const headerStyle = localHeaderStyle || globalSettings.institution.headerStyle || 'official';
@@ -181,6 +184,7 @@ export default function PrintPreviewModal() {
         paperSize,
         margins,
         fontSizeScale: scale,
+        fontFamily,
         copies,
         gutterMm,
         customScalePercent,
@@ -217,6 +221,7 @@ export default function PrintPreviewModal() {
     paperSize,
     margins,
     scale,
+    fontFamily,
     colorMode,
     tableStriped,
     highContrast,
@@ -401,6 +406,7 @@ export default function PrintPreviewModal() {
     setLocalShowNazir(null);
     setLocalShowTeacher(null);
     setLocalShowInspector(null);
+    setLocalFontFamily(null);
     setZoom(100);
   };
 
@@ -467,12 +473,16 @@ export default function PrintPreviewModal() {
   // Sheet dimensions based on paper size and orientation
   const sheetWidth = paperSize === 'a3' 
     ? (orientation === 'landscape' ? '420mm' : '297mm')
+    : paperSize === 'a5'
+    ? (orientation === 'landscape' ? '210mm' : '148mm')
     : paperSize === 'letter'
     ? (orientation === 'landscape' ? '279.4mm' : '215.9mm')
     : (orientation === 'landscape' ? '297mm' : '210mm');
 
   const sheetMinHeight = paperSize === 'a3'
     ? (orientation === 'landscape' ? '297mm' : '420mm')
+    : paperSize === 'a5'
+    ? (orientation === 'landscape' ? '148mm' : '210mm')
     : paperSize === 'letter'
     ? (orientation === 'landscape' ? '215.9mm' : '279.4mm')
     : (orientation === 'landscape' ? '210mm' : '297mm');
@@ -739,7 +749,7 @@ export default function PrintPreviewModal() {
                     paddingRight: gutterMm > 0 ? `calc(${marginPx} + ${gutterMm}mm)` : marginPx,
                     fontSize: `${11 * fontMultiplier}pt`,
                     lineHeight: lineHeight === 'compact' ? '1.3' : lineHeight === 'relaxed' ? '1.7' : '1.5',
-                    fontFamily: `${globalSettings.layout.fontFamily || 'Cairo'}, sans-serif`,
+                    fontFamily: fontFamily === 'ManaraDocs' ? "'ManaraDocs', 'ManaraDocsAmatti', 'Cairo', 'Amiri', sans-serif" : `${fontFamily || 'Cairo'}, sans-serif`,
                     direction: 'rtl'
                   }}
                   className={`bg-white text-neutral-900 shadow-2xl rounded-sm transition-all relative overflow-hidden ${
@@ -785,12 +795,24 @@ export default function PrintPreviewModal() {
                     /* Render Pure Custom HTML provided by the page (e.g. Daily Report custom sheet) with complete Algerian styling */
                     <div className="w-full">
                       <style>{`
+                        @font-face {
+                          font-family: 'ManaraDocs';
+                          src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+                          font-weight: normal;
+                          font-style: normal;
+                        }
+                        @font-face {
+                          font-family: 'ManaraDocsAmatti';
+                          src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+                          font-weight: normal;
+                          font-style: normal;
+                        }
                         .custom-rendered-sheet {
                           width: 100%;
                           color: ${isBw ? '#000000' : '#1e2819'};
                           line-height: ${lineHeight === 'compact' ? '1.3' : lineHeight === 'relaxed' ? '1.7' : '1.45'};
                           font-size: ${11 * fontMultiplier * (customScalePercent / 100)}pt;
-                          font-family: '${globalSettings.layout.fontFamily || 'Cairo'}', 'Cairo', 'Amiri', sans-serif;
+                          font-family: ${fontFamily === 'ManaraDocs' ? "'ManaraDocs', 'ManaraDocsAmatti', 'Cairo', 'Amiri', sans-serif" : `'${fontFamily || 'Cairo'}', 'Cairo', 'Amiri', sans-serif`};
                           direction: rtl;
                           ${isBw ? 'filter: grayscale(100%) contrast(150%);' : isGrayscale ? 'filter: grayscale(100%);' : ''}
                         }
@@ -1388,8 +1410,8 @@ export default function PrintPreviewModal() {
                             <FileSpreadsheet size={14} />
                             <span>حجم الورق (Paper Size)</span>
                           </label>
-                          <div className="grid grid-cols-3 gap-2">
-                            {(['a4', 'a3', 'letter'] as PrintPaperSize[]).map((size) => (
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(['a4', 'a3', 'a5', 'letter'] as PrintPaperSize[]).map((size) => (
                               <button
                                 key={size}
                                 onClick={() => setLocalPaperSize(size)}
@@ -1556,6 +1578,22 @@ export default function PrintPreviewModal() {
                             onChange={(e) => setLocalCustomScalePercent(Number(e.target.value))}
                             className="w-full accent-primary h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-lg cursor-pointer mt-1"
                           />
+                        </div>
+
+                        {/* Font Family (نوع الخط العربي) */}
+                        <div className="space-y-2 pt-2 border-t border-outline-variant/20">
+                          <label className="text-xs font-bold text-secondary flex items-center justify-between">
+                            <span>الخط العربي (Font)</span>
+                          </label>
+                          <select
+                            value={fontFamily}
+                            onChange={(e) => setLocalFontFamily(e.target.value as any)}
+                            className="w-full px-3 py-2 rounded-xl bg-surface-container border border-outline-variant/30 text-xs font-bold text-primary outline-none focus:border-primary cursor-pointer"
+                          >
+                            <option value="Cairo">خط القاهرة الرسمي (Cairo)</option>
+                            <option value="Amiri">خط أميري الكلاسيكي (Amiri)</option>
+                            <option value="ManaraDocs">خط وثائق المنارة المدمج (ManaraDocs)</option>
+                          </select>
                         </div>
                       </div>
                     )}

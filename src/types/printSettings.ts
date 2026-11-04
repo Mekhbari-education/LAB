@@ -1,4 +1,4 @@
-export type PrintPaperSize = 'a4' | 'a3' | 'letter';
+export type PrintPaperSize = 'a4' | 'a3' | 'a5' | 'letter';
 export type PrintOrientation = 'portrait' | 'landscape' | 'auto';
 export type PrintMargins = 'compact' | 'standard' | 'spacious';
 export type PrintScale = 'small' | 'normal' | 'large';
@@ -189,4 +189,5 @@ export interface PrintPreviewData {
   notes?: string;
   customHtml?: string;
   suggestedOrientation?: PrintOrientation;
+  suggestedPaperSize?: PrintPaperSize;
 }

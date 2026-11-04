@@ -265,6 +265,30 @@ export function generateFallbackSmartDocument(
         purposeOrNotes: 'تغذية التجارب الكهربائية البيداغوجية'
       }
     ];
+  } else if (prompt.includes('ختم') || prompt.includes('أختام') || prompt.includes('اختام') || prompt.includes('griffe') || prompt.includes('cachet')) {
+    title = 'طلب إداري — إعداد وتوفير ختم الإمضاء وختم المصلحة المستطيل';
+    subject = 'طلب إعداد وتوفير ختم الإمضاء الشخصي (Griffe) وختم المصلحة المستطيل للمخبر';
+    context = 'يشرفنا التوجه إلى سيادتكم المحترمة بهذا الطلب قصد التكرم بالموافقة على اعتماد وإنجاز الأختام الإدارية الموضحة أدناه، لضمان التأشير والمصادقة القانونية على السجلات والمراسلات والمطبوعات المصلحية.';
+    defaultItems = [
+      {
+        id: 'item_1',
+        itemNumber: '01',
+        designation: 'ختم الإمضاء الشخصي (Griffe de signature)',
+        referenceOrSpecs: '38 × 14 مم — الرتبة والاسم فقط (الملحق الرئيس بالمخابر / عسول فيصل) — طابع أوتوماتيكي محبر ذاتياً',
+        unit: 'جهاز',
+        quantity: '01',
+        purposeOrNotes: 'التأشير الفردي على سجلات الجرد والاستعمال وبطاقات المتابعة'
+      },
+      {
+        id: 'item_2',
+        itemNumber: '02',
+        designation: 'ختم المصلحة المستطيل (Cachet rectangulaire)',
+        referenceOrSpecs: '47 × 18 مم — إطار مستطيل رسمي مزدوج — اسم المؤسسة والبلدية فقط + اسم المصلحة/المخبر',
+        unit: 'جهاز',
+        quantity: '01',
+        purposeOrNotes: 'تثبيت الصفة المصلحية لوثائق ومطبوعات مخبر العلوم'
+      }
+    ];
   }
 
   const doc: SmartAdminDocument = {

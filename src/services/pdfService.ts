@@ -103,10 +103,12 @@ export interface AdminDocumentPDFOptions {
   showReference?: boolean;
   showApprovalBox?: boolean;
   showStampSpace?: boolean;
-  stampTitle?: string;
   orientation?: 'portrait' | 'landscape';
+  paperSize?: 'a4' | 'a3' | 'a5' | 'letter' | 'A4' | 'A3' | 'A5' | 'Letter';
   margins?: 'compact' | 'standard' | 'spacious';
   fontSizeScale?: 'compact' | 'standard' | 'large';
+  showBottomReleaseDate?: boolean;
+  showTopHeaderDate?: boolean;
 }
 
 export interface LegislationSheetOptions {
@@ -1237,10 +1239,11 @@ export class PDFService {
    */
   static async generateAdministrativeDocumentPDF(options: AdminDocumentPDFOptions): Promise<Blob> {
     const orientation = options.orientation || 'portrait';
+    const paperSize = (options.paperSize || 'a4').toLowerCase();
     const doc = new jsPDF({
       orientation: orientation,
       unit: 'mm',
-      format: 'a4',
+      format: paperSize as any,
       putOnlyUsedFonts: true
     });
 
@@ -1261,6 +1264,7 @@ export class PDFService {
     const directorate = school.directorate || 'مديرية التربية لولاية';
     const academicYear = options.academicYear || school.academicYear || '2025 / 2026';
     const fmt = options.formatType || 'correspondence';
+    const hasBottomRelease = options.showBottomReleaseDate !== false;
 
     // Header - Official Republic & Ministry
     doc.setFont(fontName, 'bold');
@@ -1279,7 +1283,9 @@ export class PDFService {
     doc.text(this.processArabic(`السنة الدراسية: ${academicYear}`), margin, currentY, { align: 'left' });
     currentY += 4.5;
     doc.text(this.processArabic(formattedSchool), pageWidth - margin, currentY, { align: 'right' });
-    doc.text(this.processArabic(`التاريخ: ${options.date || new Date().toISOString().split('T')[0]}`), margin, currentY, { align: 'left' });
+    if (!hasBottomRelease || options.showTopHeaderDate) {
+      doc.text(this.processArabic(`التاريخ: ${options.date || new Date().toISOString().split('T')[0]}`), margin, currentY, { align: 'left' });
+    }
     currentY += 4.5;
     if (options.department) {
       doc.text(this.processArabic(options.department), pageWidth - margin, currentY, { align: 'right' });
@@ -1442,6 +1448,21 @@ export class PDFService {
       currentY += 19;
     }
 
+    // Drafting Location and Date Formula (حرر بـ ... في ...)
+    if (hasBottomRelease) {
+      if (currentY > pageHeight - 40) {
+        doc.addPage();
+        currentY = margin;
+      }
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(30, 41, 59);
+      const loc = options.location || 'عين كرشة';
+      const dt = options.date || new Date().toISOString().split('T')[0];
+      doc.text(this.processArabic(`حرر بـ : ${loc} في : ${dt}`), margin, currentY + 3, { align: 'left' });
+      currentY += 10;
+    }
+
     // Signers and Official Stamps
     if (options.signers && options.signers.length > 0) {
       if (currentY > pageHeight - 38) {
@@ -1488,11 +1509,13 @@ export class PDFService {
     const fmt = options.formatType || 'correspondence';
     const orient = options.orientation || 'portrait';
     const isLandscape = orient === 'landscape';
+    const paperSize = (options.paperSize || 'a4').toLowerCase();
     const dateStr = options.date || new Date().toISOString().split('T')[0];
     const signers = options.signers && options.signers.length > 0 ? options.signers : ['مسير المخبر', 'مدير المؤسسة'];
     const showCorresp = options.showCorrespondenceMeta !== false;
     const showAppr = Boolean(options.showApprovalBox);
     const showStmp = options.showStampSpace !== false;
+    const hasBottomRelease = options.showBottomReleaseDate !== false;
     const marginMm = options.margins === 'compact' ? 10 : options.margins === 'spacious' ? 18 : 14;
     const baseFontSize = options.fontSizeScale === 'compact' ? '9.5pt' : options.fontSizeScale === 'large' ? '12pt' : '11pt';
 
@@ -1718,7 +1741,7 @@ export class PDFService {
               </td>
               <td style="text-align: left; width: 45%; font-size: 9.5pt; vertical-align: top; border: none;" dir="rtl">
                 <div><strong>السنة الدراسية:</strong> ${academicYear}</div>
-                <div><strong>التاريخ:</strong> ${dateStr}</div>
+                ${(!hasBottomRelease || options.showTopHeaderDate) ? `<div><strong>التاريخ:</strong> ${dateStr}</div>` : ''}
                 ${(options.reference && options.showReference !== false) ? `<div><strong>الرقم:</strong> ${options.reference}</div>` : ''}
               </td>
             </tr>
@@ -1748,6 +1771,13 @@ export class PDFService {
           ${notesHtml}
           ${closingHtml}
           ${approvalHtml}
+
+          ${hasBottomRelease ? `
+            <div style="text-align: left; margin: 16pt 0 10pt; font-weight: bold; font-size: 11pt; color: #1e293b;" dir="rtl">
+              حرر بـ : ${options.location || 'عين كرشة'} في : ${dateStr}
+            </div>
+          ` : ''}
+
           ${signaturesHtml}
 
           <!-- Footer -->

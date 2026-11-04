@@ -234,12 +234,16 @@ export class PrintService {
     // Sheet dimensions in mm
     const sheetWidth = paperSize === 'a3' 
       ? (orientation === 'landscape' ? '420mm' : '297mm')
+      : paperSize === 'a5'
+      ? (orientation === 'landscape' ? '210mm' : '148mm')
       : paperSize === 'letter'
       ? (orientation === 'landscape' ? '279.4mm' : '215.9mm')
       : (orientation === 'landscape' ? '297mm' : '210mm');
 
     const sheetMinHeight = paperSize === 'a3'
       ? (orientation === 'landscape' ? '297mm' : '420mm')
+      : paperSize === 'a5'
+      ? (orientation === 'landscape' ? '148mm' : '210mm')
       : paperSize === 'letter'
       ? (orientation === 'landscape' ? '215.9mm' : '279.4mm')
       : (orientation === 'landscape' ? '210mm' : '297mm');
@@ -314,8 +318,21 @@ export class PrintService {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <style>
+    @font-face {
+      font-family: 'ManaraDocs';
+      src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'ManaraDocsAmatti';
+      src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+
     @page {
-      size: ${paperSize} ${orientation};
+      size: ${paperSize} ${orientation} !important;
       margin: ${marginMm}mm;
     }
 
@@ -326,7 +343,7 @@ export class PrintService {
     }
 
     body {
-      font-family: '${settings.layout.fontFamily || 'Cairo'}', 'Cairo', 'Amiri', 'Segoe UI', Tahoma, sans-serif;
+      font-family: ${settings.layout.fontFamily === 'ManaraDocs' ? "'ManaraDocs', 'ManaraDocsAmatti', 'Cairo', 'Amiri', sans-serif" : `'${settings.layout.fontFamily || 'Cairo'}', 'Cairo', 'Amiri', 'Segoe UI', Tahoma, sans-serif`};
       margin: 0;
       padding: 0;
       color: #1a1a1a;
@@ -849,7 +866,7 @@ export class PrintService {
 
     @media print {
       @page {
-        size: ${paperSize} ${orientation};
+        size: ${paperSize} ${orientation} !important;
         margin: ${marginMm}mm;
       }
 

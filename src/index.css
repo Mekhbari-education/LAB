@@ -3,6 +3,14 @@
 @import "shadcn/tailwind.css";
 
 @font-face {
+  font-family: 'ManaraDocs';
+  src: url('/ManaraDocs_Amatti.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'ManaraDocsAmatti';
   src: url('/ManaraDocs_Amatti.ttf') format('truetype');
   font-weight: normal;

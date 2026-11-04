@@ -13,6 +13,7 @@ import { usePrintSettings } from '../context/PrintSettingsContext';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { Equipment, MaintenanceLog } from '../types/equipment';
 import { formatSchoolWithCommune } from '../lib/utils';
+import { generateEquipmentStickersHtml } from '../services/equipmentStickerService';
 
 export function useEquipmentLogic(isNested = false) {
   const { schoolId, schoolName, directorate, commune, academicYear } = useSchool();
@@ -21,6 +22,8 @@ export function useEquipmentLogic(isNested = false) {
   const navigate = useNavigate();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isStickerModalOpen, setIsStickerModalOpen] = useState(false);
+  const [stickerModalItem, setStickerModalItem] = useState<Equipment | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>(searchParams.get('filter') || 'all');
@@ -914,107 +917,13 @@ export function useEquipmentLogic(isNested = false) {
     });
   };
 
-  const handlePrintInventoryCards = () => {
-    const cardsHtml = filteredEquipment.map((e) => `
-      <div class="card">
-        <div class="card-header">
-          <div class="ministry">وزارة التربية الوطنية</div>
-          <div class="institution">${schoolName}</div>
-        </div>
-        <div class="card-title">بطاقة جرد العتاد</div>
-        <div class="card-body">
-          <div class="field"><span class="label">تعيين الجهاز:</span> <span class="value">${e.smartNameAr || e.name}</span></div>
-          <div class="field"><span class="label">رقم الجرد:</span> <span class="value">${e.serialNumber || '---'}</span></div>
-          <div class="field"><span class="label">النوع:</span> <span class="value">${e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة تقنية' : 'أخرى'}</span></div>
-          <div class="field"><span class="label">الموقع:</span> <span class="value">${e.location || '---'}</span></div>
-        </div>
-        <div class="card-qr">
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(JSON.stringify({ id: e.id, type: 'equipment', name: e.name }))}" alt="QR Code" />
-        </div>
-        <div class="card-footer">نظام تسيير المخابر - الأرضية الرقمية</div>
-      </div>
-    `).join('');
-
-    const html = `
-      <html dir="rtl" lang="ar">
-        <head>
-          <title>طباعة بطاقات الجرد</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
-            body { 
-              font-family: 'Cairo', sans-serif; 
-              margin: 0; 
-              padding: 20px; 
-              display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-              gap: 20px;
-              background: #f5f5f5;
-            }
-            @media print {
-              body { background: white; padding: 0; }
-              .card { break-inside: avoid; margin-bottom: 10px; }
-            }
-            .card {
-              background: white;
-              border: 2px solid #1a2744;
-              border-radius: 12px;
-              padding: 15px;
-              position: relative;
-              height: 180px;
-              display: flex;
-              flex-direction: column;
-              justify-content: space-between;
-              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            }
-            .card-header {
-              text-align: center;
-              font-size: 10px;
-              font-weight: bold;
-              border-bottom: 1px solid #eee;
-              padding-bottom: 5px;
-              margin-bottom: 5px;
-            }
-            .card-title {
-              text-align: center;
-              font-size: 14px;
-              font-weight: 900;
-              color: #1a2744;
-              margin-bottom: 10px;
-            }
-            .card-body {
-              font-size: 11px;
-              flex-grow: 1;
-            }
-            .field { margin-bottom: 4px; display: flex; gap: 5px; }
-            .label { font-weight: 900; color: #1a2744; min-width: 70px; }
-            .value { font-weight: bold; color: #333; }
-            .card-qr {
-              position: absolute;
-              bottom: 15px;
-              left: 15px;
-            }
-            .card-qr img { width: 60px; height: 60px; }
-            .card-footer {
-              text-align: center;
-              font-size: 8px;
-              color: #999;
-              border-top: 1px solid #eee;
-              padding-top: 5px;
-              margin-top: 5px;
-            }
-          </style>
-        </head>
-        <body>
-          ${cardsHtml}
-        </body>
-      </html>
-    `;
-    openPrintPreview({
-      title: 'بطاقات جرد العتاد للمؤسسة',
-      subtitle: `عدد البطاقات: ${filteredEquipment.length} · المؤسسة: ${schoolName}`,
-      type: 'custom',
-      customHtml: html
-    });
+  const handlePrintInventoryCards = (targetItem?: Equipment) => {
+    if (targetItem) {
+      setStickerModalItem(targetItem);
+    } else {
+      setStickerModalItem(null);
+    }
+    setIsStickerModalOpen(true);
   };
 
   const handleExportPDF = async () => {
@@ -1457,6 +1366,10 @@ export function useEquipmentLogic(isNested = false) {
     handleExportXLS,
     handlePrintList,
     handlePrintInventoryCards,
+    isStickerModalOpen,
+    setIsStickerModalOpen,
+    stickerModalItem,
+    setStickerModalItem,
     handleExportPDF,
     handleExportWord,
     handleSmartUpdate,

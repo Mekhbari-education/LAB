@@ -298,13 +298,13 @@ export default function PrintSettingsTab() {
           {/* Paper Size */}
           <div>
             <label className="block text-xs font-bold text-secondary mb-2">حجم الورق القياسي</label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['a4', 'a3', 'letter'] as PrintPaperSize[]).map((size) => (
+            <div className="grid grid-cols-4 gap-1.5">
+              {(['a4', 'a3', 'a5', 'letter'] as PrintPaperSize[]).map((size) => (
                 <button
                   key={size}
                   type="button"
                   onClick={() => updateSettings({ layout: { ...layout, paperSize: size } })}
-                  className={`py-3 px-2 rounded-xl text-xs font-black uppercase transition-all border ${
+                  className={`py-3 px-1 rounded-xl text-xs font-black uppercase transition-all border ${
                     layout.paperSize === size
                       ? 'bg-primary text-white border-primary shadow-sm'
                       : 'bg-surface-container text-secondary border-outline-variant/20 hover:bg-secondary-container/30'
@@ -397,7 +397,7 @@ export default function PrintSettingsTab() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-secondary mb-2">نوع الخط العربي في التقارير</label>
+            <label className="block text-xs font-bold text-secondary mb-2">الخط العربي (Font) — نوع الخط في التقارير والمطبوعات</label>
             <select
               value={layout.fontFamily}
               onChange={(e) => updateSettings({ layout: { ...layout, fontFamily: e.target.value as any } })}
