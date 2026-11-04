@@ -77,6 +77,7 @@ export default function EquipmentStickerModal({
 
   // Filter items based on chosen scope
   const targetItems: EquipmentStickerItem[] = useMemo(() => {
+    if (!isOpen) return [];
     let rawList: Equipment[] = [];
     if (scope === 'single') {
       const found = equipment.find(e => e.id === activeSingleId) || selectedItem || equipment[0];
@@ -113,15 +114,20 @@ export default function EquipmentStickerModal({
       status: e.status,
       notes: e.notes
     }));
-  }, [equipment, scope, activeSingleId, selectedItem, selectedIds, searchQuery]);
+  }, [isOpen, equipment, scope, activeSingleId, selectedItem, selectedIds, searchQuery]);
 
   // Build the live standalone HTML
+  const schoolNameVal = schoolInfo?.schoolName || '';
+  const communeVal = schoolInfo?.commune || '';
+  const directorateVal = schoolInfo?.directorate || '';
+
   const generatedHtml = useMemo(() => {
+    if (!isOpen) return '';
     return generateEquipmentStickersHtml({
       items: targetItems,
-      schoolName: schoolInfo.schoolName,
-      commune: schoolInfo.commune,
-      directorate: schoolInfo.directorate,
+      schoolName: schoolNameVal,
+      commune: communeVal,
+      directorate: directorateVal,
       laboratoryName: 'مخبر العلوم الفيزيائية والطبيعية',
       preset,
       includeQrCode,
@@ -137,8 +143,11 @@ export default function EquipmentStickerModal({
       copiesPerItem
     });
   }, [
+    isOpen,
     targetItems,
-    schoolInfo,
+    schoolNameVal,
+    communeVal,
+    directorateVal,
     preset,
     includeQrCode,
     includeBarcode,

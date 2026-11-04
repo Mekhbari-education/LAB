@@ -42,6 +42,8 @@ function getCacheKey(key: string): string | null {
   return `offline_cache_${user.uid}_${key}`;
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export function useSqlCollection<T>(key: string, endpoint: string) {
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
 
@@ -133,7 +135,7 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [key] });
 
   return { 
-    data: finalData || [], 
+    data: (finalData ?? EMPTY_ARRAY) as T[], 
     loading: isLoading && !finalData, 
     error, 
     refetch, 

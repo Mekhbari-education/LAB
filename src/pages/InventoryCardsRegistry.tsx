@@ -116,23 +116,28 @@ export default function InventoryCardsRegistry() {
 
   useEffect(() => {
     if (sqlEquipment) {
-      const equipmentItems = sqlEquipment.map(data => ({
-        id: data.id,
-        serialNumber: data.serialNumber || '',
-        name: data.smartNameAr || data.name || '',
-        foundationalInventory: data.registrationDate || data.foundationalInventory || '',
-        decennialReview: data.decennialReview || '',
-        totalQuantity: data.totalQuantity || 1,
-        supplier: data.source || data.supplier || '',
-        price: data.price || '',
-        location: data.location || '',
-        exitDate: data.exitDate || '',
-        status: data.status === 'functional' ? 'جيدة' : 
-                data.status === 'maintenance' ? 'تحتاج صيانة' : 
-                data.status === 'broken' ? 'عاطلة' : data.status || 'جيدة',
-        notes: data.notes || ''
-      }));
-      setItems(equipmentItems);
+      setItems(prev => {
+        if (prev.length === sqlEquipment.length && prev.length === 0) {
+          return prev;
+        }
+        const equipmentItems = sqlEquipment.map(data => ({
+          id: data.id,
+          serialNumber: data.serialNumber || '',
+          name: data.smartNameAr || data.name || '',
+          foundationalInventory: data.registrationDate || data.foundationalInventory || '',
+          decennialReview: data.decennialReview || '',
+          totalQuantity: data.totalQuantity || 1,
+          supplier: data.source || data.supplier || '',
+          price: data.price || '',
+          location: data.location || '',
+          exitDate: data.exitDate || '',
+          status: data.status === 'functional' ? 'جيدة' : 
+                  data.status === 'maintenance' ? 'تحتاج صيانة' : 
+                  data.status === 'broken' ? 'عاطلة' : data.status || 'جيدة',
+          notes: data.notes || ''
+        }));
+        return equipmentItems;
+      });
       setLoading(sqlLoading);
     }
   }, [sqlEquipment, sqlLoading]);
@@ -165,32 +170,36 @@ export default function InventoryCardsRegistry() {
     }
   };
 
-  const sortedItems = [...items].sort((a, b) => {
-    if (!sortDirection || sortField === 'index') return 0;
-    
-    const aValue = a[sortField as keyof InventoryItem];
-    const bValue = b[sortField as keyof InventoryItem];
+  const sortedItems = React.useMemo(() => {
+    return [...items].sort((a, b) => {
+      if (!sortDirection || sortField === 'index') return 0;
+      
+      const aValue = a[sortField as keyof InventoryItem];
+      const bValue = b[sortField as keyof InventoryItem];
 
-    if (typeof aValue === 'string' && typeof bValue === 'string') {
-      return sortDirection === 'asc' 
-        ? aValue.localeCompare(bValue, 'ar') 
-        : bValue.localeCompare(aValue, 'ar');
-    }
-    
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-    }
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return sortDirection === 'asc' 
+          ? aValue.localeCompare(bValue, 'ar') 
+          : bValue.localeCompare(aValue, 'ar');
+      }
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
 
-    return 0;
-  });
+      return 0;
+    });
+  }, [items, sortDirection, sortField]);
 
-  const filteredItems = sortedItems.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.supplier && item.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.location && item.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredItems = React.useMemo(() => {
+    return sortedItems.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.serialNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.supplier && item.supplier.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.location && item.location.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.notes && item.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  }, [sortedItems, searchTerm]);
 
   const stats = {
     total: items.length,

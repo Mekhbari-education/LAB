@@ -107,13 +107,18 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
         return prev;
       });
     } else if (schoolLogo) {
-      setSettings(prev => ({
-        ...prev,
-        institution: {
-          ...prev.institution,
-          customLogoUrl: schoolLogo
+      setSettings(prev => {
+        if (prev.institution.customLogoUrl === schoolLogo) {
+          return prev;
         }
-      }));
+        return {
+          ...prev,
+          institution: {
+            ...prev.institution,
+            customLogoUrl: schoolLogo
+          }
+        };
+      });
     }
   }, [schoolName, directorate, commune, jobTitle, schoolLogo]);
 

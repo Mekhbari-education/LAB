@@ -1710,18 +1710,20 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
       </AnimatePresence>
 
       {/* Equipment Identification & Inventory Sticker Printing Modal */}
-      <EquipmentStickerModal
-        isOpen={isStickerModalOpen}
-        onClose={() => setIsStickerModalOpen(false)}
-        equipment={filteredEquipment}
-        selectedItem={stickerModalItem}
-        selectedIds={selectedIds}
-        schoolInfo={{
-          schoolName,
-          commune,
-          directorate
-        }}
-      />
+      {isStickerModalOpen && (
+        <EquipmentStickerModal
+          isOpen={isStickerModalOpen}
+          onClose={() => setIsStickerModalOpen(false)}
+          equipment={filteredEquipment}
+          selectedItem={stickerModalItem}
+          selectedIds={selectedIds}
+          schoolInfo={{
+            schoolName,
+            commune,
+            directorate
+          }}
+        />
+      )}
     </div>
   );
 }

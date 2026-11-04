@@ -150,7 +150,7 @@ export default function InventoryCardPrintModal({
     initialIncludeStamp, 
     initialIncludeSupervisorStamp, 
     initialCopies, 
-    items
+    items.length
   ]);
 
   // Current active item

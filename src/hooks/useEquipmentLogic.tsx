@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { onSnapshot, query, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, writeBatch, orderBy, where, getDocs, limit } from 'firebase/firestore';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -41,10 +41,12 @@ export function useEquipmentLogic(isNested = false) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const parentRef = useRef<HTMLDivElement>(null);
+  const handledSearchTargetRef = useRef<string | null>(null);
 
   useEffect(() => {
     const targetId = searchParams.get('id');
-    if (targetId && equipment.length > 0) {
+    if (targetId && equipment.length > 0 && handledSearchTargetRef.current !== targetId) {
+      handledSearchTargetRef.current = targetId;
       let actualId = targetId;
       if (targetId.startsWith('APP_ID_')) {
         const parts = targetId.split('_');
@@ -109,7 +111,11 @@ export function useEquipmentLogic(isNested = false) {
 
   useEffect(() => {
     if (sqlEquipment) {
-      setEquipment(sqlEquipment);
+      setEquipment(prev => {
+        if (prev === sqlEquipment) return prev;
+        if (prev.length === 0 && sqlEquipment.length === 0) return prev;
+        return sqlEquipment;
+      });
       setLoading(sqlLoading);
     }
   }, [sqlEquipment, sqlLoading]);
@@ -1251,52 +1257,54 @@ export function useEquipmentLogic(isNested = false) {
     }
   };
 
-  const filteredEquipment = equipment
-    .filter(e => {
-      const s = (searchTerm || '').toLowerCase().trim();
-      const matchesSearch = !s ||
-        e.name?.toLowerCase().includes(s) ||
-        e.smartNameAr?.toLowerCase().includes(s) ||
-        e.serialNumber?.toLowerCase().includes(s) ||
-        e.source?.toLowerCase().includes(s) ||
-        e.supplier?.toLowerCase().includes(s) ||
-        e.location?.toLowerCase().includes(s) ||
-        e.price?.toLowerCase().includes(s) ||
-        e.registrationDate?.toLowerCase().includes(s) ||
-        e.foundationalInventory?.toLowerCase().includes(s) ||
-        e.exitDate?.toLowerCase().includes(s) ||
-        e.notes?.toLowerCase().includes(s);
-      
-      const matchesType = filterType === 'all' || 
-                         (filterType === 'smart' ? !!e.smartNameAr : e.type === filterType);
-      
-      const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
+  const filteredEquipment = useMemo(() => {
+    return equipment
+      .filter(e => {
+        const s = (searchTerm || '').toLowerCase().trim();
+        const matchesSearch = !s ||
+          e.name?.toLowerCase().includes(s) ||
+          e.smartNameAr?.toLowerCase().includes(s) ||
+          e.serialNumber?.toLowerCase().includes(s) ||
+          e.source?.toLowerCase().includes(s) ||
+          e.supplier?.toLowerCase().includes(s) ||
+          e.location?.toLowerCase().includes(s) ||
+          e.price?.toLowerCase().includes(s) ||
+          e.registrationDate?.toLowerCase().includes(s) ||
+          e.foundationalInventory?.toLowerCase().includes(s) ||
+          e.exitDate?.toLowerCase().includes(s) ||
+          e.notes?.toLowerCase().includes(s);
+        
+        const matchesType = filterType === 'all' || 
+                           (filterType === 'smart' ? !!e.smartNameAr : e.type === filterType);
+        
+        const matchesStatus = filterStatus === 'all' || e.status === filterStatus;
 
-      const matchesExit = filterExitStatus === 'all' ||
-        (filterExitStatus === 'active' ? (!e.exitDate || e.exitDate === '---' || e.exitDate === '-') :
-        (filterExitStatus === 'exited' ? (!!e.exitDate && e.exitDate !== '---' && e.exitDate !== '-') : true));
+        const matchesExit = filterExitStatus === 'all' ||
+          (filterExitStatus === 'active' ? (!e.exitDate || e.exitDate === '---' || e.exitDate === '-') :
+          (filterExitStatus === 'exited' ? (!!e.exitDate && e.exitDate !== '---' && e.exitDate !== '-') : true));
 
-      return matchesSearch && matchesType && matchesStatus && matchesExit;
-    })
-    .sort((a, b) => {
-      if (sortField === 'none') return 0;
-      
-      const aValue = a[sortField];
-      const bValue = b[sortField];
+        return matchesSearch && matchesType && matchesStatus && matchesExit;
+      })
+      .sort((a, b) => {
+        if (sortField === 'none') return 0;
+        
+        const aValue = a[sortField];
+        const bValue = b[sortField];
 
-      if (aValue === undefined || bValue === undefined) return 0;
+        if (aValue === undefined || bValue === undefined) return 0;
 
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-      }
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        }
 
-      const aStr = String(aValue).toLowerCase();
-      const bStr = String(bValue).toLowerCase();
+        const aStr = String(aValue).toLowerCase();
+        const bStr = String(bValue).toLowerCase();
 
-      if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
-      if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
+        if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
+        if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+  }, [equipment, searchTerm, filterType, filterStatus, filterExitStatus, sortField, sortDirection]);
 
   const rowVirtualizer = useVirtualizer({
     count: filteredEquipment.length,
