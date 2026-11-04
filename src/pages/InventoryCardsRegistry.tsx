@@ -32,7 +32,8 @@ import {
   Stamp,
   Copy,
   Sparkles,
-  Download
+  Download,
+  ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -48,6 +49,12 @@ import { Equipment } from '../types/equipment';
 import { printInventoryCards, PrintColorMode } from '../services/inventoryCardPrintService';
 import InventoryCardPrintModal from '../components/InventoryCardPrintModal';
 import { usePrintSettings } from '../context/PrintSettingsContext';
+import { 
+  getDateNumeric, 
+  getSerialNumeric, 
+  normalizeArabicForSort, 
+  getPriceNumeric 
+} from '../hooks/useEquipmentLogic';
 
 interface InventoryItem {
   id: string;
@@ -99,7 +106,7 @@ export default function InventoryCardsRegistry() {
   const [isPrinting, setIsPrinting] = useState(false);
 
   // Sorting
-  const [sortField, setSortField] = useState<SortField>('index');
+  const [sortField, setSortField] = useState<SortField>('serialNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const navigate = useNavigate();
 
@@ -166,28 +173,74 @@ export default function InventoryCardsRegistry() {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      // For quantity, dates, and price: default to 'desc' on first click ("من الأكبر إلى الأصغر" / "الأحدث أولاً")
+      if (field === 'totalQuantity' || field === 'foundationalInventory' || field === 'decennialReview' || field === 'price' || field === 'exitDate') {
+        setSortDirection('desc');
+      } else {
+        setSortDirection('asc');
+      }
     }
   };
 
   const sortedItems = React.useMemo(() => {
     return [...items].sort((a, b) => {
-      if (!sortDirection || sortField === 'index') return 0;
-      
-      const aValue = a[sortField as keyof InventoryItem];
-      const bValue = b[sortField as keyof InventoryItem];
+      if (!sortDirection) return 0;
 
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return sortDirection === 'asc' 
-          ? aValue.localeCompare(bValue, 'ar') 
-          : bValue.localeCompare(aValue, 'ar');
-      }
-      
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      // 1. Natural index / serialNumber sorting (1, 2, 3... 10, 11)
+      if (sortField === 'index' || sortField === 'serialNumber') {
+        const aSerial = getSerialNumeric(a.serialNumber);
+        const bSerial = getSerialNumeric(b.serialNumber);
+        if (aSerial !== bSerial) {
+          return sortDirection === 'asc' ? aSerial - bSerial : bSerial - aSerial;
+        }
+        return sortDirection === 'asc'
+          ? (a.serialNumber || '').localeCompare(b.serialNumber || '', undefined, { numeric: true })
+          : (b.serialNumber || '').localeCompare(a.serialNumber || '', undefined, { numeric: true });
       }
 
-      return 0;
+      // 2. Quantity (from largest to smallest or vice versa)
+      if (sortField === 'totalQuantity') {
+        const aQty = Number(a.totalQuantity) || 0;
+        const bQty = Number(b.totalQuantity) || 0;
+        return sortDirection === 'desc' ? bQty - aQty : aQty - bQty;
+      }
+
+      // 3. Dates (foundationalInventory, decennialReview, exitDate)
+      if (sortField === 'foundationalInventory' || sortField === 'decennialReview' || sortField === 'exitDate') {
+        const aDate = getDateNumeric(a[sortField as keyof InventoryItem]);
+        const bDate = getDateNumeric(b[sortField as keyof InventoryItem]);
+        if (aDate < 0 && bDate < 0) return 0;
+        if (aDate < 0) return 1;
+        if (bDate < 0) return -1;
+        return sortDirection === 'desc' ? bDate - aDate : aDate - bDate;
+      }
+
+      // 4. Price (numeric extraction from largest to smallest)
+      if (sortField === 'price') {
+        const aPrice = getPriceNumeric(a.price);
+        const bPrice = getPriceNumeric(b.price);
+        if (aPrice < 0 && bPrice < 0) return 0;
+        if (aPrice < 0) return 1;
+        if (bPrice < 0) return -1;
+        return sortDirection === 'desc' ? bPrice - aPrice : aPrice - bPrice;
+      }
+
+      // 5. Name (normalized Arabic sorting)
+      if (sortField === 'name') {
+        const aName = normalizeArabicForSort(a.name);
+        const bName = normalizeArabicForSort(b.name);
+        const comp = aName.localeCompare(bName, 'ar', { numeric: true, sensitivity: 'base' });
+        return sortDirection === 'asc' ? comp : -comp;
+      }
+
+      // 6. Generic string comparison (supplier, status, location, notes)
+      const aVal = String(a[sortField as keyof InventoryItem] || '').trim();
+      const bVal = String(b[sortField as keyof InventoryItem] || '').trim();
+      if (!aVal && !bVal) return 0;
+      if (!aVal) return 1;
+      if (!bVal) return -1;
+      const comp = aVal.localeCompare(bVal, 'ar', { numeric: true, sensitivity: 'base' });
+      return sortDirection === 'asc' ? comp : -comp;
     });
   }, [items, sortDirection, sortField]);
 
@@ -1070,18 +1123,46 @@ export default function InventoryCardsRegistry() {
             </button>
           </div>
 
-          <div className="relative flex-1 max-w-sm group">
-            <Search className={cn("absolute top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors", i18n.language === 'ar' ? 'right-5' : 'left-5')} size={18} />
-            <input
-              type="text"
-              placeholder={t('inventory_cards.search_placeholder', 'بحث في السجل بالرقم أو التعيين أو الممون...')}
-              className={cn(
-                "w-full py-3.5 bg-surface-container-low border-2 border-transparent focus:border-primary/20 focus:bg-surface rounded-2xl font-bold text-xs md:text-sm shadow-inner transition-all outline-none",
-                i18n.language === 'ar' ? "pr-12 pl-4" : "pl-12 pr-4"
-              )}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex flex-wrap items-center gap-3 flex-1 max-w-xl justify-end">
+            {/* Quick Sort Dropdown (زر الفرز السريع) */}
+            <div className="flex items-center gap-1.5 bg-surface-container-low px-3 py-2 rounded-2xl border border-primary/20 shadow-inner" title="فرز وتنسيق سجل بطاقات الجرد حسب رقم الجرد، التسمية، الجرد التأسيسي، أو الكمية">
+              <ArrowUpDown size={16} className="text-primary shrink-0" />
+              <select 
+                className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer py-1"
+                value={`${sortField}_${sortDirection}`}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const [field, dir] = val.split('_') as [SortField, SortDirection];
+                  setSortField(field);
+                  setSortDirection(dir);
+                }}
+              >
+                <option value="serialNumber_asc">الترتيب: رقم الجرد (تصاعدي 1 ← 99)</option>
+                <option value="serialNumber_desc">الترتيب: رقم الجرد (تنازلي 99 ← 1)</option>
+                <option value="name_asc">الترتيب: التسمية (أبجدياً أ ← ي)</option>
+                <option value="name_desc">الترتيب: التسمية (أبجدياً ي ← أ)</option>
+                <option value="foundationalInventory_desc">الترتيب: الجرد التأسيسي (الأحدث أولاً)</option>
+                <option value="foundationalInventory_asc">الترتيب: الجرد التأسيسي (الأقدم أولاً)</option>
+                <option value="totalQuantity_desc">الترتيب: الكمية (من الأكبر إلى الأصغر)</option>
+                <option value="totalQuantity_asc">الترتيب: الكمية (من الأصغر إلى الأكبر)</option>
+                <option value="supplier_asc">الترتيب: الممون</option>
+                <option value="status_asc">الترتيب: الحالة الوظيفية</option>
+              </select>
+            </div>
+
+            <div className="relative flex-1 min-w-[220px] max-w-sm group">
+              <Search className={cn("absolute top-1/2 -translate-y-1/2 text-primary/40 group-focus-within:text-primary transition-colors", i18n.language === 'ar' ? 'right-5' : 'left-5')} size={18} />
+              <input
+                type="text"
+                placeholder={t('inventory_cards.search_placeholder', 'بحث في السجل بالرقم أو التعيين أو الممون...')}
+                className={cn(
+                  "w-full py-3.5 bg-surface-container-low border-2 border-transparent focus:border-primary/20 focus:bg-surface rounded-2xl font-bold text-xs md:text-sm shadow-inner transition-all outline-none",
+                  i18n.language === 'ar' ? "pr-12 pl-4" : "pl-12 pr-4"
+                )}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
@@ -1499,8 +1580,9 @@ export default function InventoryCardsRegistry() {
             <thead>
               <tr className="bg-primary text-white">
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 w-[50px] cursor-pointer group"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 w-[50px] cursor-pointer group transition-colors", sortField === 'index' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('index')}
+                  title="الترتيب حسب الرقم التسلسلي"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_index', 'رقم')}
@@ -1508,8 +1590,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-[130px]"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-[130px] transition-colors", sortField === 'serialNumber' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('serialNumber')}
+                  title="انقر للترتيب حسب رقم الجرد (1 ← 99 / 99 ← 1)"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_serial', 'رقم الجرد')}
@@ -1517,8 +1600,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 font-black text-xs uppercase tracking-widest border-l border-white/10 w-[24%] text-center cursor-pointer group"
+                  className={cn("p-4 font-black text-xs uppercase tracking-widest border-l border-white/10 w-[24%] text-center cursor-pointer group transition-colors", sortField === 'name' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('name')}
+                  title="انقر للترتيب أبجدياً حسب تعيين الشيء (أ ← ي / ي ← أ)"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_name', 'تعيين الشيء')}
@@ -1526,8 +1610,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group transition-colors", sortField === 'foundationalInventory' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('foundationalInventory')}
+                  title="انقر للترتيب حسب تاريخ الجرد التأسيسي (الأحدث أولاً / الأقدم)"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_foundational', 'الجرد التأسيسي')}
@@ -1535,8 +1620,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group transition-colors", sortField === 'decennialReview' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('decennialReview')}
+                  title="انقر للترتيب حسب المراجعة العشرية"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_decennial', 'المراجعة العشرية')}
@@ -1544,8 +1630,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-20"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-20 transition-colors", sortField === 'totalQuantity' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('totalQuantity')}
+                  title="انقر للترتيب حسب الكمية (من الأكبر إلى الأصغر / من الأصغر إلى الأكبر)"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_quantity', 'الكمية')}
@@ -1553,8 +1640,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group transition-colors", sortField === 'supplier' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('supplier')}
+                  title="انقر للترتيب حسب الممون"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_supplier', 'الممون')}
@@ -1562,8 +1650,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-24"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 cursor-pointer group w-24 transition-colors", sortField === 'status' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('status')}
+                  title="انقر للترتيب حسب الحالة الوظيفية"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_status', 'الحالة')}
@@ -1571,8 +1660,9 @@ export default function InventoryCardsRegistry() {
                   </div>
                 </th>
                 <th 
-                  className="p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 w-[14%] cursor-pointer group"
+                  className={cn("p-4 text-center font-black text-xs uppercase tracking-widest border-l border-white/10 w-[14%] cursor-pointer group transition-colors", sortField === 'notes' ? "bg-white/15 text-amber-200" : "hover:bg-white/10")}
                   onClick={() => handleSort('notes')}
+                  title="انقر للترتيب حسب الملاحظات"
                 >
                   <div className="flex items-center justify-center gap-1">
                     {t('inventory_cards.col_notes', 'ملاحظات')}
