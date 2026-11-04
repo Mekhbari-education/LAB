@@ -21,7 +21,8 @@ import {
   Edit3, 
   Layers,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  ExternalLink
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
@@ -314,6 +315,19 @@ export default function ActivityRequest() {
     });
   };
 
+  const handleOpenDirectTab = async (isBlank = false) => {
+    const data = getDocumentData();
+    const html = PDFService.generateActivityRequestHtml({
+      ...data,
+      isBlank,
+      standaloneToolbar: true
+    });
+    await PrintService.printInNewTab(html, {
+      title: `طلب_تحضير_نشاط_${orderNum.replace(/\//g, '_')}${isBlank ? '_فارغ' : ''}`,
+      autoPrint: false
+    });
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24 rtl font-sans" dir="rtl">
       <Helmet>
@@ -388,6 +402,17 @@ export default function ActivityRequest() {
                       type="button"
                       onClick={() => {
                         setShowBlankDropdown(false);
+                        handleOpenDirectTab(true);
+                      }}
+                      className="w-full text-right px-3 py-2.5 rounded-xl text-xs font-black text-emerald-800 dark:text-emerald-200 hover:bg-emerald-500/15 transition-colors flex items-center gap-2"
+                    >
+                      <ExternalLink size={15} />
+                      فتح استمارة فارغة في تبويب مستقل
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowBlankDropdown(false);
                         handleDownloadBlankPDF();
                       }}
                       className="w-full text-right px-3 py-2.5 rounded-xl text-xs font-black text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 transition-colors flex items-center gap-2"
@@ -399,6 +424,16 @@ export default function ActivityRequest() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Standalone Tab Button */}
+            <button 
+              onClick={() => handleOpenDirectTab(false)} 
+              className="px-4 py-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-800 dark:text-emerald-200 border border-emerald-600/25 rounded-2xl font-black flex items-center gap-1.5 transition-all active:scale-95 text-xs shadow-sm"
+              title="فتح استمارة النشاط مباشرة في تبويب متصفح مستقل للمعاينة الكاملة والطباعة"
+            >
+              <ExternalLink size={16} />
+              تبويب مستقل
+            </button>
 
             <button 
               onClick={handleDownloadWord} 

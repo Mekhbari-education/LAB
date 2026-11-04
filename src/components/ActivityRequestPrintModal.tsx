@@ -19,7 +19,15 @@ import {
   AlignJustify,
   SlidersHorizontal,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  ExternalLink,
+  Palette,
+  Type,
+  LayoutGrid,
+  ShieldCheck,
+  Eye,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
@@ -29,6 +37,11 @@ export type PaperSize = 'a4' | 'a3' | 'letter' | 'legal';
 export type PageOrientation = 'portrait' | 'landscape';
 export type PagesPerSheet = 1 | 2 | 4;
 export type MarginOption = 'default' | 'minimum' | 'none' | 'wide';
+export type FontFamilyOption = 'amiri' | 'cairo' | 'tajawal' | 'system';
+export type ColorModeOption = 'color' | 'grayscale' | 'bw';
+export type TableDensityOption = 'compact' | 'normal' | 'spacious';
+export type BorderStyleOption = 'thin' | 'normal' | 'prominent';
+export type FontSizeScaleOption = 'normal' | 'compact' | 'large';
 
 export interface ActivityRequestData {
   orderNum: string;
@@ -82,6 +95,21 @@ export default function ActivityRequestPrintModal({
   const [scale, setScale] = useState<number>(100);
   const [showHeader, setShowHeader] = useState<boolean>(true);
   const [backgroundGraphics, setBackgroundGraphics] = useState<boolean>(true);
+
+  // Expanded Settings & Options
+  const [fontFamily, setFontFamily] = useState<FontFamilyOption>('amiri');
+  const [fontSizeScale, setFontSizeScale] = useState<FontSizeScaleOption>('normal');
+  const [colorMode, setColorMode] = useState<ColorModeOption>('color');
+  const [tableDensity, setTableDensity] = useState<TableDensityOption>('normal');
+  const [borderStyle, setBorderStyle] = useState<BorderStyleOption>('normal');
+  const [showInstitution, setShowInstitution] = useState<boolean>(true);
+  const [showSummaryCards, setShowSummaryCards] = useState<boolean>(true);
+  const [showEquipTable, setShowEquipTable] = useState<boolean>(true);
+  const [showChemTable, setShowChemTable] = useState<boolean>(true);
+  const [includeStampBox, setIncludeStampBox] = useState<boolean>(true);
+  const [includeTeacherSig, setIncludeTeacherSig] = useState<boolean>(true);
+  const [includeWatermark, setIncludeWatermark] = useState<boolean>(false);
+  const [showFormulasHighlight, setShowFormulasHighlight] = useState<boolean>(true);
 
   const [copies, setCopies] = useState<number>(1);
   const [isEconomical, setIsEconomical] = useState<boolean>(false);
@@ -173,7 +201,21 @@ export default function ActivityRequestPrintModal({
         margins,
         scale,
         showHeader,
-        backgroundGraphics: backgroundGraphics && !isEconomical
+        showInstitution,
+        showSummaryCards,
+        showEquipTable,
+        showChemTable,
+        includeStampBox,
+        includeTeacherSig,
+        includeWatermark,
+        showFormulasHighlight,
+        fontFamily,
+        fontSizeScale,
+        colorMode: isEconomical ? 'bw' : colorMode,
+        tableDensity,
+        borderStyle,
+        backgroundGraphics: backgroundGraphics && !isEconomical && colorMode === 'color',
+        standaloneToolbar: false
       });
       await PrintService.printHtml(html, { title: docTitle });
     } catch (e) {
@@ -195,8 +237,91 @@ export default function ActivityRequestPrintModal({
     margins, 
     scale, 
     showHeader, 
+    showInstitution,
+    showSummaryCards,
+    showEquipTable,
+    showChemTable,
+    includeStampBox,
+    includeTeacherSig,
+    includeWatermark,
+    showFormulasHighlight,
+    fontFamily,
+    fontSizeScale,
+    colorMode,
+    tableDensity,
+    borderStyle,
     backgroundGraphics, 
     docTitle
+  ]);
+
+  const handleOpenSeparateTab = useCallback(async () => {
+    try {
+      const html = PDFService.generateActivityRequestHtml({
+        ...data,
+        schoolInfo,
+        jobTitle: data.jobTitle,
+        isBlank,
+        isEconomical,
+        copies,
+        lineStyle,
+        blankRowsCount,
+        paperSize,
+        orientation,
+        pagesPerSheet,
+        margins,
+        scale,
+        showHeader,
+        showInstitution,
+        showSummaryCards,
+        showEquipTable,
+        showChemTable,
+        includeStampBox,
+        includeTeacherSig,
+        includeWatermark,
+        showFormulasHighlight,
+        fontFamily,
+        fontSizeScale,
+        colorMode: isEconomical ? 'bw' : colorMode,
+        tableDensity,
+        borderStyle,
+        backgroundGraphics: backgroundGraphics && !isEconomical && colorMode === 'color',
+        standaloneToolbar: true
+      });
+      await PrintService.printInNewTab(html, {
+        title: `طلب_تحضير_نشاط_${data.orderNum ? data.orderNum.replace(/\//g, '_') : 'مخبري'}${isBlank ? '_فارغ' : ''}`,
+        autoPrint: false
+      });
+    } catch (e) {
+      console.error('Error opening separate tab:', e);
+    }
+  }, [
+    data,
+    schoolInfo,
+    isBlank,
+    isEconomical,
+    copies,
+    lineStyle,
+    blankRowsCount,
+    paperSize,
+    orientation,
+    pagesPerSheet,
+    margins,
+    scale,
+    showHeader,
+    showInstitution,
+    showSummaryCards,
+    showEquipTable,
+    showChemTable,
+    includeStampBox,
+    includeTeacherSig,
+    includeWatermark,
+    showFormulasHighlight,
+    fontFamily,
+    fontSizeScale,
+    colorMode,
+    tableDensity,
+    borderStyle,
+    backgroundGraphics
   ]);
 
   // Global Ctrl+P keyboard shortcut when modal is open
@@ -271,11 +396,52 @@ export default function ActivityRequestPrintModal({
   };
 
   const paperDim = getPaperDimensions();
-  const effectiveBackgroundGraphics = backgroundGraphics && !isEconomical;
+
+  // Font family resolution for live canvas
+  const getSelectedFontFamily = () => {
+    switch (fontFamily) {
+      case 'cairo':
+        return "'Cairo', 'Segoe UI', Tahoma, sans-serif";
+      case 'tajawal':
+        return "'Tajawal', 'Cairo', sans-serif";
+      case 'system':
+        return "system-ui, -apple-system, sans-serif";
+      case 'amiri':
+      default:
+        return "'Amiri', 'Traditional Arabic', serif";
+    }
+  };
+
+  const isBwMode = colorMode === 'bw' || isEconomical;
+  const isGrayMode = colorMode === 'grayscale';
+  const effectiveBackgroundGraphics = backgroundGraphics && !isBwMode;
+
+  const getBorderBorderColor = () => {
+    if (isBwMode) return 'border-black';
+    if (isGrayMode) return 'border-zinc-500';
+    return effectiveBackgroundGraphics ? 'border-[#c8d2c3]' : 'border-zinc-400';
+  };
+
+  const getHeaderBgColor = () => {
+    if (isBwMode) return 'bg-white text-black border-black';
+    if (isGrayMode) return 'bg-zinc-800 text-white border-zinc-800';
+    return effectiveBackgroundGraphics ? 'bg-[#2b3d22] text-white border-[#2b3d22]' : 'bg-zinc-800 text-white border-zinc-800';
+  };
+
+  const getCellPadding = () => {
+    if (tableDensity === 'compact') return 'p-0.5 text-[8.5px]';
+    if (tableDensity === 'spacious') return 'p-2 text-[10.5px]';
+    return 'p-1 text-[9.5px]';
+  };
 
   // Single Page Sheet Content Component
   const renderDocumentContent = (miniBadge?: string) => (
-    <div className="w-full h-full flex flex-col justify-between select-text text-right font-sans">
+    <div 
+      style={{ fontFamily: getSelectedFontFamily() }}
+      className={`w-full h-full flex flex-col justify-between select-text text-right ${
+        fontSizeScale === 'compact' ? 'scale-[0.95]' : fontSizeScale === 'large' ? 'scale-[1.03]' : ''
+      }`}
+    >
       {/* Upper Content */}
       <div>
         {miniBadge && (
@@ -289,190 +455,200 @@ export default function ActivityRequestPrintModal({
 
         {/* Header: Republic + Ministry */}
         {showHeader && (
-          <>
-            <div className="text-center mb-1">
-              <div className="text-[13.5px] font-black tracking-wide text-[#1e2819] font-serif">
-                {schoolInfo.country}
-              </div>
-              <div className="text-[11.5px] font-bold text-[#3c4632] font-serif">
-                {schoolInfo.ministry}
-              </div>
+          <div className="text-center mb-1">
+            <div className={`text-[13.5px] font-black tracking-wide ${isBwMode ? 'text-black' : isGrayMode ? 'text-zinc-900' : 'text-[#1e2819]'}`}>
+              {schoolInfo.country}
             </div>
+            <div className={`text-[11.5px] font-bold ${isBwMode ? 'text-zinc-800' : isGrayMode ? 'text-zinc-700' : 'text-[#3c4632]'}`}>
+              {schoolInfo.ministry}
+            </div>
+          </div>
+        )}
 
-            {/* Institution and Laboratory Bar */}
-            <div className={`flex justify-between items-start text-[10.5px] font-bold text-[#32382c] border-b pb-1 mb-2 font-serif ${
-              isEconomical ? 'border-zinc-400' : 'border-[#c8d2c3]'
-            }`}>
-              <div className="text-right leading-relaxed">
-                <div>{schoolInfo.directorate}</div>
-                <div>{formattedSchool}</div>
-              </div>
-              <div className="text-left leading-relaxed">
-                <div>السنة الدراسية: {schoolInfo.academicYear}</div>
-                <div>المخبر: {schoolInfo.laboratory}</div>
-              </div>
+        {/* Institution and Laboratory Bar */}
+        {showInstitution && (
+          <div className={`flex justify-between items-start text-[10.5px] font-bold border-b pb-1 mb-2 ${
+            isBwMode ? 'text-black border-black' : isGrayMode ? 'text-zinc-800 border-zinc-400' : (effectiveBackgroundGraphics ? 'text-[#32382c] border-[#c8d2c3]' : 'text-zinc-800 border-zinc-400')
+          }`}>
+            <div className="text-right leading-relaxed">
+              <div>{schoolInfo.directorate}</div>
+              <div>{formattedSchool}</div>
             </div>
-          </>
+            <div className="text-left leading-relaxed">
+              <div>السنة الدراسية: {schoolInfo.academicYear}</div>
+              <div>المخبر: {schoolInfo.laboratory}</div>
+            </div>
+          </div>
         )}
 
         {/* Document Title Banner */}
         <div className="text-center mb-2">
-          <h2 className="text-[15.5px] font-black text-[#1b2614] m-0 font-serif tracking-tight">
+          <h2 className={`text-[15.5px] font-black m-0 tracking-tight ${
+            isBwMode ? 'text-black' : isGrayMode ? 'text-zinc-950' : 'text-[#1b2614]'
+          }`}>
             {docTitle}
           </h2>
-          <p className="text-[9.5px] font-bold text-[#495443] m-0 mt-0.5 font-serif">
+          <p className="text-[9.5px] font-bold text-zinc-600 m-0 mt-0.5">
             {docSubtitle}
           </p>
         </div>
 
         {/* 8 Detailed Summary Cards (2 rows of 4) */}
-        <div className="grid grid-cols-4 gap-1.5 mb-2">
-          {summaryCards.map((card, idx) => (
-            <div 
-              key={idx} 
-              className={`border rounded p-1 sm:p-1.5 flex justify-between items-center text-[9.5px] shadow-2xs ${
-                effectiveBackgroundGraphics 
-                  ? 'bg-[#f4f7f0] border-[#c8d2c3]' 
-                  : 'bg-white border-zinc-400'
-              }`}
-            >
-              <span className={`font-bold font-serif ${effectiveBackgroundGraphics ? 'text-[#424f3c]' : 'text-zinc-800'}`}>{card.label}</span>
-              <span className={`font-black font-sans text-[9px] ${effectiveBackgroundGraphics ? 'text-[#1b2614]' : 'text-zinc-950'}`}>{card.value}</span>
-            </div>
-          ))}
-        </div>
+        {showSummaryCards && (
+          <div className="grid grid-cols-4 gap-1.5 mb-2">
+            {summaryCards.map((card, idx) => (
+              <div 
+                key={idx} 
+                className={`border rounded p-1 sm:p-1.5 flex justify-between items-center text-[9.5px] shadow-2xs ${
+                  isBwMode 
+                    ? 'bg-white border-black text-black'
+                    : isGrayMode
+                    ? 'bg-zinc-100 border-zinc-400 text-zinc-900'
+                    : effectiveBackgroundGraphics 
+                    ? 'bg-[#f4f7f0] border-[#c8d2c3]' 
+                    : 'bg-white border-zinc-400'
+                }`}
+              >
+                <span className={`font-bold ${isBwMode ? 'text-black' : isGrayMode ? 'text-zinc-700' : (effectiveBackgroundGraphics ? 'text-[#424f3c]' : 'text-zinc-800')}`}>{card.label}</span>
+                <span className={`font-black text-[9px] ${isBwMode ? 'text-black' : isGrayMode ? 'text-zinc-950' : (effectiveBackgroundGraphics ? 'text-[#1b2614]' : 'text-zinc-950')}`}>{card.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Dual Tables Side-by-Side: الوسائل والتجهيزات | المواد الكيميائية */}
-        <div className="grid grid-cols-2 gap-2 mb-2 items-start">
+        <div className={`grid ${showEquipTable && showChemTable ? 'grid-cols-2 gap-2' : 'grid-cols-1'} mb-2 items-start`}>
           {/* Table 1: الوسائل والتجهيزات */}
-          <div className={`border rounded overflow-hidden ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>
-            <div className={`font-sans font-bold text-[10.5px] py-1 px-3 text-center ${
-              effectiveBackgroundGraphics ? 'bg-[#2b3d22] text-white' : 'bg-zinc-800 text-white'
-            }`}>
-              الوسائل والتجهيزات
-            </div>
-            <table className="w-full border-collapse text-[10px] text-right">
-              <thead>
-                <tr className={`font-sans text-[9px] ${
-                  effectiveBackgroundGraphics ? 'bg-[#f5f8f2] text-[#2b3d22]' : 'bg-zinc-100 text-zinc-900'
-                }`}>
-                  <th className={`border-b border-l p-1 text-center w-7 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>#</th>
-                  <th className={`border-b border-l p-1 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>الوسيلة / التجهيز المطلوب</th>
-                  <th className={`border-b border-l p-1 text-center w-12 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>الكمية</th>
-                  <th className={`border-b p-1 w-16 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>الملاحظات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isBlank ? (
-                  Array.from({ length: blankRowsCount }, (_, idx) => (
-                    <tr key={idx} className={`h-6 sm:h-[26px] border-b last:border-0 ${
-                      lineStyle === 'solid' ? 'border-b border-zinc-200' : 'border-b border-[#e1e6d7]'
-                    }`}>
-                      <td className={`p-1 text-center font-bold text-[9.5px] w-7 border-l ${
-                        effectiveBackgroundGraphics ? 'text-[#2b3d22] bg-[#fafbf9] border-[#e1e6d7]' : 'text-zinc-800 bg-white border-zinc-300'
-                      }`}>{idx + 1}</td>
-                      <td className={`p-1 border-l text-[8.5px] overflow-hidden ${
-                        effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300'
-                      } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] tracking-widest select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '....................................'}
-                      </td>
-                      <td className={`p-1 text-center border-l text-[8.5px] w-12 ${
-                        effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300'
-                      } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '.......'}
-                      </td>
-                      <td className={`p-1 text-[8.5px] w-16 ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '................'}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  validEquip.length > 0 ? (
-                    validEquip.map((item, idx) => (
-                      <tr key={`equip-${idx}`} className={`border-b border-[#e1e6d7] last:border-0 ${idx % 2 === 0 ? "bg-white" : (effectiveBackgroundGraphics ? "bg-[#fcfaf6]" : "bg-white")}`}>
-                        <td className={`p-1 text-center font-bold border-l border-[#e1e6d7] ${effectiveBackgroundGraphics ? 'text-[#2b3d22] bg-[#fafbf9]' : 'text-zinc-900 bg-white'}`}>{idx + 1}</td>
-                        <td className="p-1 font-bold text-[#0f172a] border-l border-[#e1e6d7]">{item.name}</td>
-                        <td className="p-1 text-center font-bold text-[#2b3d22] border-l border-[#e1e6d7]">{item.quantity || 1}</td>
-                        <td className="p-1 text-[#475569] text-[9px]">{item.notes || 'جاهزة'}</td>
+          {showEquipTable && (
+            <div className={`border rounded overflow-hidden ${getBorderBorderColor()}`}>
+              <div className={`font-bold text-[10.5px] py-1 px-3 text-center ${getHeaderBgColor()}`}>
+                الوسائل والتجهيزات
+              </div>
+              <table className="w-full border-collapse text-[10px] text-right">
+                <thead>
+                  <tr className={`text-[9px] ${
+                    isBwMode ? 'bg-zinc-100 text-black border-b border-black' : isGrayMode ? 'bg-zinc-200 text-zinc-900 border-b border-zinc-400' : (effectiveBackgroundGraphics ? 'bg-[#f5f8f2] text-[#2b3d22]' : 'bg-zinc-100 text-zinc-900')
+                  }`}>
+                    <th className={`border-b border-l p-1 text-center w-7 ${getBorderBorderColor()}`}>#</th>
+                    <th className={`border-b border-l p-1 ${getBorderBorderColor()}`}>الوسيلة / التجهيز المطلوب</th>
+                    <th className={`border-b border-l p-1 text-center w-12 ${getBorderBorderColor()}`}>الكمية</th>
+                    <th className={`border-b p-1 w-16 ${getBorderBorderColor()}`}>الملاحظات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isBlank ? (
+                    Array.from({ length: blankRowsCount }, (_, idx) => (
+                      <tr key={idx} className={`h-6 sm:h-[26px] border-b last:border-0 ${
+                        lineStyle === 'solid' ? 'border-b border-zinc-300' : 'border-b border-[#e1e6d7]'
+                      }`}>
+                        <td className={`p-1 text-center font-bold text-[9.5px] w-7 border-l ${
+                          isBwMode ? 'text-black bg-white border-black' : (effectiveBackgroundGraphics ? 'text-[#2b3d22] bg-[#fafbf9] border-[#e1e6d7]' : 'text-zinc-800 bg-white border-zinc-300')
+                        }`}>{idx + 1}</td>
+                        <td className={`p-1 border-l text-[8.5px] overflow-hidden ${
+                          isBwMode ? 'border-black' : (effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300')
+                        } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] tracking-widest select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '....................................'}
+                        </td>
+                        <td className={`p-1 text-center border-l text-[8.5px] w-12 ${
+                          isBwMode ? 'border-black' : (effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300')
+                        } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '.......'}
+                        </td>
+                        <td className={`p-1 text-[8.5px] w-16 ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '................'}
+                        </td>
                       </tr>
                     ))
                   ) : (
-                    <tr>
-                      <td className="p-1 text-center font-bold text-[#2b3d22] bg-[#fafbf9] border-l border-[#e1e6d7]">1</td>
-                      <td className="p-1.5 font-bold text-[#0f172a] border-l border-[#e1e6d7]">وسائل وتجهيزات التجربة المقررة</td>
-                      <td className="p-1 text-center font-bold text-[#2b3d22] border-l border-[#e1e6d7]">1</td>
-                      <td className="p-1.5 text-[#475569] text-[9px]">جاهزة بالمخبر</td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                    validEquip.length > 0 ? (
+                      validEquip.map((item, idx) => (
+                        <tr key={`equip-${idx}`} className={`border-b border-[#e1e6d7] last:border-0 ${idx % 2 === 0 ? "bg-white" : (effectiveBackgroundGraphics ? "bg-[#fcfaf6]" : "bg-white")}`}>
+                          <td className={`p-1 text-center font-bold border-l border-[#e1e6d7] ${effectiveBackgroundGraphics ? 'text-[#2b3d22] bg-[#fafbf9]' : 'text-zinc-900 bg-white'}`}>{idx + 1}</td>
+                          <td className={`p-1 font-bold text-[#0f172a] border-l border-[#e1e6d7] ${getCellPadding()}`}>{item.name}</td>
+                          <td className={`p-1 text-center font-bold text-[#2b3d22] border-l border-[#e1e6d7] ${getCellPadding()}`}>{item.quantity || 1}</td>
+                          <td className={`p-1 text-[#475569] text-[9px] ${getCellPadding()}`}>{item.notes || 'جاهزة'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="p-1 text-center font-bold text-[#2b3d22] bg-[#fafbf9] border-l border-[#e1e6d7]">1</td>
+                        <td className="p-1.5 font-bold text-[#0f172a] border-l border-[#e1e6d7]">وسائل وتجهيزات التجربة المقررة</td>
+                        <td className="p-1 text-center font-bold text-[#2b3d22] border-l border-[#e1e6d7]">1</td>
+                        <td className="p-1.5 text-[#475569] text-[9px]">جاهزة بالمخبر</td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Table 2: المواد الكيميائية */}
-          <div className={`border rounded overflow-hidden ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>
-            <div className={`font-sans font-bold text-[10.5px] py-1 px-3 text-center ${
-              effectiveBackgroundGraphics ? 'bg-[#2b3d22] text-white' : 'bg-zinc-800 text-white'
-            }`}>
-              المواد الكيميائية
-            </div>
-            <table className="w-full border-collapse text-[10px] text-right">
-              <thead>
-                <tr className={`font-sans text-[9px] ${
-                  effectiveBackgroundGraphics ? 'bg-[#f5f8f2] text-[#2b3d22]' : 'bg-zinc-100 text-zinc-900'
-                }`}>
-                  <th className={`border-b border-l p-1 text-center w-7 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>#</th>
-                  <th className={`border-b border-l p-1 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>المادة الكيميائية المطلوبة</th>
-                  <th className={`border-b border-l p-1 text-center w-14 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>الصيغة</th>
-                  <th className={`border-b p-1 text-center w-12 ${effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'}`}>الكمية</th>
-                </tr>
-              </thead>
-              <tbody>
-                {isBlank ? (
-                  Array.from({ length: blankRowsCount }, (_, idx) => (
-                    <tr key={idx} className={`h-6 sm:h-[26px] border-b last:border-0 ${
-                      lineStyle === 'solid' ? 'border-b border-zinc-200' : 'border-b border-[#e1e6d7]'
-                    }`}>
-                      <td className={`p-1 text-center font-bold text-[9.5px] w-7 border-l ${
-                        effectiveBackgroundGraphics ? 'text-[#1e3a8a] bg-[#fafbf9] border-[#e1e6d7]' : 'text-zinc-800 bg-white border-zinc-300'
-                      }`}>{idx + 1}</td>
-                      <td className={`p-1 border-l text-[8.5px] overflow-hidden ${
-                        effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300'
-                      } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] tracking-widest select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '....................................'}
-                      </td>
-                      <td className={`p-1 text-center border-l text-[8.5px] w-14 ${
-                        effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300'
-                      } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '.......'}
-                      </td>
-                      <td className={`p-1 text-center text-[8.5px] w-12 ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
-                        {lineStyle === 'solid' ? '' : '.......'}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  validChem.length > 0 ? (
-                    validChem.map((item, idx) => (
-                      <tr key={`chem-${idx}`} className={`border-b border-[#e1e6d7] last:border-0 ${idx % 2 === 0 ? "bg-white" : (effectiveBackgroundGraphics ? "bg-[#fcfaf6]" : "bg-white")}`}>
-                        <td className={`p-1 text-center font-bold border-l border-[#e1e6d7] ${effectiveBackgroundGraphics ? 'text-[#1e3a8a] bg-[#fafbf9]' : 'text-zinc-900 bg-white'}`}>{idx + 1}</td>
-                        <td className="p-1 font-bold text-[#0f172a] border-l border-[#e1e6d7]">{item.name}</td>
-                        <td className="p-1 text-center font-mono font-bold text-[#2563eb] text-[9px] border-l border-[#e1e6d7]">{item.formula || '---'}</td>
-                        <td className="p-1 text-center font-bold text-[#2b3d22]">{item.quantity || 'حسب التجربة'}</td>
+          {showChemTable && (
+            <div className={`border rounded overflow-hidden ${getBorderBorderColor()}`}>
+              <div className={`font-bold text-[10.5px] py-1 px-3 text-center ${getHeaderBgColor()}`}>
+                المواد الكيميائية
+              </div>
+              <table className="w-full border-collapse text-[10px] text-right">
+                <thead>
+                  <tr className={`text-[9px] ${
+                    isBwMode ? 'bg-zinc-100 text-black border-b border-black' : isGrayMode ? 'bg-zinc-200 text-zinc-900 border-b border-zinc-400' : (effectiveBackgroundGraphics ? 'bg-[#f5f8f2] text-[#2b3d22]' : 'bg-zinc-100 text-zinc-900')
+                  }`}>
+                    <th className={`border-b border-l p-1 text-center w-7 ${getBorderBorderColor()}`}>#</th>
+                    <th className={`border-b border-l p-1 ${getBorderBorderColor()}`}>المادة الكيميائية المطلوبة</th>
+                    <th className={`border-b border-l p-1 text-center w-14 ${getBorderBorderColor()}`}>الصيغة</th>
+                    <th className={`border-b p-1 text-center w-12 ${getBorderBorderColor()}`}>الكمية</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isBlank ? (
+                    Array.from({ length: blankRowsCount }, (_, idx) => (
+                      <tr key={idx} className={`h-6 sm:h-[26px] border-b last:border-0 ${
+                        lineStyle === 'solid' ? 'border-b border-zinc-300' : 'border-b border-[#e1e6d7]'
+                      }`}>
+                        <td className={`p-1 text-center font-bold text-[9.5px] w-7 border-l ${
+                          isBwMode ? 'text-black bg-white border-black' : (effectiveBackgroundGraphics ? 'text-[#1e3a8a] bg-[#fafbf9] border-[#e1e6d7]' : 'text-zinc-800 bg-white border-zinc-300')
+                        }`}>{idx + 1}</td>
+                        <td className={`p-1 border-l text-[8.5px] overflow-hidden ${
+                          isBwMode ? 'border-black' : (effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300')
+                        } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] tracking-widest select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '....................................'}
+                        </td>
+                        <td className={`p-1 text-center border-l text-[8.5px] w-14 ${
+                          isBwMode ? 'border-black' : (effectiveBackgroundGraphics ? 'border-[#e1e6d7]' : 'border-zinc-300')
+                        } ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '.......'}
+                        </td>
+                        <td className={`p-1 text-center text-[8.5px] w-12 ${lineStyle === 'solid' ? '' : 'text-[#94a3b8] select-none'}`}>
+                          {lineStyle === 'solid' ? '' : '.......'}
+                        </td>
                       </tr>
                     ))
                   ) : (
-                    <tr>
-                      <td className="p-1 text-center font-bold text-[#1e3a8a] bg-[#fafbf9] border-l border-[#e1e6d7]">1</td>
-                      <td className="p-1.5 font-bold text-[#0f172a] border-l border-[#e1e6d7]">لا تتطلب محاليل كيميائية خاصة</td>
-                      <td className="p-1 text-center text-[#64748b] text-[9px] border-l border-[#e1e6d7]">---</td>
-                      <td className="p-1 text-center text-[#64748b] text-[9px]">---</td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                    validChem.length > 0 ? (
+                      validChem.map((item, idx) => (
+                        <tr key={`chem-${idx}`} className={`border-b border-[#e1e6d7] last:border-0 ${idx % 2 === 0 ? "bg-white" : (effectiveBackgroundGraphics ? "bg-[#fcfaf6]" : "bg-white")}`}>
+                          <td className={`p-1 text-center font-bold border-l border-[#e1e6d7] ${effectiveBackgroundGraphics ? 'text-[#1e3a8a] bg-[#fafbf9]' : 'text-zinc-900 bg-white'}`}>{idx + 1}</td>
+                          <td className={`p-1 font-bold text-[#0f172a] border-l border-[#e1e6d7] ${getCellPadding()}`}>{item.name}</td>
+                          <td className={`p-1 text-center font-mono font-bold text-[9px] border-l border-[#e1e6d7] ${getCellPadding()} ${
+                            showFormulasHighlight && !isBwMode ? 'text-blue-700 bg-blue-50/70' : 'text-zinc-800'
+                          }`}>{item.formula || '---'}</td>
+                          <td className={`p-1 text-center font-bold ${getCellPadding()} ${isBwMode ? 'text-black' : 'text-[#2b3d22]'}`}>{item.quantity || 'حسب التجربة'}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="p-1 text-center font-bold text-[#1e3a8a] bg-[#fafbf9] border-l border-[#e1e6d7]">1</td>
+                        <td className="p-1.5 font-bold text-[#0f172a] border-l border-[#e1e6d7]">لا تتطلب محاليل كيميائية خاصة</td>
+                        <td className="p-1 text-center text-[#64748b] text-[9px] border-l border-[#e1e6d7]">---</td>
+                        <td className="p-1 text-center text-[#64748b] text-[9px]">---</td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -480,15 +656,19 @@ export default function ActivityRequestPrintModal({
       <div className="mt-auto pt-1">
         {/* Important Note */}
         <div className={`mb-1.5 p-1.5 border border-dashed rounded text-[9px] leading-relaxed ${
-          effectiveBackgroundGraphics 
+          isBwMode 
+            ? 'bg-white border-black text-black' 
+            : isGrayMode
+            ? 'bg-zinc-100 border-zinc-400 text-zinc-800'
+            : effectiveBackgroundGraphics 
             ? 'bg-[#fafbf9] border-[#c8d2c3] text-[#475569]' 
             : 'bg-white border-zinc-400 text-zinc-700'
         }`}>
           <strong>ملاحظة هامة:</strong> تقدم هذه الاستمارة لدى مسؤول المخبر قبل 48 ساعة على الأقل من موعد إنجاز الحصة لضمان التحضير الأمثل للعتاد والمحاليل.
         </div>
 
-        {/* Release location and date: Empty writing space for blank form, exact date for filled form */}
-        <div className="text-left font-bold text-[10.5px] text-[#2b3d22] font-sans mb-1.5">
+        {/* Release location and date */}
+        <div className={`text-left font-bold text-[10.5px] mb-1.5 ${isBwMode ? 'text-black' : 'text-[#2b3d22]'}`}>
           حرر بـ : {schoolInfo.commune} في : {isBlank ? (
             <span className="inline-block border-b-2 border-dashed border-[#55694d] min-w-[130px] text-center font-mono text-transparent select-none mr-1">
               &nbsp;
@@ -499,29 +679,38 @@ export default function ActivityRequestPrintModal({
         </div>
 
         {/* Signatures */}
-        <div className="grid grid-cols-2 gap-4 text-center">
-          <div className={`border rounded-lg p-2 bg-white h-18 sm:h-20 flex flex-col justify-between shadow-2xs ${
-            effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'
-          }`}>
-            <div className="font-bold text-[11px] text-[#2b3d22] font-sans">
-              أستاذ(ة) المادة
-            </div>
-            <div className="text-[#828c7d] text-[9px] font-serif">
-              (الاسم والتوقيع)
-            </div>
-          </div>
+        {(includeTeacherSig || includeStampBox) && (
+          <div className={`grid ${includeTeacherSig && includeStampBox ? 'grid-cols-2 gap-4' : 'grid-cols-1'} text-center`}>
+            {includeTeacherSig && (
+              <div className={`border rounded-lg p-2 bg-white h-18 sm:h-20 flex flex-col justify-between shadow-2xs ${getBorderBorderColor()}`}>
+                <div className={`font-bold text-[11px] ${isBwMode ? 'text-black' : 'text-[#2b3d22]'}`}>
+                  أستاذ(ة) المادة
+                </div>
+                <div className="text-[#828c7d] text-[9px]">
+                  (الاسم والتوقيع)
+                </div>
+              </div>
+            )}
 
-          <div className={`border rounded-lg p-2 bg-white h-18 sm:h-20 flex flex-col justify-between shadow-2xs ${
-            effectiveBackgroundGraphics ? 'border-[#d2d7cd]' : 'border-zinc-400'
-          }`}>
-            <div className="font-bold text-[11px] text-[#2b3d22] font-sans">
-              {labOfficerTitle}
-            </div>
-            <div className="text-[#828c7d] text-[9px] font-serif">
-              (التوقيع والختم)
-            </div>
+            {includeStampBox && (
+              <div className={`border rounded-lg p-2 bg-white h-18 sm:h-20 flex flex-col justify-between shadow-2xs ${getBorderBorderColor()}`}>
+                <div className={`font-bold text-[11px] ${isBwMode ? 'text-black' : 'text-[#2b3d22]'}`}>
+                  {labOfficerTitle}
+                </div>
+                <div className="text-[#828c7d] text-[9px]">
+                  (التأشيرة والختم الرسمي)
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {/* Official Document Watermark / Security Badge */}
+        {includeWatermark && (
+          <div className="mt-2 text-center text-[8.5px] text-zinc-500 border-t border-dashed border-zinc-300 pt-1 font-sans">
+            الأرضية الرقمية لتسيير المخابر المدرسية — وثيقة بيداغوجية رسمية مطابقة لمناشير وزارة التربية الوطنية
+          </div>
+        )}
       </div>
     </div>
   );
@@ -596,6 +785,17 @@ export default function ActivityRequestPrintModal({
                 <span className="hidden sm:inline">خيارات الطباعة</span>
               </button>
 
+              {/* Standalone Tab Button */}
+              <button
+                type="button"
+                onClick={handleOpenSeparateTab}
+                className="px-3 py-2 bg-emerald-600/15 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-600/25 border border-emerald-600/30 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs"
+                title="فتح النموذج في تبويب متصفح مستقل للمعاينة الكاملة والطباعة"
+              >
+                <ExternalLink size={14} />
+                <span>تبويب مستقل</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handlePrint}
@@ -657,7 +857,7 @@ export default function ActivityRequestPrintModal({
               {showSettingsDrawer && (
                 <motion.div
                   initial={{ width: 0, opacity: 0 }}
-                  animate={{ width: 290, opacity: 1 }}
+                  animate={{ width: 315, opacity: 1 }}
                   exit={{ width: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
                   className="bg-surface border-l border-outline/10 flex flex-col shrink-0 overflow-y-auto overflow-x-hidden text-xs"
@@ -667,7 +867,7 @@ export default function ActivityRequestPrintModal({
                     <div className="flex items-center justify-between pb-2 border-b border-outline/10">
                       <span className="font-black text-primary flex items-center gap-1.5 text-xs">
                         <SlidersHorizontal size={14} />
-                        إعدادات ومحددات الطباعة
+                        لوحة خيارات وإعدادات الطباعة
                       </span>
                       <button
                         type="button"
@@ -679,211 +879,506 @@ export default function ActivityRequestPrintModal({
                       </button>
                     </div>
 
-                    {/* 1. Paper Size (حجم الورق) */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1.5">
-                        حجم الورق (Paper Size):
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {(['a4', 'a3', 'letter', 'legal'] as PaperSize[]).map(size => (
-                          <button
-                            key={size}
-                            type="button"
-                            onClick={() => setPaperSize(size)}
-                            className={`py-1.5 rounded-lg font-black uppercase text-[11px] transition-all border ${
-                              paperSize === size
-                                ? 'bg-primary text-on-primary border-primary shadow-xs'
-                                : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
-                            }`}
-                          >
-                            {size}
-                          </button>
-                        ))}
+                    {/* Quick Standalone Tab Action in Drawer */}
+                    <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300 text-[11px] flex items-center gap-1">
+                          <ExternalLink size={13} />
+                          معاينة في تبويب مستقل
+                        </span>
+                        <span className="text-[9px] bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 px-1.5 py-0.5 rounded font-black">
+                          عرض كامل
+                        </span>
                       </div>
+                      <p className="text-[10px] text-on-surface/70 leading-relaxed">
+                        يفتح الاستمارة في تبويب جديد بدون قيود الإطار للمعاينة واستخدام أمر الطباعة المباشر.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleOpenSeparateTab}
+                        className="w-full py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-black text-xs flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                      >
+                        <ExternalLink size={13} />
+                        <span>فتح الاستمارة في تبويب مستقل</span>
+                      </button>
                     </div>
 
-                    {/* 2. Layout Orientation (الاتجاه: عمودي وأفقي) */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1.5">
-                        الاتجاه والتخطيط (Layout):
-                      </label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setOrientation('portrait')}
-                          className={`py-1.5 px-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all border ${
-                            orientation === 'portrait'
-                              ? 'bg-primary text-on-primary border-primary shadow-xs'
-                              : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
-                          }`}
-                        >
-                          <span className="inline-block w-3 h-4 border-2 border-current rounded-xs" />
-                          <span>عمودي (Portrait)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOrientation('landscape')}
-                          className={`py-1.5 px-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all border ${
-                            orientation === 'landscape'
-                              ? 'bg-primary text-on-primary border-primary shadow-xs'
-                              : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
-                          }`}
-                        >
-                          <span className="inline-block w-4 h-3 border-2 border-current rounded-xs" />
-                          <span>أفقي (Landscape)</span>
-                        </button>
+                    {/* Section 1: Paper & Layout */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <Layers size={13} />
+                        <span>1. حجم الورق والتخطيط:</span>
                       </div>
-                    </div>
 
-                    {/* 3. Pages per sheet (صفحات في الورقة) */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1.5">
-                        صفحات في الورقة (Page per Sheet):
-                      </label>
-                      <div className="grid grid-cols-3 gap-1">
-                        {([1, 2, 4] as PagesPerSheet[]).map(num => (
-                          <button
-                            key={num}
-                            type="button"
-                            onClick={() => setPagesPerSheet(num)}
-                            className={`py-1.5 px-1 rounded-lg font-bold text-[11px] transition-all border text-center ${
-                              pagesPerSheet === num
-                                ? 'bg-primary text-on-primary border-primary shadow-xs'
-                                : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
-                            }`}
-                          >
-                            {num === 1 ? '1 صفحة' : num === 2 ? 'صفحتان (2-up)' : '4 صفحات (4-up)'}
-                          </button>
-                        ))}
-                      </div>
-                      {pagesPerSheet === 2 && (
-                        <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 font-bold">
-                          ✓ مثالي لطباعة نسختين (للأستاذ وللمخبر) في ورقة A4 واحدة وقصها.
-                        </p>
-                      )}
-                    </div>
-
-                    {/* 4. Margins (الهوامش) */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1.5">
-                        الهوامش (Margins):
-                      </label>
-                      <div className="grid grid-cols-4 gap-1">
-                        {[
-                          { id: 'default', label: 'عادي (10mm)' },
-                          { id: 'minimum', label: 'ضيق (4mm)' },
-                          { id: 'none', label: 'بدون (0mm)' },
-                          { id: 'wide', label: 'عريض (15mm)' },
-                        ].map(item => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => setMargins(item.id as MarginOption)}
-                            className={`py-1.5 px-1 rounded-lg font-bold text-[10.5px] transition-all border text-center ${
-                              margins === item.id
-                                ? 'bg-primary text-on-primary border-primary shadow-xs'
-                                : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
-                            }`}
-                          >
-                            {item.label.split(' ')[0]}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* 5. Scale (المقياس) */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-[11px] font-bold text-on-surface/70">
-                          المقياس (Scale):
+                      {/* Paper Size (حجم الورق) */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          حجم الورق (Paper Size):
                         </label>
-                        <span className="font-mono font-black text-primary text-[11px]">{scale}%</span>
+                        <div className="grid grid-cols-4 gap-1">
+                          {(['a4', 'a3', 'letter', 'legal'] as PaperSize[]).map(size => (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => setPaperSize(size)}
+                              className={`py-1.5 rounded-lg font-black uppercase text-[11px] transition-all border ${
+                                paperSize === size
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {size}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        {[100, 90, 80].map(s => (
+
+                      {/* Layout Orientation (الاتجاه) */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          الاتجاه والتخطيط (Layout):
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
                           <button
-                            key={s}
                             type="button"
-                            onClick={() => setScale(s)}
-                            className={`flex-1 py-1 rounded-md text-[10.5px] font-bold transition-all border ${
-                              scale === s
-                                ? 'bg-primary text-on-primary border-primary shadow-2xs'
+                            onClick={() => setOrientation('portrait')}
+                            className={`py-1.5 px-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all border ${
+                              orientation === 'portrait'
+                                ? 'bg-primary text-on-primary border-primary shadow-xs'
                                 : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
                             }`}
                           >
-                            {s}%
+                            <span className="inline-block w-3 h-4 border-2 border-current rounded-xs" />
+                            <span>عمودي (Portrait)</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setOrientation('landscape')}
+                            className={`py-1.5 px-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 transition-all border ${
+                              orientation === 'landscape'
+                                ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                            }`}
+                          >
+                            <span className="inline-block w-4 h-3 border-2 border-current rounded-xs" />
+                            <span>أفقي (Landscape)</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Pages per sheet */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          صفحات في الورقة (Page per Sheet):
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {([1, 2, 4] as PagesPerSheet[]).map(num => (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setPagesPerSheet(num)}
+                              className={`py-1.5 px-1 rounded-lg font-bold text-[11px] transition-all border text-center ${
+                                pagesPerSheet === num
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {num === 1 ? '1 صفحة' : num === 2 ? 'صفحتان (2-up)' : '4 صفحات (4-up)'}
+                            </button>
+                          ))}
+                        </div>
+                        {pagesPerSheet === 2 && (
+                          <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1 font-bold">
+                            ✓ مثالي لطباعة نسختين (للأستاذ وللمخبر) في ورقة واحدة وقصها.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Margins */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          الهوامش (Margins):
+                        </label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {[
+                            { id: 'default', label: 'عادي (10mm)' },
+                            { id: 'minimum', label: 'ضيق (5mm)' },
+                            { id: 'none', label: 'بدون (0mm)' },
+                            { id: 'wide', label: 'عريض (16mm)' },
+                          ].map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => setMargins(item.id as MarginOption)}
+                              className={`py-1.5 px-1 rounded-lg font-bold text-[10px] transition-all border text-center ${
+                                margins === item.id
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {item.label.split(' ')[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Scale */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10.5px] font-bold text-on-surface/70">
+                            المقياس (Scale):
+                          </label>
+                          <span className="font-mono font-black text-primary text-[11px]">{scale}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mb-1.5">
+                          {[100, 90, 80].map(s => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setScale(s)}
+                              className={`flex-1 py-1 rounded-md text-[10.5px] font-bold transition-all border ${
+                                scale === s
+                                  ? 'bg-primary text-on-primary border-primary shadow-2xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {s}%
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setScale(100)}
+                            className="px-2 py-1 bg-surface-container-low text-on-surface/60 hover:text-primary rounded-md text-[10px] font-bold border border-outline/10"
+                            title="إعادة ضبط 100%"
+                          >
+                            ملاءمة
+                          </button>
+                        </div>
+                        <input 
+                          type="range"
+                          min="60"
+                          max="140"
+                          step="5"
+                          value={scale}
+                          onChange={(e) => setScale(Number(e.target.value))}
+                          className="w-full accent-primary h-1 bg-surface-container-high rounded cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Section 2: Typography & Fonts */}
+                    <div className="pt-3 border-t border-outline/10 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <Type size={13} />
+                        <span>2. الخط والتنسيق البيداغوجي:</span>
+                      </div>
+
+                      {/* Font Family */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          الخط المعتمد (Font Family):
+                        </label>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[
+                            { id: 'amiri', label: 'الأميري الرسمي', font: 'font-serif' },
+                            { id: 'cairo', label: 'خط القاهرة الحديث', font: 'font-sans' },
+                            { id: 'tajawal', label: 'خط تجوال المتزن', font: 'font-sans' },
+                            { id: 'system', label: 'خط النظام الأساسي', font: 'font-sans' },
+                          ].map(f => (
+                            <button
+                              key={f.id}
+                              type="button"
+                              onClick={() => setFontFamily(f.id as FontFamilyOption)}
+                              className={`py-1.5 px-2 rounded-xl text-[10.5px] font-bold transition-all border text-center ${
+                                fontFamily === f.id
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Font Scale */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          حجم النص الأساسي:
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { id: 'compact', label: 'مضغوط (95%)' },
+                            { id: 'normal', label: 'عادي (100%)' },
+                            { id: 'large', label: 'مكبر (105%)' },
+                          ].map(fs => (
+                            <button
+                              key={fs.id}
+                              type="button"
+                              onClick={() => setFontSizeScale(fs.id as FontSizeScaleOption)}
+                              className={`py-1 rounded-lg text-[10px] font-bold transition-all border text-center ${
+                                fontSizeScale === fs.id
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {fs.label.split(' ')[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Section 3: Colors & Toner Saver */}
+                    <div className="pt-3 border-t border-outline/10 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <Palette size={13} />
+                        <span>3. نمط الألوان واستهلاك الحبر:</span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { id: 'color', label: 'ملون كامل' },
+                          { id: 'grayscale', label: 'رمادي Eco' },
+                          { id: 'bw', label: 'أبيض وأسود' },
+                        ].map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setColorMode(c.id as ColorModeOption)}
+                            className={`py-1.5 px-1 rounded-lg font-bold text-[10.5px] transition-all border text-center ${
+                              colorMode === c.id
+                                ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                            }`}
+                          >
+                            {c.label}
                           </button>
                         ))}
-                        <button
-                          type="button"
-                          onClick={() => setScale(100)}
-                          className="px-2 py-1 bg-surface-container-low text-on-surface/60 hover:text-primary rounded-md text-[10px] font-bold border border-outline/10"
-                          title="إعادة ضبط 100%"
-                        >
-                          ملاءمة
-                        </button>
                       </div>
-                      <input 
-                        type="range"
-                        min="60"
-                        max="140"
-                        step="5"
-                        value={scale}
-                        onChange={(e) => setScale(Number(e.target.value))}
-                        className="w-full accent-primary h-1 bg-surface-container-high rounded cursor-pointer"
-                      />
+
+                      {/* Quick Checkboxes */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={backgroundGraphics}
+                            onChange={(e) => setBackgroundGraphics(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            رسومات الخلفية والتعبئة الملونة
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isEconomical}
+                            onChange={(e) => setIsEconomical(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80 flex items-center gap-1">
+                            <Droplet size={11} className={isEconomical ? 'text-amber-500' : 'text-on-surface/40'} />
+                            توفير الحبر السريع (تباين عالي)
+                          </span>
+                        </label>
+                      </div>
                     </div>
 
-                    {/* 6. Options Checkboxes (Headers & Footers, Background Graphics) */}
-                    <div className="pt-2 border-t border-outline/10 space-y-2">
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1">
-                        خيارات متقدمة (Options):
-                      </label>
-                      
-                      {/* Show Header & Footer Option */}
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={showHeader}
-                          onChange={(e) => setShowHeader(e.target.checked)}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
-                        />
-                        <span className="text-[11px] font-bold text-on-surface/80">
-                          الرؤوس والتذييل (Header & Institution)
-                        </span>
-                      </label>
+                    {/* Section 4: Table Density & Border Style */}
+                    <div className="pt-3 border-t border-outline/10 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <LayoutGrid size={13} />
+                        <span>4. كثافة وتباعد الجداول:</span>
+                      </div>
 
-                      {/* Background Graphics Option */}
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={backgroundGraphics}
-                          onChange={(e) => setBackgroundGraphics(e.target.checked)}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
-                        />
-                        <span className="text-[11px] font-bold text-on-surface/80">
-                          رسومات الخلفية والألوان (Background graphics)
-                        </span>
-                      </label>
+                      {/* Density */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          كثافة الأسطر والخلايا:
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { id: 'compact', label: 'مدمج (صفحة واحدة)' },
+                            { id: 'normal', label: 'عادي (قياسي)' },
+                            { id: 'spacious', label: 'مريح وموسع' },
+                          ].map(d => (
+                            <button
+                              key={d.id}
+                              type="button"
+                              onClick={() => setTableDensity(d.id as TableDensityOption)}
+                              className={`py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all border text-center ${
+                                tableDensity === d.id
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {d.label.split(' ')[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                      {/* Economical Toner Saver Mode */}
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={isEconomical}
-                          onChange={(e) => setIsEconomical(e.target.checked)}
-                          className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
-                        />
-                        <span className="text-[11px] font-bold text-on-surface/80 flex items-center gap-1">
-                          <Droplet size={12} className={isEconomical ? 'text-amber-500' : 'text-on-surface/40'} />
-                          توفير الحبر (أبيض وأسود عالي التباين)
-                        </span>
-                      </label>
+                      {/* Border Style */}
+                      <div>
+                        <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1">
+                          نمط حدود الجداول:
+                        </label>
+                        <div className="grid grid-cols-3 gap-1">
+                          {[
+                            { id: 'thin', label: 'دقيق (1px)' },
+                            { id: 'normal', label: 'قياسي (1.5px)' },
+                            { id: 'prominent', label: 'بارز (2px)' },
+                          ].map(b => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              onClick={() => setBorderStyle(b.id as BorderStyleOption)}
+                              className={`py-1 rounded-lg text-[10px] font-bold transition-all border text-center ${
+                                borderStyle === b.id
+                                  ? 'bg-primary text-on-primary border-primary shadow-xs'
+                                  : 'bg-surface-container-low text-on-surface/70 border-outline/10 hover:text-primary'
+                              }`}
+                            >
+                              {b.label.split(' ')[0]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
-                    {/* 7. Copies Selector */}
-                    <div className="pt-2 border-t border-outline/10">
-                      <label className="block text-[11px] font-bold text-on-surface/70 mb-1.5">
+                    {/* Section 5: Document Sections Toggle */}
+                    <div className="pt-3 border-t border-outline/10 space-y-2">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <Eye size={13} />
+                        <span>5. إظهار وإخفاء عناصر النموذج:</span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showHeader}
+                            onChange={(e) => setShowHeader(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            ترويسة الجمهورية والوزارة
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showInstitution}
+                            onChange={(e) => setShowInstitution(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            بيانات المؤسسة والمديرية والمخبر
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showSummaryCards}
+                            onChange={(e) => setShowSummaryCards(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            بطاقات ملخص الحصة (8 بطاقات ملخصة)
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showEquipTable}
+                            onChange={(e) => setShowEquipTable(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            جدول الوسائل والتجهيزات المخبرية
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showChemTable}
+                            onChange={(e) => setShowChemTable(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            جدول المواد الكيميائية والمحاليل
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={showFormulasHighlight}
+                            onChange={(e) => setShowFormulasHighlight(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            تمييز الصيغ الكيميائية بالخط العلمي اللاتيني
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Section 6: Signatures & Verification */}
+                    <div className="pt-3 border-t border-outline/10 space-y-2">
+                      <div className="flex items-center gap-1.5 text-primary font-black text-[11px]">
+                        <ShieldCheck size={13} />
+                        <span>6. التأشيرات والأختام الرسمية:</span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={includeStampBox}
+                            onChange={(e) => setIncludeStampBox(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            تأشيرة ومربع ختم {labOfficerTitle}
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={includeTeacherSig}
+                            onChange={(e) => setIncludeTeacherSig(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            صندوق توقيع أستاذ(ة) المادة
+                          </span>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={includeWatermark}
+                            onChange={(e) => setIncludeWatermark(e.target.checked)}
+                            className="w-4 h-4 rounded text-primary focus:ring-primary accent-primary cursor-pointer"
+                          />
+                          <span className="text-[10.5px] font-bold text-on-surface/80">
+                            شريط التوثيق البيداغوجي المعتمد
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Section 7: Copies */}
+                    <div className="pt-3 border-t border-outline/10">
+                      <label className="block text-[10.5px] font-bold text-on-surface/70 mb-1.5">
                         عدد النسخ المطبوعة (Copies):
                       </label>
                       <div className="flex items-center gap-1.5 bg-surface-container-low p-1.5 rounded-xl border border-outline/10">
@@ -918,8 +1413,8 @@ export default function ActivityRequestPrintModal({
 
                     {/* Blank Form Specific Controls */}
                     {isBlank && (
-                      <div className="pt-2 border-t border-outline/10 space-y-2">
-                        <label className="block text-[11px] font-bold text-on-surface/70">
+                      <div className="pt-3 border-t border-outline/10 space-y-2">
+                        <label className="block text-[10.5px] font-bold text-on-surface/70">
                           تخصيص النموذج اليدوي:
                         </label>
                         <div className="flex items-center gap-1">
@@ -947,10 +1442,10 @@ export default function ActivityRequestPrintModal({
                           </button>
                         </div>
 
-                        <div className="flex items-center justify-between text-[11px] font-bold text-on-surface/70 pt-1">
+                        <div className="flex items-center justify-between text-[10.5px] font-bold text-on-surface/70 pt-1">
                           <span>عدد الأسطر الفارغة:</span>
                           <div className="flex items-center gap-1">
-                            {[10, 12, 14].map(c => (
+                            {[8, 10, 12, 16].map(c => (
                               <button
                                 key={c}
                                 type="button"

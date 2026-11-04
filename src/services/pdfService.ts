@@ -1075,6 +1075,54 @@ export class PDFService {
     const equipItems = options.equipItems || [];
     const chemItems = options.chemItems || [];
 
+    // Advanced print options
+    const paperSize = (options.paperSize || 'a4').toUpperCase();
+    const orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait';
+    const margins = options.margins === 'none' ? '0mm' : options.margins === 'minimum' ? '5mm' : options.margins === 'wide' ? '16mm' : '10mm';
+    const scale = typeof options.scale === 'number' ? options.scale : 100;
+    
+    // Typography
+    const fontFamily = options.fontFamily === 'cairo'
+      ? "'Cairo', 'Segoe UI', Tahoma, sans-serif"
+      : options.fontFamily === 'tajawal'
+      ? "'Tajawal', 'Cairo', sans-serif"
+      : options.fontFamily === 'system'
+      ? "system-ui, -apple-system, sans-serif"
+      : "'Amiri', 'Traditional Arabic', serif";
+
+    // Color mode
+    const isBw = options.colorMode === 'bw' || options.isEconomical;
+    const isGrayscale = options.colorMode === 'grayscale';
+    const primaryColor = isBw ? '#000000' : isGrayscale ? '#222222' : '#2b3d22';
+    const headerBg = isBw ? '#ffffff' : isGrayscale ? '#f2f2f2' : '#f4f6f2';
+    const tableHeaderBg = isBw ? '#000000' : isGrayscale ? '#333333' : '#2b3d22';
+    const tableHeaderColor = '#ffffff';
+    const borderColor = isBw ? '#000000' : isGrayscale ? '#888888' : '#c8d2c3';
+    const rowAltBg = isBw ? '#ffffff' : isGrayscale ? '#f8f8f8' : '#f9faf7';
+    const cardBg = isBw ? '#ffffff' : isGrayscale ? '#f5f5f5' : '#f4f7f0';
+
+    // Density & borders
+    const density = options.tableDensity || 'normal';
+    const cellPadding = density === 'compact' ? '3px 6px' : density === 'spacious' ? '8px 10px' : '5px 8px';
+    const cellFontSize = density === 'compact' ? '8.5pt' : density === 'spacious' ? '10pt' : '9pt';
+    const borderWidth = options.borderStyle === 'prominent' ? '2px' : options.borderStyle === 'thin' ? '1px' : '1.5px';
+
+    // Visibility toggles
+    const showHeader = options.showHeader !== false;
+    const showInstitution = options.showInstitution !== false;
+    const showSummaryCards = options.showSummaryCards !== false;
+    const showEquipTable = options.showEquipTable !== false;
+    const showChemTable = options.showChemTable !== false;
+    const includeStampBox = options.includeStampBox !== false;
+    const includeTeacherSig = options.includeTeacherSig !== false;
+    const includeWatermark = Boolean(options.includeWatermark);
+    const showFormulasHighlight = options.showFormulasHighlight !== false;
+    const standaloneToolbar = Boolean(options.standaloneToolbar);
+
+    const blankEquipCount = options.blankRowsCount ? Math.ceil(options.blankRowsCount / 2) : 5;
+    const blankChemCount = options.blankRowsCount ? Math.floor(options.blankRowsCount / 2) : 4;
+    const lineClass = options.lineStyle === 'solid' ? 'solid-line' : 'dotted-line';
+
     return `
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -1082,56 +1130,180 @@ export class PDFService {
   <meta charset="UTF-8">
   <title>طلب تحضير نشاط مخبري — ${options.orderNum || ''}</title>
   <style>
-    @page { size: A4 portrait; margin: 12mm; }
-    * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 0; color: #1a1a1a; direction: rtl; font-size: 11pt; line-height: 1.4; }
-    .sheet { width: 100%; margin: 0 auto; }
-    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    @page { 
+      size: ${paperSize} ${orientation}; 
+      margin: ${margins}; 
+    }
+    * { 
+      box-sizing: border-box; 
+      -webkit-print-color-adjust: exact !important; 
+      print-color-adjust: exact !important; 
+    }
+    body { 
+      font-family: ${fontFamily}; 
+      margin: 0; 
+      padding: ${standaloneToolbar ? '15px' : '0'}; 
+      color: #1a1a1a; 
+      direction: rtl; 
+      font-size: 10.5pt; 
+      line-height: 1.35;
+      background: ${standaloneToolbar ? '#f8fafc' : '#ffffff'};
+    }
+    .sheet { 
+      width: 100%; 
+      max-width: 210mm;
+      margin: 0 auto; 
+      background: #ffffff;
+      transform: scale(${scale / 100});
+      transform-origin: top center;
+      ${standaloneToolbar ? 'box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 12mm; border-radius: 6px;' : ''}
+    }
+    @media print {
+      body { background: #ffffff !important; padding: 0 !important; }
+      .sheet { box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+      .tab-preview-toolbar { display: none !important; }
+    }
+    .tab-preview-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1e2819;
+      color: #ffffff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      margin: 0 auto 15px auto;
+      max-width: 210mm;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+      font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+    }
+    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
     .header-table td { vertical-align: top; }
-    .rep-title { text-align: center; font-weight: 800; font-size: 11.5pt; color: #1b2e17; }
-    .min-title { text-align: center; font-weight: 700; font-size: 10pt; color: #2e4d27; }
-    .doc-title-box { text-align: center; margin: 12px 0; padding: 8px; border: 2px solid #2b3d22; background: #f4f6f2; border-radius: 6px; }
-    .doc-title { font-size: 14pt; font-weight: 900; color: #2b3d22; margin: 0; }
-    .info-grid { width: 100%; border-collapse: collapse; margin-bottom: 12px; background: #fafbf9; border: 1px solid #d2d8ce; border-radius: 6px; }
-    .info-grid td { padding: 5px 10px; font-size: 9.5pt; border: 1px solid #e2e6de; }
-    .info-label { font-weight: 700; color: #2b3d22; }
-    .table-title { font-weight: 800; font-size: 10.5pt; color: #2b3d22; margin: 10px 0 4px 0; }
-    table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-    table.data-table th { background-color: #2b3d22; color: #ffffff; padding: 6px 8px; font-size: 9pt; border: 1px solid #2b3d22; text-align: center; }
-    table.data-table td { padding: 5px 8px; font-size: 9pt; border: 1px solid #d2d8ce; text-align: right; }
-    table.data-table tr:nth-child(even) td { background-color: #f9faf7; }
-    .signatures-table { width: 100%; margin-top: 20px; border-collapse: collapse; }
-    .signatures-table td { width: 50%; vertical-align: top; text-align: center; padding: 10px; }
-    .sig-rank { font-weight: 800; font-size: 11pt; color: #2b3d22; margin-bottom: 4px; }
-    .sig-sub { font-size: 8.5pt; color: #666; }
-    .sig-box { min-height: 70px; border: 1px dashed #b8c2b0; border-radius: 6px; margin-top: 6px; padding: 8px; background: #fafbf8; }
+    .rep-title { text-align: center; font-weight: 800; font-size: 11pt; color: ${primaryColor}; }
+    .min-title { text-align: center; font-weight: 700; font-size: 9.5pt; color: ${primaryColor}; }
+    .doc-title-box { 
+      text-align: center; 
+      margin: 8px 0; 
+      padding: 6px; 
+      border: ${borderWidth} solid ${primaryColor}; 
+      background: ${headerBg}; 
+      border-radius: 4px; 
+    }
+    .doc-title { font-size: 13pt; font-weight: 900; color: ${primaryColor}; margin: 0; }
+    .doc-sub { font-size: 8.5pt; font-weight: 700; color: #555; margin: 3px 0 0 0; }
+    .info-grid { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-bottom: 8px; 
+      background: ${cardBg}; 
+      border: ${borderWidth} solid ${borderColor}; 
+      border-radius: 4px; 
+    }
+    .info-grid td { padding: 4px 8px; font-size: 8.5pt; border: 1px solid ${borderColor}; }
+    .info-label { font-weight: 700; color: ${primaryColor}; }
+    .table-title { font-weight: 800; font-size: 9.5pt; color: ${primaryColor}; margin: 8px 0 3px 0; }
+    table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; border: ${borderWidth} solid ${borderColor}; }
+    table.data-table th { 
+      background-color: ${tableHeaderBg}; 
+      color: ${tableHeaderColor}; 
+      padding: ${cellPadding}; 
+      font-size: ${cellFontSize}; 
+      border: 1px solid ${tableHeaderBg}; 
+      text-align: center; 
+      font-weight: 800;
+    }
+    table.data-table td { 
+      padding: ${cellPadding}; 
+      font-size: ${cellFontSize}; 
+      border: 1px solid ${borderColor}; 
+      text-align: right; 
+    }
+    table.data-table tr:nth-child(even) td { background-color: ${rowAltBg}; }
+    .formula-tag {
+      direction: ltr; 
+      display: inline-block;
+      font-family: monospace; 
+      font-weight: bold;
+      ${showFormulasHighlight && !isBw ? 'background: #eef4ea; color: #233e1c; padding: 1px 6px; border-radius: 3px;' : ''}
+    }
+    .signatures-table { width: 100%; margin-top: 14px; border-collapse: collapse; }
+    .signatures-table td { width: 50%; vertical-align: top; text-align: center; padding: 4px 8px; }
+    .sig-rank { font-weight: 800; font-size: 10pt; color: ${primaryColor}; margin-bottom: 2px; }
+    .sig-sub { font-size: 8pt; color: #666; }
+    .sig-box { 
+      min-height: 65px; 
+      border: 1px dashed ${borderColor}; 
+      border-radius: 4px; 
+      margin-top: 4px; 
+      padding: 6px; 
+      background: ${cardBg}; 
+    }
+    .watermark-banner {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 7.5pt;
+      color: #666;
+      border-top: 1px dashed ${borderColor};
+      padding-top: 4px;
+    }
   </style>
 </head>
 <body>
+  ${standaloneToolbar ? `
+  <div class="tab-preview-toolbar">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="background: #3b5030; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 800;">نموذج رسمي</span>
+      <span style="font-weight: 800; font-size: 12.5px;">طلب تحضير نشاط مخبري — معاينة وطباعة في تبويب مستقل</span>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button onclick="window.print()" style="background: #3c542e; color: #fff; border: 1px solid #5a7d47; padding: 6px 16px; border-radius: 6px; font-weight: 800; font-size: 12px; cursor: pointer;">
+        🖨️ طباعة الآن (Ctrl+P)
+      </button>
+      <button onclick="window.close()" style="background: #334155; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer;">
+        ✕ إغلاق التبويب
+      </button>
+    </div>
+  </div>
+  ` : ''}
+
   <div class="sheet">
+    ${(showHeader || showInstitution) ? `
     <table class="header-table">
       <tr>
         <td style="text-align: right; width: 33%;">
-          <div style="font-weight: 700;">${directorate}</div>
-          <div style="font-weight: 800; color: #2b3d22;">${formattedSchool}</div>
-          <div style="font-size: 8.5pt; color: #666;">مخبر العلوم الطبيعية والفيزيائية</div>
+          ${showInstitution ? `
+            <div style="font-weight: 700; font-size: 9pt;">${directorate}</div>
+            <div style="font-weight: 800; font-size: 9.5pt; color: ${primaryColor};">${formattedSchool}</div>
+            <div style="font-size: 8pt; color: #666;">${options.lab || 'مخبر العلوم الطبيعية والفيزيائية'}</div>
+          ` : ''}
         </td>
         <td style="text-align: center; width: 34%;">
-          <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية</div>
-          <div class="min-title">وزارة التربية الوطنية</div>
+          ${showHeader ? `
+            <div class="rep-title">الجمهورية الجزائرية الديمقراطية الشعبية</div>
+            <div class="min-title">وزارة التربية الوطنية</div>
+          ` : ''}
         </td>
         <td style="text-align: left; width: 33%;">
-          <div style="font-size: 9pt;">السنة الدراسية: <strong>${school.academicYear || '2025 / 2026'}</strong></div>
-          <div style="font-size: 9pt;">رقم الطلب: <strong>${options.orderNum || '—'}</strong></div>
-          <div style="font-size: 8.5pt; color: #666;">تاريخ التحرير: ${options.requestDate || '—'}</div>
+          ${showInstitution ? `
+            <div style="font-size: 8.5pt;">السنة الدراسية: <strong>${school.academicYear || '2025 / 2026'}</strong></div>
+            <div style="font-size: 8.5pt;">رقم الطلب: <strong>${options.orderNum || '—'}</strong></div>
+            <div style="font-size: 8pt; color: #666;">تاريخ التحرير: ${options.requestDate || '—'}</div>
+          ` : ''}
         </td>
       </tr>
     </table>
+    ` : ''}
 
     <div class="doc-title-box">
       <h1 class="doc-title">طلب تحضير نشاط تجريبي / مخبري</h1>
+      <p class="doc-sub">
+        المخبر المخصص: ${options.lab || 'مخبر العلوم'} — عنوان النشاط: ${options.activityTitle || (isBlank ? '................................................' : 'نشاط تجريبي')}
+      </p>
     </div>
 
+    ${showSummaryCards ? `
     <table class="info-grid">
       <tr>
         <td><span class="info-label">أستاذ(ة) المادة:</span> ${isBlank ? '................................................' : (options.teacherName || '—')}</td>
@@ -1141,25 +1313,24 @@ export class PDFService {
       <tr>
         <td><span class="info-label">القسم / الفوج:</span> ${isBlank ? '................................................' : (options.className || '—')}</td>
         <td><span class="info-label">نوع النشاط:</span> ${options.activityType || 'عملي'}</td>
-        <td><span class="info-label">المخبر المبرمج:</span> ${options.lab || 'مخبر العلوم'}</td>
-      </tr>
-      <tr>
-        <td colspan="3"><span class="info-label">عنوان النشاط المخبري:</span> <strong>${isBlank ? '................................................................................................................' : (options.activityTitle || '—')}</strong></td>
+        <td><span class="info-label">ساعة الطلب:</span> ${options.requestTime || '—'}</td>
       </tr>
     </table>
+    ` : ''}
 
+    ${showEquipTable ? `
     <div class="table-title">1. قائمة الأجهزة والوسائل والزجاجيات المطلوبة:</div>
     <table class="data-table">
       <thead>
         <tr>
-          <th style="width: 8%;">الرقم</th>
-          <th style="width: 50%;">اسم الجهاز / الوسيلة</th>
+          <th style="width: 7%;">الرقم</th>
+          <th style="width: 50%;">اسم الجهاز / الوسيلة المخبرية</th>
           <th style="width: 15%;">الكمية المطلوبة</th>
-          <th style="width: 27%;">ملاحظات وحالة العتاد</th>
+          <th style="width: 28%;">ملاحظات وحالة العتاد</th>
         </tr>
       </thead>
       <tbody>
-        ${isBlank ? Array(5).fill(0).map((_, i) => `
+        ${isBlank ? Array(blankEquipCount).fill(0).map((_, i) => `
           <tr>
             <td style="text-align: center;">${i + 1}</td>
             <td></td>
@@ -1169,27 +1340,29 @@ export class PDFService {
         `).join('') : (equipItems.length > 0 ? equipItems.map((e: any, i: number) => `
           <tr>
             <td style="text-align: center;">${i + 1}</td>
-            <td style="font-weight: 600;">${e.name || '—'}</td>
-            <td style="text-align: center; font-weight: 700;">${e.quantity || 1}</td>
+            <td style="font-weight: 700;">${e.name || '—'}</td>
+            <td style="text-align: center; font-weight: 800;">${e.quantity || 1}</td>
             <td>${e.notes || 'صالحة وجاهزة للتجربة'}</td>
           </tr>
-        `).join('') : `<tr><td colspan="4" style="text-align:center;">لا توجد أجهزة مضافة</td></tr>`)}
+        `).join('') : `<tr><td colspan="4" style="text-align:center; color: #888;">لا توجد أجهزة مضافة</td></tr>`)}
       </tbody>
     </table>
+    ` : ''}
 
+    ${showChemTable ? `
     <div class="table-title">2. قائمة المواد الكيميائية والمحاليل المستعملة:</div>
     <table class="data-table">
       <thead>
         <tr>
-          <th style="width: 8%;">الرقم</th>
-          <th style="width: 40%;">اسم المادة الكيميائية</th>
+          <th style="width: 7%;">الرقم</th>
+          <th style="width: 42%;">اسم المادة الكيميائية</th>
           <th style="width: 20%;">الصيغة الكيميائية</th>
-          <th style="width: 15%;">الكمية المطلوبة</th>
+          <th style="width: 14%;">الكمية المطلوبة</th>
           <th style="width: 17%;">ملاحظات السلامة</th>
         </tr>
       </thead>
       <tbody>
-        ${isBlank ? Array(4).fill(0).map((_, i) => `
+        ${isBlank ? Array(blankChemCount).fill(0).map((_, i) => `
           <tr>
             <td style="text-align: center;">${i + 1}</td>
             <td></td>
@@ -1200,33 +1373,46 @@ export class PDFService {
         `).join('') : (chemItems.length > 0 ? chemItems.map((c: any, i: number) => `
           <tr>
             <td style="text-align: center;">${i + 1}</td>
-            <td style="font-weight: 600;">${c.name || '—'}</td>
-            <td style="direction: ltr; text-align: center; font-family: monospace;">${c.formula || '—'}</td>
-            <td style="text-align: center; font-weight: 700;">${c.quantity || '—'}</td>
+            <td style="font-weight: 700;">${c.name || '—'}</td>
+            <td style="text-align: center;"><span class="formula-tag">${c.formula || '—'}</span></td>
+            <td style="text-align: center; font-weight: 800;">${c.quantity || '—'}</td>
             <td>${c.notes || '—'}</td>
           </tr>
-        `).join('') : `<tr><td colspan="5" style="text-align:center;">لا توجد مواد كيميائية مضافة</td></tr>`)}
+        `).join('') : `<tr><td colspan="5" style="text-align:center; color: #888;">لا توجد مواد كيميائية مضافة</td></tr>`)}
       </tbody>
     </table>
+    ` : ''}
 
+    ${(includeTeacherSig || includeStampBox) ? `
     <table class="signatures-table">
       <tr>
+        ${includeTeacherSig ? `
         <td>
           <div class="sig-rank">أستاذ(ة) المادة</div>
           <div class="sig-sub">(الاسم والتوقيع)</div>
           <div class="sig-box">
-            <div style="font-size: 8pt; color: #777; text-align: right;">حرر في: ${options.signDate || options.requestDate || '.................'}</div>
+            <div style="font-size: 7.5pt; color: #777; text-align: right;">حرر في: ${options.signDate || options.requestDate || '.................'}</div>
           </div>
         </td>
+        ` : ''}
+        ${includeStampBox ? `
         <td>
           <div class="sig-rank">${officerRank}</div>
-          <div class="sig-sub">(التوقيع والختم)</div>
+          <div class="sig-sub">(التأشيرة والختم الرسمي)</div>
           <div class="sig-box">
-            <div style="font-size: 8pt; color: #777; text-align: right;"> استلام وتحضير العتاد</div>
+            <div style="font-size: 7.5pt; color: #777; text-align: right;">تمت مراجعة وتحضير العتاد المخبري</div>
           </div>
         </td>
+        ` : ''}
       </tr>
     </table>
+    ` : ''}
+
+    ${includeWatermark ? `
+    <div class="watermark-banner">
+      الأرضية الرقمية لتسيير المخابر المدرسية — وثيقة بيداغوجية رسمية مطابقة لمناشير وزارة التربية الوطنية
+    </div>
+    ` : ''}
   </div>
 </body>
 </html>
