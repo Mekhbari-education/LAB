@@ -42,6 +42,16 @@ function getCacheKey(key: string): string | null {
   return `offline_cache_${user.uid}_${key}`;
 }
 
+function getActiveSchoolId(): string | null {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('algeria_lab_school_id');
+    if (stored && stored !== 'school_001' && stored.trim() !== '') {
+      return stored.trim();
+    }
+  }
+  return auth.currentUser?.uid || null;
+}
+
 const EMPTY_ARRAY: any[] = [];
 
 export function useSqlCollection<T>(key: string, endpoint: string) {
@@ -64,50 +74,73 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
       const cacheKey = getCacheKey(key);
       try {
         const result = await fetchWithAuth(endpoint);
-        if (Array.isArray(result) && cacheKey) {
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(result));
-          } catch (e) {
-            // LocalStorage quota or unavailable, ignore
+        if (Array.isArray(result) && result.length > 0) {
+          if (cacheKey) {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(result));
+            } catch (e) {
+              // LocalStorage quota or unavailable, ignore
+            }
           }
+          return result;
         }
-        return result;
       } catch (err) {
-        // 1. If backend API failed, attempt Firestore
-        try {
-          if (auth.currentUser) {
-            const schoolId = auth.currentUser.uid;
-            const colRef = getUserCollection(schoolId, key);
-            const snap = await getDocs(colRef);
-            if (!snap.empty) {
-              const firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
+        // Ignore API failure and check Firestore / cache
+      }
+
+      // Check Firestore (when SQL failed OR returned an empty array)
+      try {
+        if (auth.currentUser) {
+          const activeSchoolId = getActiveSchoolId() || auth.currentUser.uid;
+          const colRef = getUserCollection(activeSchoolId, key);
+          const snap = await getDocs(colRef);
+          if (!snap.empty) {
+            const firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
+            if (cacheKey) {
+              try {
+                localStorage.setItem(cacheKey, JSON.stringify(firestoreItems));
+              } catch (e) {
+                // Ignore quota
+              }
+            }
+            return firestoreItems;
+          }
+
+          // Also check UID-scoped collection if activeSchoolId differs from auth.currentUser.uid
+          if (activeSchoolId !== auth.currentUser.uid) {
+            const uidSnap = await getDocs(getUserCollection(auth.currentUser.uid, key));
+            if (!uidSnap.empty) {
+              const uidItems = uidSnap.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
               if (cacheKey) {
                 try {
-                  localStorage.setItem(cacheKey, JSON.stringify(firestoreItems));
+                  localStorage.setItem(cacheKey, JSON.stringify(uidItems));
                 } catch (e) {
                   // Ignore quota
                 }
               }
-              return firestoreItems;
-            }
-          }
-        } catch (fsErr) {
-          // Ignore Firestore error and fall through to localStorage
-        }
-
-        // 2. Attempt offline cache retrieval only for this authenticated account
-        if (cacheKey) {
-          const cached = localStorage.getItem(cacheKey);
-          if (cached) {
-            try {
-              return JSON.parse(cached) as T[];
-            } catch (parseErr) {
-              // Ignore parse error
+              return uidItems;
             }
           }
         }
-        return [];
+      } catch (fsErr) {
+        // Ignore Firestore error and fall through to localStorage
       }
+
+      // Attempt offline cache retrieval only for this authenticated account
+      if (cacheKey) {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached) as T[];
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed;
+            }
+          } catch (parseErr) {
+            // Ignore parse error
+          }
+        }
+      }
+      return [];
     },
     placeholderData: () => {
       // Do not show stale data before confirming active authenticated account

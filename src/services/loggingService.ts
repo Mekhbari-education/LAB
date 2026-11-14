@@ -41,16 +41,19 @@ export async function logActivity(
   if (!auth.currentUser) return;
 
   try {
-    await addDoc(getUserCollection(schoolId, 'logs'), {
+    const logData: Record<string, any> = {
       userId: auth.currentUser.uid,
       userName: auth.currentUser.displayName || 'مستخدم',
-      userEmail: auth.currentUser.email,
+      userEmail: auth.currentUser.email || '',
       action,
       module,
       details,
-      targetId,
       timestamp: serverTimestamp()
-    });
+    };
+    if (targetId !== undefined && targetId !== null) {
+      logData.targetId = targetId;
+    }
+    await addDoc(getUserCollection(schoolId, 'logs'), logData);
   } catch (error) {
     logger.error('Error logging activity:', error);
   }

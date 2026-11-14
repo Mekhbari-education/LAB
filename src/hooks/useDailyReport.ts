@@ -272,6 +272,20 @@ export function useDailyReport() {
         })) as SavedReport[];
         setHistory(reports);
         setIsLoadingHistory(false);
+
+        // If currently on an unsaved date or reportNumber is outdated, assign the true next sequential number
+        const existingForDate = reports.find(r => r.date === date);
+        if (!existingForDate && reports.length > 0) {
+          const calculatedNext = getNextReportNumberFromList(reports);
+          setReportNumber(prev => {
+            const prevNum = parseInt(String(prev || '0').replace(/[^\d]/g, ''), 10);
+            const nextNum = parseInt(calculatedNext, 10);
+            if (!prev || isNaN(prevNum) || prevNum < nextNum) {
+              return calculatedNext;
+            }
+            return prev;
+          });
+        }
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, 'daily_reports');
         setIsLoadingHistory(false);
@@ -279,30 +293,65 @@ export function useDailyReport() {
 
       return () => unsubscribe();
     }
-  }, [schoolId]);
+  }, [schoolId, date]);
 
-  const generateNextReportNumber = async () => {
-    if (!auth.currentUser) return '01';
+  const getNextReportNumberFromList = (list: SavedReport[]): string => {
+    if (!list || list.length === 0) return '01';
+    let max = 0;
+    for (const r of list) {
+      const raw = String(r.reportNumber || '').replace(/[^\d]/g, '');
+      const parsed = parseInt(raw, 10);
+      if (!isNaN(parsed) && parsed > max) {
+        max = parsed;
+      }
+    }
+    return (max + 1).toString().padStart(2, '0');
+  };
+
+  const generateNextReportNumber = async (reportsList?: SavedReport[]): Promise<string> => {
+    let maxNumber = 0;
+
+    // 1. Scan memory history first if available
+    const listToCheck = (reportsList && reportsList.length > 0) ? reportsList : history;
+    if (listToCheck && listToCheck.length > 0) {
+      for (const rep of listToCheck) {
+        const raw = String(rep.reportNumber || '').replace(/[^\d]/g, '');
+        const num = parseInt(raw, 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+
+    if (!auth.currentUser || !schoolId) {
+      return (maxNumber > 0 ? (maxNumber + 1).toString().padStart(2, '0') : '01');
+    }
     
     try {
+      // 2. Query all daily reports for this user from Firestore to scan all existing report numbers
       const reportsRef = getUserCollection(schoolId, 'daily_reports');
       const q = query(
         reportsRef,
-        where('createdBy', '==', auth.currentUser.uid),
-        orderBy('createdAt', 'desc'),
-        limit(1)
+        where('createdBy', '==', auth.currentUser.uid)
       );
       
       const snapshot = await getDocs(q);
-      if (snapshot.empty) return '01';
+      if (!snapshot.empty) {
+        snapshot.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          const raw = String(data.reportNumber || '').replace(/[^\d]/g, '');
+          const num = parseInt(raw, 10);
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num;
+          }
+        });
+      }
       
-      const lastReport = snapshot.docs[0].data();
-      const lastNumber = parseInt(lastReport.reportNumber || '0');
-      const nextNumber = (lastNumber + 1).toString().padStart(2, '0');
+      const nextNumber = (maxNumber + 1).toString().padStart(2, '0');
       return nextNumber;
     } catch (error) {
       console.error('Error generating report number:', error);
-      return '01';
+      return (maxNumber > 0 ? (maxNumber + 1).toString().padStart(2, '0') : '01');
     }
   };
 

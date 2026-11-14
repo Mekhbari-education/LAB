@@ -4,9 +4,24 @@ import { queryClient } from '../queryClient';
 import { db, auth, getUserCollection } from '../../firebase';
 import { writeBatch, doc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
+function getActiveSchoolId(): string | null {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('algeria_lab_school_id');
+    if (stored && stored !== 'school_001' && stored.trim() !== '') {
+      return stored.trim();
+    }
+  }
+  return auth.currentUser?.uid || null;
+}
+
+function getOfflineCacheKey(): string {
+  const uid = auth.currentUser?.uid;
+  return uid ? `offline_cache_${uid}_teachers` : 'offline_cache_teachers';
+}
+
 function getOfflineCache(): Teacher[] {
   try {
-    const raw = localStorage.getItem('offline_cache_teachers');
+    const raw = localStorage.getItem(getOfflineCacheKey()) ?? localStorage.getItem('offline_cache_teachers');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -15,16 +30,21 @@ function getOfflineCache(): Teacher[] {
 
 function setOfflineCache(items: Teacher[]) {
   try {
-    localStorage.setItem('offline_cache_teachers', JSON.stringify(items));
+    localStorage.setItem(getOfflineCacheKey(), JSON.stringify(items));
   } catch (e) {
     console.warn('Could not save to localStorage', e);
   }
 }
 
+function syncQueryCache(items: Teacher[]) {
+  setOfflineCache(items);
+  queryClient.setQueryData(['teachers', auth.currentUser?.uid], items);
+}
+
 export const getTeachers = async (): Promise<Teacher[]> => {
   try {
     const result = await fetchWithAuth('/api/db/teachers');
-    if (Array.isArray(result)) {
+    if (Array.isArray(result) && result.length > 0) {
       setOfflineCache(result);
       return result;
     }
@@ -34,12 +54,21 @@ export const getTeachers = async (): Promise<Teacher[]> => {
 
   try {
     if (auth.currentUser) {
-      const colRef = getUserCollection(auth.currentUser.uid, 'teachers');
+      const schoolId = getActiveSchoolId() || auth.currentUser.uid;
+      const colRef = getUserCollection(schoolId, 'teachers');
       const snap = await getDocs(colRef);
       if (!snap.empty) {
         const items = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Teacher[];
         setOfflineCache(items);
         return items;
+      }
+      if (schoolId !== auth.currentUser.uid) {
+        const uidSnap = await getDocs(getUserCollection(auth.currentUser.uid, 'teachers'));
+        if (!uidSnap.empty) {
+          const items = uidSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Teacher[];
+          setOfflineCache(items);
+          return items;
+        }
       }
     }
   } catch (fsErr) {
@@ -52,153 +81,207 @@ export const getTeachers = async (): Promise<Teacher[]> => {
 export const createTeacher = async (data: Partial<Teacher>): Promise<Teacher> => {
   const payload = {
     ...data,
-    id: data.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11))
+    id:
+      data.id ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2, 11))
   } as Teacher;
+
+  let savedTeacher: Teacher = payload;
 
   try {
     const result = await fetchWithAuth('/api/db/teachers', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-    queryClient.invalidateQueries({ queryKey: ['teachers'] });
-    const existing = getOfflineCache();
-    const updated = [result, ...existing.filter(e => e.id !== result.id)];
-    setOfflineCache(updated);
-    return result;
+    if (result && result.id) {
+      savedTeacher = { ...payload, ...result };
+    }
   } catch (apiErr) {
     console.warn('API /api/db/teachers unavailable, falling back to Firestore & localStorage:', apiErr);
   }
 
+  // Always mirror to Firestore for cross-module availability (e.g. DailyReport, TeacherPortal)
   try {
     if (auth.currentUser) {
-      const docRef = doc(getUserCollection(auth.currentUser.uid, 'teachers'), payload.id);
-      await setDoc(docRef, { ...payload, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+      const schoolId = getActiveSchoolId() || auth.currentUser.uid;
+      const docRef = doc(getUserCollection(schoolId, 'teachers'), savedTeacher.id);
+      await setDoc(docRef, { ...savedTeacher, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (fsErr) {
-    console.warn('Firestore fallback error in createTeacher:', fsErr);
+    console.warn('Firestore write error in createTeacher:', fsErr);
   }
 
   const existing = getOfflineCache();
-  const updated = [payload, ...existing.filter(e => e.id !== payload.id)];
-  setOfflineCache(updated);
-  queryClient.setQueryData(['teachers'], updated);
-  queryClient.invalidateQueries({ queryKey: ['teachers'] });
-  return payload;
+  const updated = [savedTeacher, ...existing.filter(e => e.id !== savedTeacher.id)];
+  syncQueryCache(updated);
+  return savedTeacher;
 };
 
 export const updateTeacher = async (id: string, data: Partial<Teacher>): Promise<Teacher> => {
+  let updatedTeacher: Teacher = { id, ...data } as Teacher;
+
   try {
     const result = await fetchWithAuth(`/api/db/teachers/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
     });
-    queryClient.invalidateQueries({ queryKey: ['teachers'] });
-    const existing = getOfflineCache();
-    const updated = existing.map(e => e.id === id ? { ...e, ...data } : e);
-    setOfflineCache(updated);
-    return result;
+    if (result && result.id) {
+      updatedTeacher = { ...data, ...result, id };
+    }
   } catch (apiErr) {
     console.warn(`API /api/db/teachers/${id} unavailable, falling back to Firestore & localStorage:`, apiErr);
   }
 
   try {
     if (auth.currentUser) {
-      const docRef = doc(getUserCollection(auth.currentUser.uid, 'teachers'), id);
+      const schoolId = getActiveSchoolId() || auth.currentUser.uid;
+      const docRef = doc(getUserCollection(schoolId, 'teachers'), id);
       await setDoc(docRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (fsErr) {
-    console.warn('Firestore fallback update error in updateTeacher:', fsErr);
+    console.warn('Firestore update error in updateTeacher:', fsErr);
   }
 
   const existing = getOfflineCache();
-  const updated = existing.map(e => e.id === id ? { ...e, ...data } : e);
-  setOfflineCache(updated);
-  queryClient.setQueryData(['teachers'], updated);
-  queryClient.invalidateQueries({ queryKey: ['teachers'] });
-  return { id, ...data } as Teacher;
+  const updated = existing.map(e => (e.id === id ? { ...e, ...updatedTeacher } : e));
+  syncQueryCache(updated);
+  return updatedTeacher;
 };
 
 export const deleteTeacher = async (id: string): Promise<void> => {
   try {
-    const result = await fetchWithAuth(`/api/db/teachers/${id}`, {
+    await fetchWithAuth(`/api/db/teachers/${id}`, {
       method: 'DELETE'
     });
-    queryClient.invalidateQueries({ queryKey: ['teachers'] });
-    const existing = getOfflineCache();
-    setOfflineCache(existing.filter(e => e.id !== id));
-    return result;
   } catch (apiErr) {
     console.warn(`API /api/db/teachers/${id} DELETE unavailable, falling back to Firestore & localStorage:`, apiErr);
   }
 
   try {
     if (auth.currentUser) {
-      const docRef = doc(getUserCollection(auth.currentUser.uid, 'teachers'), id);
+      const schoolId = getActiveSchoolId() || auth.currentUser.uid;
+      const docRef = doc(getUserCollection(schoolId, 'teachers'), id);
       await deleteDoc(docRef);
     }
   } catch (fsErr) {
-    console.warn('Firestore fallback delete error in deleteTeacher:', fsErr);
+    console.warn('Firestore delete error in deleteTeacher:', fsErr);
   }
 
   const existing = getOfflineCache();
-  const updated = existing.filter(e => e.id !== id);
-  setOfflineCache(updated);
-  queryClient.setQueryData(['teachers'], updated);
-  queryClient.invalidateQueries({ queryKey: ['teachers'] });
+  syncQueryCache(existing.filter(e => e.id !== id));
 };
 
-export const createTeachersBulk = async (items: Partial<Teacher>[]): Promise<Teacher[]> => {
-  const formatted = items.map(item => ({
-    ...item,
-    id: item.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11))
-  })) as Teacher[];
+export const deleteTeachersBulk = async (ids: string[]): Promise<void> => {
+  if (!ids || ids.length === 0) return;
+  const idSet = new Set(ids);
 
   try {
-    const result = await fetchWithAuth('/api/db/teachers/bulk', {
+    await fetchWithAuth('/api/db/teachers/bulk-delete', {
       method: 'POST',
-      body: JSON.stringify(formatted)
+      body: JSON.stringify({ ids })
     });
-    queryClient.invalidateQueries({ queryKey: ['teachers'] });
-    const existing = getOfflineCache();
-    const existingMap = new Map(existing.map(e => [e.id, e]));
-    formatted.forEach(f => existingMap.set(f.id, f));
-    setOfflineCache(Array.from(existingMap.values()));
-    return result;
   } catch (apiErr) {
-    console.warn('API /api/db/teachers/bulk unavailable, falling back to Firestore & localStorage:', apiErr);
+    console.warn('API /api/db/teachers/bulk-delete unavailable, falling back to Firestore & localStorage:', apiErr);
   }
 
   try {
     const currentUser = auth.currentUser;
     if (currentUser) {
-      const schoolId = currentUser.uid;
-      for (let i = 0; i < formatted.length; i += 400) {
-        const chunk = formatted.slice(i, i + 400);
+      const schoolId = getActiveSchoolId() || currentUser.uid;
+      for (let i = 0; i < ids.length; i += 400) {
+        const chunk = ids.slice(i, i + 400);
         const batch = writeBatch(db);
-        chunk.forEach(item => {
-          const docRef = doc(getUserCollection(schoolId, 'teachers'), item.id);
-          batch.set(docRef, {
-            ...item,
-            updatedAt: serverTimestamp(),
-            createdAt: serverTimestamp()
-          }, { merge: true });
+        chunk.forEach(id => {
+          const docRef = doc(getUserCollection(schoolId, 'teachers'), id);
+          batch.delete(docRef);
         });
         await batch.commit();
       }
     }
   } catch (fsErr) {
-    console.warn('Firestore fallback write error in createTeachersBulk:', fsErr);
+    console.warn('Firestore delete error in deleteTeachersBulk:', fsErr);
   }
 
   const existing = getOfflineCache();
-  const existingMap = new Map(existing.map(e => [e.id, e]));
-  formatted.forEach(f => existingMap.set(f.id, f));
-  const merged = Array.from(existingMap.values());
-  setOfflineCache(merged);
-
-  queryClient.setQueryData(['teachers'], merged);
-  queryClient.invalidateQueries({ queryKey: ['teachers'] });
-
-  return formatted;
+  syncQueryCache(existing.filter(e => !idSet.has(e.id)));
 };
 
+export const createTeachersBulk = async (items: Partial<Teacher>[]): Promise<Teacher[]> => {
+  const formatted = items.map(item => ({
+    ...item,
+    firstName: item.firstName || '',
+    lastName: item.lastName || '',
+    name: item.name || `${item.firstName || ''} ${item.lastName || ''}`.trim() || '',
+    levels: Array.isArray(item.levels) ? item.levels : [],
+    id:
+      item.id ||
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).substring(2, 11))
+  })) as Teacher[];
+
+  let finalItems: Teacher[] = formatted;
+
+  // 1. Try SQL API in chunks of 200 (safe under MAX_BULK_ITEMS = 250)
+  try {
+    const apiSaved: Teacher[] = [];
+    for (let i = 0; i < formatted.length; i += 200) {
+      const chunk = formatted.slice(i, i + 200);
+      const result = await fetchWithAuth('/api/db/teachers/bulk', {
+        method: 'POST',
+        body: JSON.stringify(chunk)
+      });
+      if (Array.isArray(result)) {
+        // Merge original chunk fields (like phone) with returned DB fields
+        const resultMap = new Map(result.map((r: any) => [r.id, r]));
+        chunk.forEach(orig => {
+          const dbRow = resultMap.get(orig.id);
+          apiSaved.push(dbRow ? { ...orig, ...dbRow } : orig);
+        });
+      }
+    }
+    if (apiSaved.length > 0) {
+      finalItems = apiSaved;
+    }
+  } catch (apiErr) {
+    console.warn('API /api/db/teachers/bulk unavailable, falling back to Firestore & localStorage:', apiErr);
+  }
+
+  // 2. Always mirror to Firestore in chunks of 400
+  try {
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const schoolId = getActiveSchoolId() || currentUser.uid;
+      for (let i = 0; i < finalItems.length; i += 400) {
+        const chunk = finalItems.slice(i, i + 400);
+        const batch = writeBatch(db);
+        chunk.forEach(item => {
+          const docRef = doc(getUserCollection(schoolId, 'teachers'), item.id);
+          batch.set(
+            docRef,
+            {
+              ...item,
+              updatedAt: serverTimestamp(),
+              createdAt: serverTimestamp()
+            },
+            { merge: true }
+          );
+        });
+        await batch.commit();
+      }
+    }
+  } catch (fsErr) {
+    console.warn('Firestore write error in createTeachersBulk:', fsErr);
+  }
+
+  // 3. Persist merged list in offline cache & React Query cache directly
+  const existing = getOfflineCache();
+  const existingMap = new Map(existing.map(e => [e.id, e]));
+  finalItems.forEach(f => existingMap.set(f.id, f));
+  const merged = Array.from(existingMap.values());
+  syncQueryCache(merged);
+
+  return finalItems;
+};

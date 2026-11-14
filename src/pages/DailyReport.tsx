@@ -66,6 +66,7 @@ export default function DailyReport() {
     activeTab, setActiveTab,
     date, setDate,
     reportNumber, setReportNumber,
+    generateNextReportNumber,
     docRouting, setDocRouting,
     docDepartment, setDocDepartment,
     docAcademicYear, setDocAcademicYear,
@@ -988,7 +989,55 @@ export default function DailyReport() {
             <div className="relative z-10 flex flex-wrap gap-6 mb-8 text-sm font-bold text-primary">
               <div className="flex items-center gap-3 bg-surface-container-low/40 px-5 py-2.5 rounded-2xl border border-outline/5">
                 <label className="font-black opacity-60 uppercase text-xs">رقم التقرير:</label>
-                <span className="font-black text-primary text-base" dir="ltr">{reportNumber || '01'}</span>
+                <span className="font-black text-primary text-base inline-flex items-center gap-2" dir="ltr">
+                  <input
+                    type="text"
+                    dir="ltr"
+                    value={reportNumber}
+                    onChange={(e) => setReportNumber(e.target.value)}
+                    className="bg-transparent outline-none text-center w-14 font-black text-primary text-base border-b-2 border-primary/30 focus:border-primary transition-all cursor-text py-0.5 hover:border-primary"
+                    placeholder="21"
+                    title="انقر لتعديل رقم التقرير يدوياً (مثلاً 21)"
+                  />
+                  <span className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = parseInt(reportNumber || '0', 10);
+                        setReportNumber((num + 1).toString().padStart(2, '0'));
+                      }}
+                      className="p-0.5 hover:bg-primary/10 text-primary rounded transition-colors"
+                      title="زيادة رقم التقرير (+1)"
+                    >
+                      <ChevronUp size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const num = parseInt(reportNumber || '1', 10);
+                        if (num > 1) {
+                          setReportNumber((num - 1).toString().padStart(2, '0'));
+                        }
+                      }}
+                      className="p-0.5 hover:bg-primary/10 text-primary rounded transition-colors"
+                      title="إنقاص رقم التقرير (-1)"
+                    >
+                      <ChevronDown size={12} />
+                    </button>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = await generateNextReportNumber();
+                      setReportNumber(next);
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-black bg-primary/10 hover:bg-primary/20 text-primary rounded-xl transition-all flex items-center gap-1 shadow-2xs active:scale-95"
+                    title="حساب الرقم التسلسلي التالي تلقائياً بناءً على تقارير السجل (مثلاً 21)"
+                  >
+                    <Sparkles size={12} />
+                    <span className="text-[10.5px]">التالي تلقائياً</span>
+                  </button>
+                </span>
               </div>
 
               <div className="flex items-center gap-3 bg-surface-container-low/40 px-5 py-2.5 rounded-2xl border border-outline/5">
