@@ -132701,13 +132701,17 @@ var init_dbRoutes = __esm({
       "lastSmartUpdate"
     ];
     teacherAllowedFields = [
+      "functionalCode",
+      "firstName",
+      "lastName",
       "name",
+      "birthDate",
+      "rank",
       "subject",
-      "specialty",
+      "grade",
+      "effectiveDate",
       "email",
-      "phone",
-      "classes",
-      "active"
+      "levels"
     ];
     studentClassAllowedFields = [
       "name",
@@ -132970,10 +132974,22 @@ var init_dbRoutes = __esm({
         if (!schoolId) return;
         const id = req.body.id || generateId();
         const cleaned = pickAllowed(req.body, teacherAllowedFields);
-        const newTeacher = { ...cleaned, id, schoolId };
+        const firstName = String(cleaned.firstName || "");
+        const lastName = String(cleaned.lastName || "");
+        const fullName = String(cleaned.name || `${firstName} ${lastName}`.trim() || "");
+        const newTeacher = {
+          ...cleaned,
+          id,
+          schoolId,
+          firstName,
+          lastName,
+          name: fullName,
+          levels: Array.isArray(cleaned.levels) ? cleaned.levels : []
+        };
         const [inserted] = await db.insert(teachers).values(newTeacher).returning();
         res.json(inserted);
       } catch (error) {
+        console.error("Failed to insert teacher:", error);
         res.status(500).json({ error: "Failed to insert teacher" });
       }
     });
@@ -132986,15 +133002,39 @@ var init_dbRoutes = __esm({
         if (items.length > MAX_BULK_ITEMS) {
           return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
         }
-        const formatted = items.map((item) => ({
-          ...pickAllowed(item, teacherAllowedFields),
-          id: item.id || generateId(),
-          schoolId
-        }));
+        const formatted = items.map((item) => {
+          const cleaned = pickAllowed(item, teacherAllowedFields);
+          const firstName = String(cleaned.firstName || "");
+          const lastName = String(cleaned.lastName || "");
+          const fullName = String(cleaned.name || `${firstName} ${lastName}`.trim() || "");
+          return {
+            ...cleaned,
+            id: item.id || generateId(),
+            schoolId,
+            firstName,
+            lastName,
+            name: fullName,
+            levels: Array.isArray(cleaned.levels) ? cleaned.levels : []
+          };
+        });
         const inserted = await db.insert(teachers).values(formatted).returning();
         res.json(inserted);
       } catch (error) {
+        console.error("Failed to bulk insert teachers:", error);
         res.status(500).json({ error: "Failed to bulk insert teachers" });
+      }
+    });
+    router.post("/teachers/bulk-delete", async (req, res) => {
+      try {
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id) => typeof id === "string" && id.trim()) : [];
+        if (ids.length === 0) return res.status(400).json({ error: "No teacher IDs provided" });
+        await db.delete(teachers).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.inArray)(teachers.id, ids), (0, import_drizzle_orm.eq)(teachers.schoolId, schoolId)));
+        res.json({ success: true, deletedCount: ids.length });
+      } catch (error) {
+        console.error("Failed to bulk delete teachers:", error);
+        res.status(500).json({ error: "Failed to bulk delete teachers" });
       }
     });
     router.get("/student-classes", async (req, res) => {
