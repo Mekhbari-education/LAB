@@ -132749,13 +132749,13 @@ var init_dbRoutes = __esm({
       "semester"
     ];
     glasswareAllowedFields = [
-      "name",
+      "designationFr",
+      "nameAr",
       "type",
-      "capacity",
+      "unit",
       "quantity",
-      "brokenQuantity",
+      "status",
       "location",
-      "minimumThreshold",
       "notes"
     ];
     equipmentScrappingAllowedFields = [
@@ -132857,6 +132857,24 @@ var init_dbRoutes = __esm({
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to bulk insert chemicals" });
+      }
+    });
+    router.post("/chemicals/bulk-delete", async (req, res) => {
+      try {
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id) => typeof id === "string" && id.trim().length > 0) : [];
+        if (ids.length === 0) {
+          return res.status(400).json({ error: "No chemical IDs provided" });
+        }
+        if (ids.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
+        await db.delete(chemicals).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.inArray)(chemicals.id, ids), (0, import_drizzle_orm.eq)(chemicals.schoolId, schoolId)));
+        res.json({ success: true, deletedCount: ids.length });
+      } catch (error) {
+        console.error("Failed to bulk delete chemicals:", error);
+        res.status(500).json({ error: "Failed to bulk delete chemicals" });
       }
     });
     router.get("/equipment", async (req, res) => {
@@ -133188,7 +133206,16 @@ var init_dbRoutes = __esm({
         if (!schoolId) return;
         const id = req.body.id || generateId();
         const cleaned = pickAllowed(req.body, glasswareAllowedFields);
-        const [inserted] = await db.insert(glasswareInventory).values({ ...cleaned, id, schoolId }).returning();
+        const [inserted] = await db.insert(glasswareInventory).values({
+          ...cleaned,
+          id,
+          schoolId,
+          nameAr: cleaned.nameAr || req.body.name || "\u0632\u062C\u0627\u062C\u064A\u0629 \u0645\u062E\u0628\u0631\u064A\u0629",
+          type: cleaned.type || "\u0623\u062E\u0631\u0649",
+          unit: cleaned.unit || "\u0642\u0637\u0639\u0629",
+          quantity: Number(cleaned.quantity) || 0,
+          status: cleaned.status || "\u062C\u064A\u062F\u0629"
+        }).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to create glassware item" });
@@ -133203,15 +133230,41 @@ var init_dbRoutes = __esm({
         if (items.length > MAX_BULK_ITEMS) {
           return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
         }
-        const formatted = items.map((item) => ({
-          ...pickAllowed(item, glasswareAllowedFields),
-          id: item.id || generateId(),
-          schoolId
-        }));
+        const formatted = items.map((item) => {
+          const cleaned = pickAllowed(item, glasswareAllowedFields);
+          return {
+            ...cleaned,
+            id: item.id || generateId(),
+            schoolId,
+            nameAr: cleaned.nameAr || item.name || "\u0632\u062C\u0627\u062C\u064A\u0629 \u0645\u062E\u0628\u0631\u064A\u0629",
+            type: cleaned.type || "\u0623\u062E\u0631\u0649",
+            unit: cleaned.unit || "\u0642\u0637\u0639\u0629",
+            quantity: Number(cleaned.quantity) || 0,
+            status: cleaned.status || "\u062C\u064A\u062F\u0629"
+          };
+        });
         const inserted = await db.insert(glasswareInventory).values(formatted).returning();
         res.json(inserted);
       } catch (error) {
         res.status(500).json({ error: "Failed to bulk insert glassware" });
+      }
+    });
+    router.post("/glassware/bulk-delete", async (req, res) => {
+      try {
+        const schoolId = getSchoolId(req, res);
+        if (!schoolId) return;
+        const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id) => typeof id === "string" && id.trim().length > 0) : [];
+        if (ids.length === 0) {
+          return res.status(400).json({ error: "No glassware IDs provided" });
+        }
+        if (ids.length > MAX_BULK_ITEMS) {
+          return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+        }
+        await db.delete(glasswareInventory).where((0, import_drizzle_orm.and)((0, import_drizzle_orm.inArray)(glasswareInventory.id, ids), (0, import_drizzle_orm.eq)(glasswareInventory.schoolId, schoolId)));
+        res.json({ success: true, deletedCount: ids.length });
+      } catch (error) {
+        console.error("Failed to bulk delete glassware:", error);
+        res.status(500).json({ error: "Failed to bulk delete glassware" });
       }
     });
     router.put("/glassware/:id", async (req, res) => {
