@@ -72,28 +72,34 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
     queryKey: [key, auth.currentUser?.uid],
     queryFn: async () => {
       const cacheKey = getCacheKey(key);
+      let sqlResponded = false;
       try {
         const result = await fetchWithAuth(endpoint);
-        if (Array.isArray(result) && result.length > 0) {
-          if (cacheKey) {
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(result));
-            } catch (e) {
-              // LocalStorage quota or unavailable, ignore
+        if (Array.isArray(result)) {
+          sqlResponded = true;
+          if (result.length > 0) {
+            if (cacheKey) {
+              try {
+                localStorage.setItem(cacheKey, JSON.stringify(result));
+              } catch (e) {
+                // LocalStorage quota or unavailable, ignore
+              }
             }
+            return result;
           }
-          return result;
         }
       } catch (err) {
         // Ignore API failure and check Firestore / cache
       }
 
       // Check Firestore (when SQL failed OR returned an empty array)
+      let firestoreResponded = false;
       try {
         if (auth.currentUser) {
           const activeSchoolId = getActiveSchoolId() || auth.currentUser.uid;
           const colRef = getUserCollection(activeSchoolId, key);
           const snap = await getDocs(colRef);
+          firestoreResponded = true;
           if (!snap.empty) {
             const firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() })) as T[];
             if (cacheKey) {
@@ -126,7 +132,20 @@ export function useSqlCollection<T>(key: string, endpoint: string) {
         // Ignore Firestore error and fall through to localStorage
       }
 
-      // Attempt offline cache retrieval only for this authenticated account
+      // If an authoritative source (Firestore or SQL) confirmed 0 items exist,
+      // sync offline cache to empty instead of resurrecting deleted items.
+      if (firestoreResponded || sqlResponded) {
+        if (cacheKey) {
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify([]));
+          } catch (e) {
+            // Ignore quota
+          }
+        }
+        return [];
+      }
+
+      // Attempt offline cache retrieval only when both API and Firestore could not respond
       if (cacheKey) {
         const cached = localStorage.getItem(cacheKey);
         if (cached) {

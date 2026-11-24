@@ -21,6 +21,7 @@ export default defineConfig(({mode}) => {
           name: 'نظام تسيير المخابر',
           short_name: 'المخابر',
           description: 'تطبيق تسيير مخابر المؤسسات التعليمية',
+          start_url: './#/',
           theme_color: '#fcf9f3',
           background_color: '#fcf9f3',
           display: 'standalone',

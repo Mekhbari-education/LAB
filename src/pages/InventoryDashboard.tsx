@@ -28,22 +28,29 @@ import { analyzeLabImage } from '../services/geminiService';
 const inventoryModules = [
   { 
     title: 'المخزن الكيميائي', 
-    desc: 'تتبع المحاليل، تواريخ الصلاحية، ودرجات الخطورة Safety Data.', 
+    desc: 'تتبع المحاليل، تواريخ الصلاحية، وبطاقات المخزون للمواد الكيميائية.', 
     icon: FlaskConical, 
     color: 'bg-primary/10', 
     path: ROUTES.CHEMICALS 
   },
   { 
+    title: 'مخزن الزجاجيات وبطاقات المخزون', 
+    desc: 'مخزن مخصص للزجاجيات المخبرية بنماذج مصورة وطباعة بطاقات المخزون (بدون بطاقات جرد).', 
+    icon: Beaker, 
+    color: 'bg-sky-500/15', 
+    path: ROUTES.GLASSWARE_STORE 
+  },
+  { 
     title: 'بطاقات الجرد', 
-    desc: 'سجل رسمي لبطاقات الجرد يتضمن الأرقام التسلسلية والمراجعات العشرية.', 
+    desc: 'سجل رسمي لبطاقات الجرد الدائم للأجهزة والتجهيزات (باستثناء الزجاجيات والمواد).', 
     icon: Database, 
     color: 'bg-primary/20', 
     path: ROUTES.INVENTORY_CARDS 
   },
   { 
     title: 'الزجاجيات والعتاد', 
-    desc: 'قاعدة بيانات شاملة للأجهزة والمعدات الزجاجية والميكانيكية.', 
-    icon: Beaker, 
+    desc: 'قاعدة بيانات شاملة للأجهزة والمعدات المخبرية والتجهيزات التقنية.', 
+    icon: Monitor, 
     color: 'bg-secondary-container/50', 
     path: ROUTES.EQUIPMENT 
   },

@@ -177,7 +177,7 @@ export class PDFService {
    */
   static processArabic(text: any): string {
     if (text === null || text === undefined) return '';
-    return String(text).trim();
+    return String(text).replace(/ناظر\s*الدروس/g, 'الناظر').trim();
   }
 
   /**
@@ -1983,7 +1983,7 @@ export class PDFService {
         </div>
       </body>
       </html>
-    `;
+    `.replace(/ناظر\s*الدروس/g, 'الناظر');
   }
 
   /**

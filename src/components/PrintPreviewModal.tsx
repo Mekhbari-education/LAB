@@ -30,6 +30,7 @@ import { usePrintSettings } from '../context/PrintSettingsContext';
 import { usePdfPreview } from '../context/PdfPreviewContext';
 import { PrintService } from '../services/printService';
 import { PDFService } from '../services/pdfService';
+import { sanitizeCustomCss } from '../utils/printCssUtils';
 import DOMPurify from 'dompurify';
 import { 
   PrintOrientation, 
@@ -431,14 +432,19 @@ export default function PrintPreviewModal() {
   const handleZoomReset = () => setZoom(100);
   const handleZoomFit = () => setZoom(orientation === 'landscape' ? 80 : 90);
 
-  // Extract custom embedded CSS rules from customHtml
+  // Extract and safely scope custom embedded CSS rules from customHtml
   const extractedCustomStyles = useMemo(() => {
     if (!previewData?.customHtml) return '';
     const styleMatches = previewData.customHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
     if (!styleMatches) return '';
-    return styleMatches
+    const rawCss = styleMatches
       .map(tag => tag.replace(/<\/?style[^>]*>/gi, ''))
       .join('\n');
+    return sanitizeCustomCss(rawCss, {
+      scopeSelector: '.custom-rendered-sheet',
+      stripMediaPrint: true,
+      stripPageAndImport: true
+    });
   }, [previewData?.customHtml]);
 
   // Sanitize custom HTML using useMemo unconditionally before any early returns
@@ -489,6 +495,11 @@ export default function PrintPreviewModal() {
 
   const hasBothViews = Boolean(previewData.customHtml && (previewData.headers?.length || previewData.cards?.length || previewData.stickers?.length));
   const shouldRenderCustom = previewData.customHtml && (viewMode === 'custom' || (!previewData.headers?.length && !previewData.cards?.length && !previewData.stickers?.length));
+  const isStandaloneCardsPreview = Boolean(
+    shouldRenderCustom &&
+    sanitizedCustomHtml &&
+    (sanitizedCustomHtml.includes('pcard') || sanitizedCustomHtml.includes('ph-container'))
+  );
 
   // Scale multiplier for font size
   const fontMultiplier = scale === 'small' ? 0.88 : scale === 'large' ? 1.15 : 1;
@@ -744,21 +755,24 @@ export default function PrintPreviewModal() {
                 <div
                   style={{
                     width: sheetWidth,
-                    minHeight: sheetMinHeight,
-                    padding: marginPx,
-                    paddingRight: gutterMm > 0 ? `calc(${marginPx} + ${gutterMm}mm)` : marginPx,
+                    minHeight: isStandaloneCardsPreview ? 'auto' : sheetMinHeight,
+                    padding: isStandaloneCardsPreview ? 0 : marginPx,
+                    paddingRight: isStandaloneCardsPreview ? 0 : (gutterMm > 0 ? `calc(${marginPx} + ${gutterMm}mm)` : marginPx),
                     fontSize: `${11 * fontMultiplier}pt`,
                     lineHeight: lineHeight === 'compact' ? '1.3' : lineHeight === 'relaxed' ? '1.7' : '1.5',
                     fontFamily: fontFamily === 'ManaraDocs' ? "'ManaraDocs', 'ManaraDocsAmatti', 'Cairo', 'Amiri', sans-serif" : `${fontFamily || 'Cairo'}, sans-serif`,
                     direction: 'rtl'
                   }}
-                  className={`bg-white text-neutral-900 shadow-2xl rounded-sm transition-all relative overflow-hidden ${
-                    borderStyle === 'double_official' 
-                      ? 'border-4 border-double border-neutral-800' 
-                      : borderStyle === 'high_contrast' 
-                      ? 'border-2 border-neutral-900' 
-                      : 'border border-neutral-200'
-                  }`}
+                  className={isStandaloneCardsPreview
+                    ? 'bg-transparent text-neutral-900 transition-all relative overflow-visible'
+                    : `bg-white text-neutral-900 shadow-2xl rounded-sm transition-all relative overflow-hidden ${
+                        borderStyle === 'double_official' 
+                          ? 'border-4 border-double border-neutral-800' 
+                          : borderStyle === 'high_contrast' 
+                          ? 'border-2 border-neutral-900' 
+                          : 'border border-neutral-200'
+                      }`
+                  }
                 >
                   {/* Binding Gutter Visual Guide if enabled */}
                   {gutterMm > 0 && (
@@ -1012,38 +1026,47 @@ export default function PrintPreviewModal() {
                           font-family: 'Amiri', serif;
                         }
 
-                        /* Universal styling for any table inside custom forms */
-                        .custom-rendered-sheet table {
-                          width: 100% !important;
-                          border-collapse: collapse !important;
-                          margin: 6px 0 !important;
+                        /* Fallback generic styling for plain HTML tables inside custom forms (0-specificity so template styles win) */
+                        :where(.custom-rendered-sheet table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) {
+                          width: 100%;
+                          border-collapse: collapse;
+                          margin: 6px 0;
                           font-size: ${11.5 * fontMultiplier * (customScalePercent / 100)}px;
                         }
-                        .custom-rendered-sheet table th,
-                        .custom-rendered-sheet th {
-                          background-color: ${isBw ? '#ffffff' : bgHeader} !important;
-                          color: ${textHeader} !important;
-                          font-weight: bold !important;
-                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : isGrayscale ? '#888888' : bgHeader} !important;
-                          padding: 6px 7px !important;
-                          text-align: center !important;
-                          font-family: 'Cairo', sans-serif !important;
-                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px !important;
+                        :where(.custom-rendered-sheet table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) th {
+                          background-color: ${isBw ? '#ffffff' : bgHeader};
+                          color: ${textHeader};
+                          font-weight: bold;
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : isGrayscale ? '#888888' : '#2b3d22'};
+                          padding: 6px 7px;
+                          text-align: center;
+                          font-family: 'Cairo', sans-serif;
+                          font-size: ${10.5 * fontMultiplier * (customScalePercent / 100)}px;
                         }
-                        .custom-rendered-sheet table td,
-                        .custom-rendered-sheet td {
-                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d2d8ce'} !important;
-                          padding: 5px 7px !important;
-                          vertical-align: middle !important;
+                        :where(.custom-rendered-sheet table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) td {
+                          border: 1px solid ${isBw || highContrast || borderStyle === 'high_contrast' ? '#000000' : '#d2d8ce'};
+                          padding: 5px 7px;
+                          vertical-align: middle;
                           background-color: #ffffff;
                         }
                         ${tableStriped ? `
-                          .custom-rendered-sheet table tbody tr:nth-child(even) td,
-                          .custom-rendered-sheet table tr:nth-child(even) td {
+                          :where(.custom-rendered-sheet table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) tbody tr:nth-child(even) td {
                             background-color: ${isBw ? '#ffffff' : colorMode === 'grayscale' ? '#f5f5f5' : '#f9faf7'};
                           }
                         ` : ''}
-                        .custom-rendered-sheet .paper-wrapper {
+
+                        /* Embedded custom styles from template (scoped cleanly inside .custom-rendered-sheet) */
+                        ${extractedCustomStyles}
+
+                        /* Host sheet container isolation & normalization */
+                        .custom-rendered-sheet {
+                          background: transparent !important;
+                          padding: 0 !important;
+                          margin: 0 !important;
+                          ${isBw ? 'filter: grayscale(100%) contrast(150%);' : isGrayscale ? 'filter: grayscale(100%);' : ''}
+                        }
+                        .custom-rendered-sheet .paper-wrapper,
+                        .custom-rendered-sheet .sheet {
                           width: 100% !important;
                           max-width: 100% !important;
                           min-height: auto !important;
@@ -1053,15 +1076,20 @@ export default function PrintPreviewModal() {
                           border: none !important;
                           background: transparent !important;
                         }
-
-                        /* Embedded custom styles from template */
-                        ${extractedCustomStyles}
+                        .custom-rendered-sheet #body {
+                          padding-top: 0 !important;
+                          margin: 0 auto !important;
+                          max-width: 100% !important;
+                        }
+                        .custom-rendered-sheet #toolbar {
+                          display: none !important;
+                        }
                       `}</style>
                       <div 
                         className="custom-rendered-sheet w-full"
                         dangerouslySetInnerHTML={{ __html: sanitizedCustomHtml }}
                       />
-                      {(showPrintDateTime || showPageNumbers) && (
+                      {!isStandaloneCardsPreview && (showPrintDateTime || showPageNumbers) && (
                         <div className="mt-4 pt-2 border-t border-neutral-300 flex justify-between items-center text-[10px] text-neutral-500">
                           <div>{showPrintDateTime ? `طُبع بتاريخ: ${currentDateFormatted}` : ''}</div>
                           <div>{sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
@@ -1229,7 +1257,7 @@ export default function PrintPreviewModal() {
                           {showNazir && (
                             <div className="flex-1 border border-dashed border-neutral-300 rounded p-2 bg-neutral-50 flex flex-col justify-between min-h-[85px]">
                               <div>
-                                <div className="text-[11px] font-bold text-neutral-800">{sig.nazirTitle || 'الناظر'}</div>
+                                <div className="text-[11px] font-bold text-neutral-800">{(sig.nazirTitle || 'الناظر').replace(/ناظر\s*الدروس/g, 'الناظر')}</div>
                                 <div className="text-[9px] text-neutral-500">(التوقيع والختم)</div>
                               </div>
                               {stampSpace && (

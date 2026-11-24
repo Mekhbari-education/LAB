@@ -28,6 +28,11 @@ interface PrintSettingsContextType {
 
 const PrintSettingsContext = createContext<PrintSettingsContextType | undefined>(undefined);
 
+const normalizeNazirTitle = (title?: string): string => {
+  if (!title) return 'الناظر';
+  return title.replace(/ناظر\s*الدروس/g, 'الناظر');
+};
+
 export function PrintSettingsProvider({ children }: { children: React.ReactNode }) {
   const { schoolName, directorate, commune, jobTitle, academicYear, schoolLogo } = useSchool();
   const [isSaving, setIsSaving] = useState(false);
@@ -42,6 +47,11 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
+          const mergedSignatures = {
+            ...DEFAULT_PRINT_SETTINGS.signatures,
+            ...(parsed.signatures || {})
+          };
+          mergedSignatures.nazirTitle = normalizeNazirTitle(mergedSignatures.nazirTitle);
           return {
             ...DEFAULT_PRINT_SETTINGS,
             ...parsed,
@@ -57,10 +67,7 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
               ...DEFAULT_PRINT_SETTINGS.appearance,
               ...(parsed.appearance || {})
             },
-            signatures: {
-              ...DEFAULT_PRINT_SETTINGS.signatures,
-              ...(parsed.signatures || {})
-            },
+            signatures: mergedSignatures,
             qrSticker: {
               ...DEFAULT_PRINT_SETTINGS.qrSticker,
               ...(parsed.qrSticker || {})
@@ -177,7 +184,8 @@ export function PrintSettingsProvider({ children }: { children: React.ReactNode 
               },
               signatures: {
                 ...prev.signatures,
-                ...(data.printSettings.signatures || {})
+                ...(data.printSettings.signatures || {}),
+                nazirTitle: normalizeNazirTitle(data.printSettings.signatures?.nazirTitle || prev.signatures.nazirTitle)
               },
               qrSticker: {
                 ...prev.qrSticker,

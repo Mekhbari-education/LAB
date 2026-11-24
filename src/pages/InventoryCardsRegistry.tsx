@@ -127,7 +127,9 @@ export default function InventoryCardsRegistry() {
         if (prev.length === sqlEquipment.length && prev.length === 0) {
           return prev;
         }
-        const equipmentItems = sqlEquipment.map(data => ({
+        const equipmentItems = sqlEquipment
+          .filter(data => data.type !== 'glassware')
+          .map(data => ({
           id: data.id,
           serialNumber: data.serialNumber || '',
           name: data.smartNameAr || data.name || '',
@@ -1042,6 +1044,20 @@ export default function InventoryCardsRegistry() {
               {t('inventory_cards.registry_title', 'سجل بطاقات الجرد - مخبر الوسائل التعليمية')}
             </h2>
           </div>
+        </div>
+
+        {/* Regulatory Note: Glassware uses Stock Cards instead of Inventory Cards */}
+        <div className="mb-6 no-print rounded-2xl border border-sky-200 dark:border-sky-800/50 bg-sky-50/70 dark:bg-sky-950/30 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-xs sm:text-sm font-bold text-sky-950 dark:text-sky-100">
+            تنبيه تنظيمي: الزجاجيات المخبرية لا تخضع لبطاقات الجرد الدائم (تم استبعادها تلقائياً من هذا السجل)، ولديها بطاقات مخزون خاصة مثل المواد الكيميائية.
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.GLASSWARE_STORE)}
+            className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-black hover:bg-primary/90 transition-colors cursor-pointer"
+          >
+            فتح مخزن الزجاجيات وبطاقات المخزون
+          </button>
         </div>
 
         {/* Action Toolbar */}

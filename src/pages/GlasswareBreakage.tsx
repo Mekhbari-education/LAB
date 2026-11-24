@@ -29,6 +29,9 @@ import { useSqlCollection } from '../hooks/useSqlCollection';
 import { usePdfPreview } from '../context/PdfPreviewContext';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import { PDFService } from '../services/pdfService';
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../config/routes';
+import { buildGlasswareStockCardsHtml } from '../services/glasswareStockCardPrintService';
 import { 
   GlasswareItem, 
   createGlassware, 
@@ -292,12 +295,41 @@ export default function GlasswareBreakage({ isNested = false }: { isNested?: boo
               <Eye size={18} />
               معاينة
             </button>
+            <Link
+              to={ROUTES.GLASSWARE_STORE}
+              className="bg-sky-600 text-white px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-sky-700 transition-all shadow-md active:scale-95 text-sm"
+            >
+              <Beaker size={18} />
+              مخزن الزجاجيات والنماذج المصورة
+            </Link>
+            <button
+              onClick={() => {
+                if (!items.length) return;
+                const html = buildGlasswareStockCardsHtml(items, {
+                  schoolName,
+                  directorate,
+                  commune,
+                  academicYear,
+                });
+                openPrintPreview({
+                  title: `بطاقات مخزون الزجاجيات (${items.length} صنف)`,
+                  type: 'custom',
+                  customHtml: html,
+                  suggestedPaperSize: 'a5',
+                  suggestedOrientation: 'portrait',
+                });
+              }}
+              className="bg-surface text-primary border-2 border-primary/20 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-md active:scale-95 text-sm"
+            >
+              <Printer size={18} />
+              طباعة بطاقات المخزون
+            </button>
             <button 
               onClick={handlePrint}
               className="bg-surface text-primary border-2 border-primary/10 px-5 py-3 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 transition-all shadow-md active:scale-95 text-sm"
             >
               <Printer size={18} />
-              طباعة
+              طباعة القائمة
             </button>
             <button 
               onClick={handleSeedData}

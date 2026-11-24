@@ -390,8 +390,8 @@ export function useDailyReport() {
         if (reportData.academicYear) setDocAcademicYear(reportData.academicYear);
         if (reportData.location) setDocLocation(reportData.location);
         if (reportData.sender) setDocSender(formatOfficialRankTitle(reportData.sender));
-        if (reportData.recipient) setDocRecipient(reportData.recipient);
-        
+        if (reportData.recipient) setDocRecipient(String(reportData.recipient).replace(/ناظر\s*الدروس/g, 'الناظر'));
+
         // Restore signers ensuring "الناظر" format and formatted lab rank with "ال"
         if (reportData.signers) {
           const sanitizedSigners = reportData.signers.map((s: string, idx: number) => {
@@ -1503,11 +1503,11 @@ export function useDailyReport() {
     if (report.academicYear) setDocAcademicYear(report.academicYear);
     if (report.location) setDocLocation(report.location);
     if (report.sender) setDocSender(report.sender);
-    if (report.recipient) setDocRecipient(report.recipient);
-    
+    if (report.recipient) setDocRecipient(String(report.recipient).replace(/ناظر\s*الدروس/g, 'الناظر'));
+
     // Ensure "الناظر" in signers
     if (report.signers) {
-      setDocSigners(report.signers.map(s => s.includes('تحت إشراف ناظر') ? 'الناظر' : (s.includes('مدير المؤسسة') ? 'المدير' : s)));
+      setDocSigners(report.signers.map(s => (s.includes('تحت إشراف ناظر') || s.includes('ناظر')) ? 'الناظر' : (s.includes('مدير المؤسسة') ? 'المدير' : s)));
     } else {
       handleSetRouting(report.routing || 'hierarchical_nazir');
     }

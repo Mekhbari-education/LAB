@@ -217,12 +217,48 @@ export function generateEquipmentStickersHtml(options: EquipmentStickerOptions):
     const source = item.source || item.supplier || '---';
     
     // Status formatting
-    const isFunctional = item.status === 'functional' || !item.status;
-    const isMaintenance = item.status === 'maintenance';
-    const statusText = isFunctional ? 'سليم وصالح للاستعمال' : isMaintenance ? 'تحت الصيانة' : 'تالف / مقترح للإسقاط';
-    const statusBg = isBw ? '#ffffff' : isFunctional ? '#e6f4ea' : isMaintenance ? '#fef7e0' : '#fce8e6';
-    const statusBorder = isBw ? '#000000' : isFunctional ? '#137333' : isMaintenance ? '#b06000' : '#c5221f';
-    const statusColor = isBw ? '#000000' : isFunctional ? '#0d652d' : isMaintenance ? '#8a4b00' : '#a50e0e';
+    const st = item.status || 'functional';
+    const isFunctional = st === 'functional';
+    const isMaintenance = st === 'maintenance' || st === 'needs_inspection';
+    const statusTextMap: Record<string, string> = {
+      functional: 'سليم وصالح للاستعمال',
+      maintenance: 'تحت الصيانة',
+      needs_inspection: 'يحتاج فحص',
+      reserved: 'محجوز / قيد الاستخدام',
+      in_storage: 'في المخزن',
+      broken: 'تالف / مقترح للإسقاط',
+      missing: 'مفقود',
+      written_off: 'إسقاط',
+    };
+    const statusText = statusTextMap[st] || st;
+    const isBlueOrNeutral = st === 'reserved' || st === 'in_storage';
+    const statusBg = isBw
+      ? '#ffffff'
+      : isFunctional
+        ? '#e6f4ea'
+        : isMaintenance
+          ? '#fef7e0'
+          : isBlueOrNeutral
+            ? '#e8f0fe'
+            : '#fce8e6';
+    const statusBorder = isBw
+      ? '#000000'
+      : isFunctional
+        ? '#137333'
+        : isMaintenance
+          ? '#b06000'
+          : isBlueOrNeutral
+            ? '#1967d2'
+            : '#c5221f';
+    const statusColor = isBw
+      ? '#000000'
+      : isFunctional
+        ? '#0d652d'
+        : isMaintenance
+          ? '#8a4b00'
+          : isBlueOrNeutral
+            ? '#174ea6'
+            : '#a50e0e';
 
     // QR Payload: structured compact JSON for scanner apps and smartphone cameras
     const qrPayload = JSON.stringify({

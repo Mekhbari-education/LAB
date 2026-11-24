@@ -19,6 +19,7 @@ export const ROUTES = {
 
   // Inventory & Stock
   CHEMICALS: '/chemicals',
+  GLASSWARE_STORE: '/glassware-store',
   EQUIPMENT: '/equipment',
   INVENTORY_CARDS: '/inventory-cards',
   CHEMICAL_STORAGE: '/chemical-storage',

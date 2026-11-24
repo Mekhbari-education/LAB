@@ -43,7 +43,8 @@ import {
   SlidersHorizontal,
   Table as TableIcon,
   Coins,
-  Tag
+  Tag,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatSchoolWithCommune } from '../lib/utils';
@@ -51,8 +52,11 @@ import { getEquipmentIntelligence, ensureApiKey } from '../services/geminiServic
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import QRScanner from '../components/QRScanner';
 import EquipmentStickerModal from '../components/EquipmentStickerModal';
+import { buildGlasswareStockCardsHtml } from '../services/glasswareStockCardPrintService';
+import { findGlasswareCatalogMatch } from '../data/glasswareCatalog';
 
-import type { Equipment, MaintenanceLog } from '../types/equipment';
+import { Equipment as EquipmentType, MaintenanceLog, EQUIPMENT_STATUS_OPTIONS, getEquipmentStatusLabel } from '../types/equipment';
+import type { Equipment } from '../types/equipment';
 import { useEquipmentLogic } from '../hooks/useEquipmentLogic';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import { useTranslation } from 'react-i18next';
@@ -202,10 +206,18 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
               <Database size={20} />
               {t('equipment.btn_inventory_cards', 'سجل بطاقات الجرد')}
             </button>
+            <button
+              onClick={() => navigate(ROUTES.GLASSWARE_STORE)}
+              className="bg-sky-600 text-white px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-sky-700 transition-all shadow-xl active:scale-95"
+              title="فتح مخزن الزجاجيات وبطاقات المخزون والنماذج المصورة (الزجاجيات لا تخضع لبطاقات الجرد)"
+            >
+              <Beaker size={20} />
+              مخزن الزجاجيات (بطاقات المخزون)
+            </button>
             <button 
               onClick={() => handlePrintInventoryCards()}
               className="bg-surface text-primary border-2 border-primary/10 px-6 py-3.5 rounded-full font-black flex items-center gap-2 hover:bg-primary/5 hover:border-primary transition-all shadow-xl active:scale-95"
-              title="طباعة بطاقات وملصقات الجرد للصقها فوق الأجهزة لتعريفها وجردها"
+              title="طباعة بطاقات وملصقات الجرد للصقها فوق الأجهزة لتعريفها وجردها (باستثناء الزجاجيات)"
             >
               <Tag size={20} />
               {t('equipment.btn_print_cards', 'طباعة بطاقات / ملصقات الجرد')}
@@ -294,35 +306,55 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
         </header>
       )}
 
-      {/* Quick Access to Specialized Units */}
+      {/* Regulatory Note & Quick Access to Specialized Units */}
       {!isNested && (
-        <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {[
-            { label: 'الأجهزة التقنية', path: ROUTES.TECH_INVENTORY, icon: Monitor, color: 'bg-primary/5 text-primary' },
-            { label: 'جرد الزجاجيات', path: ROUTES.GLASSWARE_BREAKAGE, icon: Beaker, color: 'bg-primary/5 text-primary' },
-            { label: 'النماذج الذكية', path: ROUTES.SMART_FORMS, icon: FileText, color: 'bg-primary/5 text-primary' },
-            { label: 'النفايات الكيميائية', path: ROUTES.CHEMICAL_WASTE, icon: Trash2, color: 'bg-error/5 text-error' },
-            { label: 'الخريطة التربوية', path: ROUTES.EDUCATIONAL_MAP, icon: Map, color: 'bg-primary/5 text-primary' },
-            { label: 'المستهلكات & SDS', path: ROUTES.CONSUMABLES_SDS, icon: Package, color: 'bg-primary/5 text-primary' },
-          ].map((unit, i) => (
-            <motion.a
-              key={unit.label}
-              href={`#${unit.path}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className={cn(
-                "flex flex-col items-center justify-center p-6 rounded-[32px] border border-outline/5 shadow-sm hover:shadow-md transition-all group text-center gap-3",
-                unit.color
-              )}
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-sky-200 dark:border-sky-800/50 bg-sky-50/70 dark:bg-sky-950/30 px-4 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-xs sm:text-sm font-bold text-sky-950 dark:text-sky-100">
+              <ShieldCheck size={18} className="text-sky-600 dark:text-sky-400 shrink-0" />
+              <span>
+                تنبيه تنظيمي: الزجاجيات ليس لها بطاقات جرد دائمة، بل تخضع لبطاقات المخزون في «مخزن الزجاجيات» مثل المواد الكيميائية.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(ROUTES.GLASSWARE_STORE)}
+              className="shrink-0 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-black flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <div className="p-3 rounded-2xl bg-surface shadow-sm group-hover:scale-110 transition-transform">
-                <unit.icon size={20} />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-tight leading-tight">{unit.label}</span>
-            </motion.a>
-          ))}
-        </section>
+              <Beaker size={15} />
+              <span>فتح مخزن الزجاجيات والنماذج المصورة</span>
+            </button>
+          </div>
+
+          <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            {[
+              { label: 'مخزن الزجاجيات (بطاقات المخزون)', path: ROUTES.GLASSWARE_STORE, icon: Beaker, color: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20' },
+              { label: 'الأجهزة التقنية', path: ROUTES.TECH_INVENTORY, icon: Monitor, color: 'bg-primary/5 text-primary' },
+              { label: 'جرد الزجاجيات والكسور', path: ROUTES.GLASSWARE_BREAKAGE, icon: AlertTriangle, color: 'bg-primary/5 text-primary' },
+              { label: 'النماذج الذكية', path: ROUTES.SMART_FORMS, icon: FileText, color: 'bg-primary/5 text-primary' },
+              { label: 'النفايات الكيميائية', path: ROUTES.CHEMICAL_WASTE, icon: Trash2, color: 'bg-error/5 text-error' },
+              { label: 'الخريطة التربوية', path: ROUTES.EDUCATIONAL_MAP, icon: Map, color: 'bg-primary/5 text-primary' },
+              { label: 'المستهلكات & SDS', path: ROUTES.CONSUMABLES_SDS, icon: Package, color: 'bg-primary/5 text-primary' },
+            ].map((unit, i) => (
+              <motion.a
+                key={unit.label}
+                href={`#${unit.path}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className={cn(
+                  "flex flex-col items-center justify-center p-5 rounded-[28px] border border-outline/10 shadow-sm hover:shadow-md transition-all group text-center gap-3",
+                  unit.color
+                )}
+              >
+                <div className="p-3 rounded-2xl bg-surface shadow-sm group-hover:scale-110 transition-transform">
+                  <unit.icon size={20} />
+                </div>
+                <span className="text-[11px] font-black leading-tight">{unit.label}</span>
+              </motion.a>
+            ))}
+          </section>
+        </div>
       )}
 
       {/* Stats */}
@@ -404,6 +436,21 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 <option value="tech">أجهزة تقنية</option>
                 <option value="smart">تحديث ذكي ✨</option>
                 <option value="other">أخرى</option>
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 bg-surface px-3 py-1.5 rounded-2xl border border-outline/10 shadow-sm">
+              <CheckCircle2 size={15} className="text-primary/40" />
+              <select
+                className="bg-transparent border-none text-xs font-black text-primary focus:ring-0 cursor-pointer py-1"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="all">كل الحالات</option>
+                {EQUIPMENT_STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -582,7 +629,7 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     ) : <ArrowUpDown size={12} className="opacity-25" />}
                   </div>
                 </th>
-                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-20" : "w-24", sortField === 'status' && "text-primary font-black")} onClick={() => handleSort('status')} title="انقر للترتيب حسب الحالة">
+                <th className={cn("py-3 text-center cursor-pointer hover:text-primary transition-colors whitespace-nowrap px-1", isFitScreen ? "w-28" : "w-32", sortField === 'status' && "text-primary font-black")} onClick={() => handleSort('status')} title="انقر للترتيب حسب الحالة">
                   <div className="flex items-center justify-center gap-1">
                     <span>الحالة</span>
                     {sortField === 'status' ? (
@@ -826,15 +873,26 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                           <select 
                             className={cn(
                               "w-full rounded-lg px-1 py-1 text-[11px] font-black border transition-all cursor-pointer text-center",
-                              e.status === 'maintenance' ? "bg-tertiary/10 border-tertiary/20 text-tertiary" : 
-                              e.status === 'broken' ? "bg-error/10 border-error/20 text-error" : "bg-primary/5 border-primary/10 text-primary"
+                              e.status === 'maintenance' ? "bg-tertiary/10 border-tertiary/20 text-tertiary" :
+                              e.status === 'needs_inspection' ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300" :
+                              e.status === 'reserved' ? "bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300" :
+                              e.status === 'in_storage' ? "bg-slate-500/10 border-slate-500/30 text-slate-700 dark:text-slate-300" :
+                              e.status === 'missing' ? "bg-orange-500/15 border-orange-500/30 text-orange-700 dark:text-orange-300" :
+                              e.status === 'written_off' ? "bg-zinc-500/15 border-zinc-500/30 text-zinc-700 dark:text-zinc-300" :
+                              e.status === 'broken' ? "bg-error/10 border-error/20 text-error" :
+                              "bg-primary/5 border-primary/10 text-primary"
                             )}
-                            defaultValue={e.status}
+                            value={e.status || 'functional'}
                             onChange={(ev) => triggerInlineEdit(e.id, 'status', ev.target.value)}
                           >
                             <option value="functional">سليم</option>
                             <option value="maintenance">صيانة</option>
-                            <option value="broken">تالف / مشطوب</option>
+                            <option value="needs_inspection">يحتاج فحص</option>
+                            <option value="reserved">محجوز / قيد الاستخدام</option>
+                            <option value="in_storage">في المخزن</option>
+                            <option value="broken">تالف / مقترح للإسقاط</option>
+                            <option value="missing">مفقود</option>
+                            <option value="written_off">إسقاط</option>
                           </select>
                           {saveIndicator[`${e.id}_status`] && (
                             <span className="absolute top-1 end-1 text-emerald-600 animate-ping">●</span>
@@ -935,14 +993,56 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                               <QrCode size={13} />
                             </button>
 
-                            {/* Print Inventory Sticker */}
-                            <button 
-                              onClick={() => handlePrintInventoryCards(e)}
-                              className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-md transition-colors"
-                              title="طباعة ملصق الجرد والتعريف لهذا الجهاز"
-                            >
-                              <Tag size={13} />
-                            </button>
+                            {/* Print Inventory Sticker (Non-glassware) OR Glassware Stock Card (Glassware) */}
+                            {e.type === 'glassware' ? (
+                              <button
+                                onClick={() => {
+                                  const matched = findGlasswareCatalogMatch(e.smartNameAr || e.name, e.name);
+                                  const html = buildGlasswareStockCardsHtml(
+                                    [
+                                      {
+                                        id: e.id,
+                                        nameAr: e.smartNameAr || e.name,
+                                        designationFr: matched.designationFr,
+                                        type: matched.type,
+                                        unit: 'قطعة',
+                                        quantity: Number(e.totalQuantity) || 1,
+                                        status:
+                                          e.status === 'broken' || e.status === 'written_off'
+                                            ? 'مكسورة'
+                                            : e.status === 'missing'
+                                            ? 'مفقودة'
+                                            : e.status === 'maintenance' || e.status === 'needs_inspection'
+                                            ? 'تحتاج إصلاح'
+                                            : 'جيدة',
+                                        location: e.location || matched.defaultLocation,
+                                        notes: e.notes || matched.careAndSafety,
+                                      },
+                                    ],
+                                    { schoolName, directorate, commune }
+                                  );
+                                  openPrintPreview({
+                                    title: `بطاقة مخزون زجاجية — ${e.smartNameAr || e.name}`,
+                                    type: 'custom',
+                                    customHtml: html,
+                                    suggestedPaperSize: 'a5',
+                                    suggestedOrientation: 'portrait',
+                                  });
+                                }}
+                                className="p-1 text-sky-600 hover:text-sky-700 hover:bg-sky-500/10 rounded-md transition-colors"
+                                title="الزجاجيات ليس لها بطاقة جرد — طباعة بطاقة مخزون الزجاجية"
+                              >
+                                <Beaker size={13} />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handlePrintInventoryCards(e)}
+                                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10 rounded-md transition-colors"
+                                title="طباعة ملصق الجرد والتعريف لهذا الجهاز"
+                              >
+                                <Tag size={13} />
+                              </button>
+                            )}
 
                             {/* Print Card */}
                             <button 
@@ -1099,6 +1199,20 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                 <AlertTriangle size={14} />
                 تالف
               </button>
+              <select
+                className="px-3 py-1.5 rounded-full bg-surface/15 text-white border border-white/20 text-xs font-black cursor-pointer focus:outline-none"
+                value=""
+                onChange={(ev) => {
+                  if (ev.target.value) {
+                    handleBulkStatusUpdate(ev.target.value as EquipmentType['status']);
+                  }
+                }}
+              >
+                <option value="" className="text-zinc-900">تغيير الحالة إلى...</option>
+                {EQUIPMENT_STATUS_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value} className="text-zinc-900">{opt.label}</option>
+                ))}
+              </select>
               <button 
                 onClick={handleBulkDelete}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs border border-error/30"
@@ -1280,12 +1394,17 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                     <label className="text-xs font-black text-on-surface/40 uppercase tracking-widest mr-4">{t('equipment.field_status', 'الحالة التشغيلية')}</label>
                     <select 
                       className="w-full bg-surface-container-low border-2 border-transparent rounded-[24px] px-6 py-4 text-base font-bold focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-inner appearance-none"
-                      value={newEquipment.status}
+                      value={newEquipment.status || 'functional'}
                       onChange={e => setNewEquipment({...newEquipment, status: e.target.value as any})}
                     >
                       <option value="functional">{t('equipment.status_functional', 'سليم / نشط')}</option>
                       <option value="maintenance">{t('equipment.status_maintenance', 'قيد الصيانة')}</option>
-                      <option value="broken">{t('equipment.status_broken', 'تالف / خارج الخدمة')}</option>
+                      <option value="needs_inspection">يحتاج فحص</option>
+                      <option value="reserved">محجوز / قيد الاستخدام</option>
+                      <option value="in_storage">في المخزن</option>
+                      <option value="broken">{t('equipment.status_broken', 'تالف / مقترح للإسقاط')}</option>
+                      <option value="missing">مفقود</option>
+                      <option value="written_off">إسقاط</option>
                     </select>
                   </div>
                   <div className="space-y-3">
@@ -1398,9 +1517,15 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
                         <span className={cn(
                           "text-xs font-black px-4 py-1.5 rounded-full shadow-sm uppercase tracking-widest",
                           log.newStatus === 'functional' ? "bg-primary/10 text-primary" : 
-                          log.newStatus === 'maintenance' ? "bg-tertiary/10 text-tertiary" : "bg-error/10 text-error"
+                          log.newStatus === 'maintenance' ? "bg-tertiary/10 text-tertiary" :
+                          log.newStatus === 'needs_inspection' ? "bg-amber-500/10 text-amber-700" :
+                          log.newStatus === 'reserved' ? "bg-blue-500/10 text-blue-700" :
+                          log.newStatus === 'in_storage' ? "bg-slate-500/10 text-slate-700" :
+                          log.newStatus === 'missing' ? "bg-orange-500/15 text-orange-700" :
+                          log.newStatus === 'written_off' ? "bg-zinc-500/15 text-zinc-700" :
+                          "bg-error/10 text-error"
                         )}>
-                          {log.newStatus === 'functional' ? 'سليم / نشط' : log.newStatus === 'maintenance' ? 'قيد الصيانة' : 'تالف / خارج الخدمة'}
+                          {getEquipmentStatusLabel(log.newStatus)}
                         </span>
                         <span className="text-[10px] font-black text-on-surface/30 uppercase tracking-widest">{log.date?.toDate()?.toLocaleString('ar-DZ')}</span>
                       </div>
@@ -1747,13 +1872,13 @@ export default function Equipment({ isNested = false }: { isNested?: boolean }) 
         )}
       </AnimatePresence>
 
-      {/* Equipment Identification & Inventory Sticker Printing Modal */}
+      {/* Equipment Identification & Inventory Sticker Printing Modal (Excludes Glassware) */}
       {isStickerModalOpen && (
         <EquipmentStickerModal
           isOpen={isStickerModalOpen}
           onClose={() => setIsStickerModalOpen(false)}
-          equipment={filteredEquipment}
-          selectedItem={stickerModalItem}
+          equipment={filteredEquipment.filter(item => item.type !== 'glassware')}
+          selectedItem={stickerModalItem && stickerModalItem.type !== 'glassware' ? stickerModalItem : null}
           selectedIds={selectedIds}
           schoolInfo={{
             schoolName,

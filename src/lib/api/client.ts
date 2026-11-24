@@ -21,7 +21,8 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}) {
   // Pass active school ID header if stored locally, to be validated against server records
   if (!headers.has('x-school-id')) {
     try {
-      const activeSchool = localStorage.getItem('active_school_id');
+      const storedSchool = localStorage.getItem('active_school_id') || localStorage.getItem('algeria_lab_school_id');
+      const activeSchool = storedSchool && storedSchool !== 'school_001' && storedSchool.trim() !== '' ? storedSchool.trim() : null;
       if (activeSchool) {
         headers.set('x-school-id', activeSchool);
       } else {

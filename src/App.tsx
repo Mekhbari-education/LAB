@@ -42,6 +42,7 @@ const DataDeletion = React.lazy(() => import('./pages/DataDeletion'));
 const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
 const TechInventory = React.lazy(() => import('./pages/TechInventory'));
 const GlasswareBreakage = React.lazy(() => import('./pages/GlasswareBreakage'));
+const GlasswareStore = React.lazy(() => import('./pages/GlasswareStore'));
 const SmartForms = React.lazy(() => import('./pages/SmartForms'));
 const ChemicalWaste = React.lazy(() => import('./pages/ChemicalWaste'));
 const EducationalMap = React.lazy(() => import('./pages/EducationalMap'));
@@ -215,6 +216,7 @@ export default function App() {
                 <Route path={ROUTES.INVENTORY_CARDS.substring(1)} element={<InventoryCardsRegistry />} />
                 <Route path={ROUTES.TECH_INVENTORY.substring(1)} element={<TechInventory />} />
                 <Route path={ROUTES.GLASSWARE_BREAKAGE.substring(1)} element={<GlasswareBreakage />} />
+                <Route path={ROUTES.GLASSWARE_STORE.substring(1)} element={<GlasswareStore />} />
                 <Route path={ROUTES.SMART_FORMS.substring(1)} element={<SmartForms />} />
                 <Route path={ROUTES.CHEMICAL_WASTE.substring(1)} element={<ChemicalWaste />} />
                 <Route path={ROUTES.CHEMICAL_STORAGE.substring(1)} element={<ChemicalStorage />} />

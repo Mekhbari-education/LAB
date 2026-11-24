@@ -72,6 +72,11 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
     setIsBulkUpdating,
     isBulkConfirmOpen,
     setIsBulkConfirmOpen,
+    isBulkDeleteConfirmOpen,
+    setIsBulkDeleteConfirmOpen,
+    isDeletingBulk,
+    toast,
+    setToast,
     bulkProgress,
     setBulkProgress,
     selectedIds,
@@ -118,8 +123,32 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
     stateName
   } = useChemicalsLogic(isNested);
 
+  const activeSelectedIds = selectedIds.filter(id => chemicals.some(c => c.id === id));
+  const selectedItemsList = chemicals.filter(c => activeSelectedIds.includes(c.id));
+  const isAllFilteredSelected =
+    filteredChemicals.length > 0 && filteredChemicals.every(c => activeSelectedIds.includes(c.id));
+
   return (
     <div className={cn("space-y-10 max-w-7xl mx-auto pb-20", !isNested && "px-4")} dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+      {/* Toast notification */}
+      {toast && (
+        <div
+          className={cn(
+            'fixed bottom-6 start-6 z-[60] flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-lg text-sm font-bold max-w-md transition-all',
+            toast.type === 'success' &&
+              'bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-100 dark:border-emerald-800',
+            toast.type === 'error' &&
+              'bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950 dark:text-rose-100 dark:border-rose-800',
+            toast.type === 'info' &&
+              'bg-sky-50 text-sky-900 border-sky-200 dark:bg-sky-950 dark:text-sky-100 dark:border-sky-800'
+          )}
+        >
+          <span className="flex-1">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100">
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {/* Header */}
       {!isNested && (
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-4">
@@ -316,12 +345,12 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
                         onClick={handleSelectAll}
                         className={cn(
                           "w-5 h-5 rounded border-2 cursor-pointer flex items-center justify-center transition-all",
-                          selectedIds.length === filteredChemicals.length && filteredChemicals.length > 0
+                          isAllFilteredSelected
                             ? "bg-primary border-primary text-white" 
                             : "border-outline/30 hover:border-primary/50"
                         )}
                       >
-                        {selectedIds.length === filteredChemicals.length && filteredChemicals.length > 0 && <Check size={12} />}
+                        {isAllFilteredSelected && <Check size={12} />}
                       </div>
                     </th>
                     <th className="px-3 py-5 text-start w-10">#</th>
@@ -707,7 +736,7 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
 
       {/* Floating Bulk Action Bar */}
       <AnimatePresence>
-        {selectedIds.length > 0 && (
+        {activeSelectedIds.length > 0 && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -715,7 +744,7 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
             className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-secondary text-white px-6 py-4 rounded-[28px] shadow-2xl flex flex-wrap items-center justify-between gap-4 w-[calc(100vw-2rem)] max-w-2xl border border-white/10"
           >
             <div className="flex flex-col">
-              <span className="text-sm font-black">{selectedIds.length} {t('common.selected', 'مادة مختارة')}</span>
+              <span className="text-sm font-black">{activeSelectedIds.length} {t('common.selected', 'مادة مختارة')}</span>
               <span className="text-[10px] text-white/60 font-bold">{t('chemicals.bulk_operations_hint', 'يمكنك إجراء عمليات جماعية على هذه المواد')}</span>
             </div>
 
@@ -723,8 +752,10 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
 
             <div className="flex items-center gap-2 flex-wrap">
               <button 
-                onClick={handleBulkDelete}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs"
+                type="button"
+                onClick={() => setIsBulkDeleteConfirmOpen(true)}
+                disabled={isDeletingBulk}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-error/20 text-error-container hover:bg-error hover:text-white transition-all font-black text-xs disabled:opacity-50"
               >
                 <Trash2 size={16} />
                 {t('common.delete_selected', 'حذف المختار')}
@@ -804,6 +835,57 @@ export default function Chemicals({ isNested = false }: { isNested?: boolean }) 
         onClose={() => setIsReviewModalOpen(false)}
         onApprove={handleApproveUpdate}
       />
+
+      {/* Bulk Delete Confirmation Modal */}
+      {isBulkDeleteConfirmOpen && activeSelectedIds.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-surface border border-outline/15 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-primary">تأكيد الحذف الجماعي</h4>
+                <p className="text-xs font-bold text-secondary/70 tabular-nums">
+                  سيتم حذف {activeSelectedIds.length} مادة كيميائية نهائياً من المخزن
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-surface-container-low border border-outline/10 p-3 max-h-40 overflow-y-auto space-y-1 text-xs font-bold text-secondary">
+              {selectedItemsList.slice(0, 6).map(item => (
+                <div key={item.id} className="truncate">
+                  • {item.nameAr || item.nameEn} {item.formula ? `(${item.formula})` : ''}
+                </div>
+              ))}
+              {selectedItemsList.length > 6 && (
+                <div className="text-primary/70 pt-1 tabular-nums">
+                  و {selectedItemsList.length - 6} مواد أخرى...
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteConfirmOpen(false)}
+                disabled={isDeletingBulk}
+                className="px-4 py-2 rounded-xl border border-outline/15 text-xs font-bold text-secondary disabled:opacity-50"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={isDeletingBulk}
+                className="px-5 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 disabled:opacity-50"
+              >
+                {isDeletingBulk ? 'جاري الحذف...' : `حذف (${activeSelectedIds.length}) نهائياً`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {isQRScannerOpen && (

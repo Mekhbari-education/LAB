@@ -76,8 +76,8 @@ const labScheduleAllowedFields = [
 ];
 
 const glasswareAllowedFields = [
-  'name', 'type', 'capacity', 'quantity', 'brokenQuantity', 
-  'location', 'minimumThreshold', 'notes'
+  'designationFr', 'nameAr', 'type', 'unit', 'quantity',
+  'status', 'location', 'notes'
 ];
 
 const equipmentScrappingAllowedFields = [
@@ -178,6 +178,29 @@ router.post('/chemicals/bulk', async (req: AuthRequest, res) => {
     res.json(inserted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk insert chemicals' });
+  }
+});
+
+router.post('/chemicals/bulk-delete', async (req: AuthRequest, res) => {
+  try {
+    const schoolId = getSchoolId(req, res);
+    if (!schoolId) return;
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((id: any) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No chemical IDs provided' });
+    }
+    if (ids.length > MAX_BULK_ITEMS) {
+      return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+    }
+    await db
+      .delete(chemicals)
+      .where(and(inArray(chemicals.id, ids), eq(chemicals.schoolId, schoolId)));
+    res.json({ success: true, deletedCount: ids.length });
+  } catch (error) {
+    console.error('Failed to bulk delete chemicals:', error);
+    res.status(500).json({ error: 'Failed to bulk delete chemicals' });
   }
 });
 
@@ -555,7 +578,16 @@ router.post('/glassware', async (req: AuthRequest, res) => {
     if (!schoolId) return;
     const id = req.body.id || generateId();
     const cleaned = pickAllowed(req.body, glasswareAllowedFields);
-    const [inserted] = await db.insert(glasswareInventory).values({ ...cleaned, id, schoolId } as any).returning();
+    const [inserted] = await db.insert(glasswareInventory).values({
+      ...cleaned,
+      id,
+      schoolId,
+      nameAr: cleaned.nameAr || req.body.name || 'زجاجية مخبرية',
+      type: cleaned.type || 'أخرى',
+      unit: cleaned.unit || 'قطعة',
+      quantity: Number(cleaned.quantity) || 0,
+      status: cleaned.status || 'جيدة',
+    } as any).returning();
     res.json(inserted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create glassware item' });
@@ -571,15 +603,46 @@ router.post('/glassware/bulk', async (req: AuthRequest, res) => {
     if (items.length > MAX_BULK_ITEMS) {
       return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
     }
-    const formatted = items.map(item => ({
-      ...pickAllowed(item, glasswareAllowedFields),
-      id: item.id || generateId(),
-      schoolId,
-    }));
+    const formatted = items.map(item => {
+      const cleaned = pickAllowed(item, glasswareAllowedFields);
+      return {
+        ...cleaned,
+        id: item.id || generateId(),
+        schoolId,
+        nameAr: cleaned.nameAr || item.name || 'زجاجية مخبرية',
+        type: cleaned.type || 'أخرى',
+        unit: cleaned.unit || 'قطعة',
+        quantity: Number(cleaned.quantity) || 0,
+        status: cleaned.status || 'جيدة',
+      };
+    });
     const inserted = await db.insert(glasswareInventory).values(formatted as any).returning();
     res.json(inserted);
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk insert glassware' });
+  }
+});
+
+router.post('/glassware/bulk-delete', async (req: AuthRequest, res) => {
+  try {
+    const schoolId = getSchoolId(req, res);
+    if (!schoolId) return;
+    const ids = Array.isArray(req.body?.ids)
+      ? req.body.ids.filter((id: any) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No glassware IDs provided' });
+    }
+    if (ids.length > MAX_BULK_ITEMS) {
+      return res.status(400).json({ error: `Payload too large: maximum ${MAX_BULK_ITEMS} items allowed per bulk request` });
+    }
+    await db
+      .delete(glasswareInventory)
+      .where(and(inArray(glasswareInventory.id, ids), eq(glasswareInventory.schoolId, schoolId)));
+    res.json({ success: true, deletedCount: ids.length });
+  } catch (error) {
+    console.error('Failed to bulk delete glassware:', error);
+    res.status(500).json({ error: 'Failed to bulk delete glassware' });
   }
 });
 

@@ -183,6 +183,7 @@ export default function Layout() {
       icon: Package,
       items: [
         { name: t('nav.chemicals', 'الكواشف الكيميائية'), path: ROUTES.CHEMICALS, icon: FlaskConical },
+        { name: t('nav.glassware_store', 'مخزن الزجاجيات وبطاقات المخزون'), path: ROUTES.GLASSWARE_STORE, icon: Beaker },
         { name: t('nav.equipment', 'التجهيزات المخبرية'), path: ROUTES.EQUIPMENT, icon: Beaker },
         { name: t('nav.inventory_cards', 'سجل بطاقات الجرد'), path: ROUTES.INVENTORY_CARDS, icon: FileText },
         { name: t('nav.tech_inventory', 'جرد التجهيزات التقنية'), path: ROUTES.TECH_INVENTORY, icon: Monitor },

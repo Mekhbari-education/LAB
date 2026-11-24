@@ -1,5 +1,6 @@
 import { PrintSettings, PrintPreviewData, DEFAULT_PRINT_SETTINGS } from '../types/printSettings';
 import { formatSchoolWithCommune } from '../lib/utils';
+import { sanitizeCustomCss } from '../utils/printCssUtils';
 import logo from '/ministry-logo.png';
 import DOMPurify from 'dompurify';
 
@@ -184,6 +185,8 @@ export class PrintService {
       subtitle,
       headers = [],
       rows = [],
+      cards = [],
+      stickers = [],
       summaryCards = [],
       notes,
       suggestedOrientation,
@@ -195,9 +198,14 @@ export class PrintService {
     if (rawCustomHtml) {
       const styleMatches = rawCustomHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
       if (styleMatches) {
-        extractedCustomStyles = styleMatches
+        const rawCss = styleMatches
           .map(tag => tag.replace(/<\/?style[^>]*>/gi, ''))
           .join('\n');
+        extractedCustomStyles = sanitizeCustomCss(rawCss, {
+          scopeSelector: '.custom-report-content',
+          stripMediaPrint: false,
+          stripPageAndImport: true
+        });
       }
       const bodyMatch = rawCustomHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
       if (bodyMatch) {
@@ -207,23 +215,32 @@ export class PrintService {
       }
     }
 
-    const hasBuiltInHeader = Boolean(
+    const isStandaloneCardsDoc = Boolean(
       extractedCustomBody && (
+        extractedCustomBody.includes('pcard') ||
+        extractedCustomBody.includes('ph-container')
+      )
+    );
+
+    const hasBuiltInHeader = Boolean(
+      isStandaloneCardsDoc ||
+      (extractedCustomBody && (
         extractedCustomBody.includes('republic-header') ||
         extractedCustomBody.includes('official-header') ||
         extractedCustomBody.includes('institution-bar') ||
         extractedCustomBody.includes('title-banner') ||
         extractedCustomBody.includes('inst-info')
-      )
+      ))
     );
 
     const hasBuiltInSignatures = Boolean(
-      extractedCustomBody && (
+      isStandaloneCardsDoc ||
+      (extractedCustomBody && (
         extractedCustomBody.includes('signatures-grid') ||
         extractedCustomBody.includes('signatures-section') ||
         extractedCustomBody.includes('signatures-table') ||
         extractedCustomBody.includes('sig-box')
-      )
+      ))
     );
 
     const orientation = (settings.layout.orientation && settings.layout.orientation !== 'auto') 
@@ -267,8 +284,8 @@ export class PrintService {
 
     const brandPrimary = isBw ? '#000000' : isGrayscale ? '#1a1a1a' : '#2b3d22';
     const brandAccent = isBw ? '#333333' : isGrayscale ? '#444444' : '#415437';
-    const bgHeader = isBw ? '#000000' : isGrayscale ? '#e2e2e2' : '#2b3d22';
-    const textHeader = isBw ? '#ffffff' : isGrayscale ? '#000000' : '#ffffff';
+    const bgHeader = isBw ? '#ffffff' : isGrayscale ? '#e2e2e2' : '#2b3d22';
+    const textHeader = isBw ? '#000000' : isGrayscale ? '#000000' : '#ffffff';
     const rowZebraBg = settings.appearance.tableStriped
       ? (isBw ? '#ffffff' : isGrayscale ? '#f5f5f5' : '#f9faf7')
       : '#ffffff';
@@ -354,7 +371,7 @@ export class PrintService {
     }
 
     /* Page Container */
-    .sheet {
+    .sheet.report-root-sheet {
       width: 100%;
       background: #ffffff;
       padding-right: ${gutterMm}mm;
@@ -764,37 +781,103 @@ export class PrintService {
       font-size: 8.5pt;
       font-family: 'Amiri', serif;
     }
-    /* Universal styling for all custom tables and forms */
-    .custom-report-content table {
-      width: 100% !important;
-      border-collapse: collapse !important;
-      margin: 6px 0 !important;
+    /* Fallback styling for plain custom tables (0-specificity so template tables keep their own colors) */
+    :where(.custom-report-content table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
     }
-    .custom-report-content table th,
-    .custom-report-content th {
-      background-color: ${bgHeader} !important;
-      color: ${textHeader} !important;
-      font-weight: bold !important;
-      border: 1px solid ${tableBorderColor} !important;
-      padding: 6px 8px !important;
-      text-align: center !important;
-      font-family: 'Cairo', sans-serif !important;
-      font-size: ${9.5 * scaleMultiplier}pt !important;
+    :where(.custom-report-content table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) th {
+      background-color: ${bgHeader};
+      color: ${textHeader};
+      font-weight: bold;
+      border: 1px solid ${tableBorderColor};
+      padding: 6px 8px;
+      text-align: center;
+      font-family: 'Cairo', sans-serif;
+      font-size: ${9.5 * scaleMultiplier}pt;
     }
-    .custom-report-content table td,
-    .custom-report-content td {
-      border: 1px solid ${tableBorderColor} !important;
-      padding: 5px 8px !important;
-      vertical-align: middle !important;
+    :where(.custom-report-content table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) td {
+      border: 1px solid ${tableBorderColor};
+      padding: 5px 8px;
+      vertical-align: middle;
       background-color: #ffffff;
     }
     ${settings.appearance.tableStriped ? `
-      .custom-report-content table tbody tr:nth-child(even) td,
-      .custom-report-content table tr:nth-child(even) td {
+      :where(.custom-report-content table:not(.ic-tbl):not(.data-table):not(.observations-table):not(.items-table):not(.official-table)) tbody tr:nth-child(even) td {
         background-color: ${rowZebraBg};
       }
     ` : ''}
-    .custom-report-content .paper-wrapper {
+
+    /* Standard Cards & Stickers Grid Styles */
+    .report-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 12px 0;
+    }
+    .report-card-box {
+      border: 1px solid ${borderColor};
+      border-radius: 6px;
+      padding: 10px;
+      background: #fafbf9;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .report-card-title {
+      font-weight: 800;
+      font-size: ${10.5 * scaleMultiplier}pt;
+      color: ${brandPrimary};
+      margin-bottom: 3px;
+    }
+    .report-card-code {
+      font-family: monospace;
+      font-size: 8.5pt;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    .report-card-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid #ecefe8;
+      padding: 2px 0;
+      font-size: ${9 * scaleMultiplier}pt;
+    }
+    .report-stickers-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .report-sticker-box {
+      border: 1px dashed #94a38f;
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+      background: #ffffff;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    /* Extracted custom styles (scoped cleanly inside .custom-report-content) */
+    ${extractedCustomStyles}
+
+    /* Custom container normalization & color mode filters */
+    .custom-report-content {
+      background: transparent !important;
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    .custom-report-content #toolbar {
+      display: none !important;
+    }
+    .custom-report-content #body {
+      padding-top: 0 !important;
+      margin: 0 auto !important;
+      max-width: 100% !important;
+    }
+    .custom-report-content .paper-wrapper,
+    .custom-report-content .sheet {
       width: 100% !important;
       max-width: 100% !important;
       min-height: auto !important;
@@ -807,17 +890,14 @@ export class PrintService {
 
     /* Color mode filters on entire sheet */
     ${isBw ? `
-      .sheet, .custom-report-content {
+      .sheet.report-root-sheet, .custom-report-content {
         filter: grayscale(100%) contrast(150%) !important;
       }
     ` : isGrayscale ? `
-      .sheet, .custom-report-content {
+      .sheet.report-root-sheet, .custom-report-content {
         filter: grayscale(100%) !important;
       }
     ` : ''}
-
-    /* Extracted custom styles if any */
-    ${extractedCustomStyles}
 
     /* Media queries specifically optimizing for screen view and paper/PDF print */
     @media screen {
@@ -850,7 +930,7 @@ export class PrintService {
         font-family: 'Cairo', sans-serif;
       }
 
-      .sheet {
+      .sheet.report-root-sheet {
         width: 100% !important;
         max-width: ${sheetWidth} !important;
         min-height: ${sheetMinHeight} !important;
@@ -885,7 +965,7 @@ export class PrintService {
         display: none !important;
       }
 
-      .sheet {
+      .sheet.report-root-sheet {
         width: 100% !important;
         max-width: 100% !important;
         min-height: auto !important;
@@ -949,6 +1029,24 @@ export class PrintService {
       }
     }
 
+    ${isStandaloneCardsDoc ? `
+      @media screen {
+        .sheet.report-root-sheet {
+          background: transparent !important;
+          box-shadow: none !important;
+          border: none !important;
+          padding: 0 !important;
+          min-height: auto !important;
+        }
+      }
+      @media print {
+        @page {
+          size: ${paperSize} ${orientation} !important;
+          margin: 3mm !important;
+        }
+      }
+    ` : ''}
+
     /* Footer disclaimer */
     .document-footer {
       margin-top: 15px;
@@ -980,7 +1078,7 @@ export class PrintService {
     </div>
   </div>
 
-  <div class="sheet">
+  <div class="sheet report-root-sheet">
     ${watermarkText ? `
     <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-35deg); font-size: 65pt; font-weight: 900; color: rgba(180, 190, 175, 0.16); border: 5px dashed rgba(180, 190, 175, 0.2); padding: 8px 36px; border-radius: 12px; pointer-events: none; z-index: 99; white-space: nowrap; letter-spacing: 4px; user-select: none;">
       ${watermarkText}
@@ -1048,6 +1146,38 @@ export class PrintService {
     </table>
     ` : ''}
 
+    ${(!extractedCustomBody && cards.length > 0) ? `
+    <div class="report-cards-grid">
+      ${cards.map(c => `
+        <div class="report-card-box">
+          <div class="report-card-title">${c.title}</div>
+          ${c.code ? `<div class="report-card-code">كود: ${c.code}</div>` : ''}
+          <div>
+            ${c.details.map(d => `
+              <div class="report-card-row">
+                <span style="color:#666;">${d.label}:</span>
+                <strong style="color:#1e2819;">${d.value}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+
+    ${(!extractedCustomBody && stickers.length > 0) ? `
+    <div class="report-stickers-grid">
+      ${stickers.map(s => `
+        <div class="report-sticker-box">
+          <div style="font-weight:800;font-size:9pt;color:#1e2819;">${s.name}</div>
+          ${s.code ? `<div style="font-family:monospace;font-size:8pt;color:#555;">${s.code}</div>` : ''}
+          ${s.location ? `<div style="font-size:7.5pt;color:#666;">المكان: ${s.location}</div>` : ''}
+          <div style="margin-top:4px;font-family:monospace;font-size:7.5pt;background:#f3f5f1;padding:2px 4px;border-radius:3px;">${s.qrValue}</div>
+        </div>
+      `).join('')}
+    </div>
+    ` : ''}
+
     ${extractedCustomBody ? `
     <div class="custom-report-content" dir="rtl">
       ${extractedCustomBody}
@@ -1076,7 +1206,7 @@ export class PrintService {
       ${sig.showNazir ? `
       <div class="signature-card">
         <div>
-          <div class="signature-card-title">${sig.nazirTitle || 'الناظر'}</div>
+          <div class="signature-card-title">${(sig.nazirTitle || 'الناظر').replace(/ناظر\s*الدروس/g, 'الناظر')}</div>
           <div class="signature-card-subtitle">(التوقيع والختم)</div>
         </div>
         ${sig.reserveStampSpace ? `<div class="stamp-circle-zone">موضع الختم</div>` : ''}
@@ -1115,7 +1245,7 @@ export class PrintService {
     </div>
     ` : ''}
 
-    ${(Boolean(settings.appearance.showPrintDateTime) || Boolean(settings.appearance.showPageNumbers)) ? `
+    ${(!isStandaloneCardsDoc && (Boolean(settings.appearance.showPrintDateTime) || Boolean(settings.appearance.showPageNumbers))) ? `
     <footer class="document-footer">
       <div>${sig.customDisclaimer || 'الجمهورية الجزائرية الديمقراطية الشعبية — الأرضية الرقمية لتسيير المخابر'}</div>
       <div>${formatSchoolWithCommune(inst.school, inst.commune)} — ${inst.laboratory}</div>
@@ -1126,7 +1256,7 @@ export class PrintService {
   </div>
 </body>
 </html>
-    `;
+    `.replace(/ناظر\s*الدروس/g, 'الناظر');
   }
 
   /**
@@ -1646,7 +1776,7 @@ export class PrintService {
                 </td>
                 ${sig.showNazir ? `
                 <td style="width: 33.3%;">
-                  <div class="sig-title">${sig.nazirTitle || 'الناظر'}</div>
+                  <div class="sig-title">${(sig.nazirTitle || 'الناظر').replace(/ناظر\s*الدروس/g, 'الناظر')}</div>
                   <div class="sig-space">(التوقيع والختم)</div>
                   <div style="font-size: 7.5pt; color: #777;">الختم ومصادقة</div>
                 </td>
@@ -1670,7 +1800,7 @@ export class PrintService {
         </div>
       </body>
       </html>
-    `;
+    `.replace(/ناظر\s*الدروس/g, 'الناظر');
   }
 
   /**

@@ -33,12 +33,22 @@ export function useChemicalsLogic(isNested = false) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [suggestedUpdate, setSuggestedUpdate] = useState<ChemicalIntelligence | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Chemical; direction: 'asc' | 'desc' } | null>(null);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => {
+      setToast(prev => (prev?.message === message ? null : prev));
+    }, 4000);
+  };
 
   const formatDisplayDate = (dateStr: string) => {
     if (!dateStr) return 'غير محدد';
@@ -64,12 +74,18 @@ export function useChemicalsLogic(isNested = false) {
     notes: ''
   });
 
-  const { data: chemicalsList, loading: chemicalsLoading, error } = useSqlCollection<Chemical>('chemicals', '/api/db/chemicals');
+  const { data: chemicalsList, loading: chemicalsLoading, error, invalidate } = useSqlCollection<Chemical>('chemicals', '/api/db/chemicals');
   
   useEffect(() => {
     if (!chemicalsLoading) {
       setChemicals(chemicalsList);
       setLoading(false);
+
+      const validIdSet = new Set(chemicalsList.map(c => c.id));
+      setSelectedIds(prev => {
+        const next = prev.filter(id => validIdSet.has(id));
+        return next.length === prev.length ? prev : next;
+      });
       
       const targetId = searchParams.get('id');
       if (targetId) {
@@ -82,10 +98,14 @@ export function useChemicalsLogic(isNested = false) {
         const item = chemicalsList.find(e => e.id === targetId || e.id === actualId);
         if (item) {
           setSelectedChemical(item);
-        } else if (chemicalsList.length > 0 && !selectedChemical) {
+        } else if (chemicalsList.length > 0 && (!selectedChemical || !validIdSet.has(selectedChemical.id))) {
           setSelectedChemical(chemicalsList[0]);
+        } else if (chemicalsList.length === 0) {
+          setSelectedChemical(null);
         }
-      } else if (chemicalsList.length > 0 && !selectedChemical) {
+      } else if (chemicalsList.length === 0) {
+        setSelectedChemical(null);
+      } else if (!selectedChemical || !validIdSet.has(selectedChemical.id)) {
         setSelectedChemical(chemicalsList[0]);
       }
     }
@@ -106,6 +126,7 @@ export function useChemicalsLogic(isNested = false) {
       }
       setIsAddModalOpen(false);
       setEditingChemical(null);
+      await invalidate();
       setNewChemical({
         nameEn: '',
         nameAr: '',
@@ -294,12 +315,21 @@ export function useChemicalsLogic(isNested = false) {
     try {
       const { deleteChemical } = await import('../lib/api/chemicals');
       await deleteChemical(id);
-      await logActivity(schoolId, LogAction.DELETE, LogModule.CHEMICALS, `حذف المادة: ${name}`, id);
+      setChemicals(prev => prev.filter(c => c.id !== id));
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
       if (selectedChemical?.id === id) {
         setSelectedChemical(chemicals.find(c => c.id !== id) || null);
       }
+      await invalidate();
+      try {
+        await logActivity(schoolId, LogAction.DELETE, LogModule.CHEMICALS, `حذف المادة: ${name}`, id);
+      } catch {
+        // Non-blocking activity log
+      }
+      showToast('success', `تم حذف "${name || 'المادة'}" من المخزن الكيميائي.`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `chemicals/${id}`);
+      console.error('Error deleting chemical:', error);
+      showToast('error', 'تعذر حذف المادة. حاول مرة أخرى.');
     }
   };
 
@@ -898,9 +928,9 @@ export function useChemicalsLogic(isNested = false) {
             body { 
               font-family: 'Cairo', sans-serif; 
               direction: rtl; 
-              background: #f0f2f5; 
+              background: transparent; 
               color: #1a1c1e;
-              padding: 20px;
+              padding: 0;
             }
 
             #toolbar {
@@ -1010,14 +1040,16 @@ export function useChemicalsLogic(isNested = false) {
               @page { size: A5 portrait; margin: 3mm; }
               .pcard {
                 width: 100% !important; height: calc(210mm - 6mm) !important;
-                margin: 0 !important; border: 1px solid #000 !important;
-                border-radius: 0 !important; box-shadow: none !important;
-                page-break-after: always !important; padding: 5mm !important;
+                margin: 0 !important; border: 1px solid rgba(0,0,0,0.15) !important;
+                border-radius: 24px !important; box-shadow: none !important;
+                page-break-after: always !important; padding: 6mm !important;
+                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
               }
-              .ph-container { border-radius: 0 !important; margin-bottom: 2mm !important; }
-              .ic-meta-expressive .ic-field { background: white !important; border: 1px solid #eee !important; box-shadow: none !important; }
-              .ic-tbl th { background: #f0f0f0 !important; border: 0.5pt solid #000 !important; print-color-adjust: exact; }
-              .ic-tbl td { border: 0.5pt solid #000 !important; }
+              .pcard:last-child { page-break-after: avoid !important; }
+              .ph-container { margin: -6mm -6mm 4mm -6mm !important; padding: 5mm 6mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .ic-meta-expressive .ic-field, .ic-info-box, .ic-safety-strip, .pcard-badge, .rules-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .ic-tbl th { background: #e8ecef !important; border: 0.5pt solid var(--surface-variant) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .ic-tbl td { border: 0.5pt solid var(--surface-variant) !important; }
             }
           </style>
         </head>
@@ -1037,6 +1069,7 @@ export function useChemicalsLogic(isNested = false) {
       title: `بطاقات جرد كيميائي (${items.length} عنصر)`,
       type: 'custom',
       customHtml: html,
+      suggestedPaperSize: 'a5',
       suggestedOrientation: 'portrait'
     });
   };
@@ -1113,24 +1146,47 @@ export function useChemicalsLogic(isNested = false) {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.length === filteredChemicals.length) {
-      setSelectedIds([]);
+    const filteredIds = filteredChemicals.map(c => c.id);
+    const filteredIdSet = new Set(filteredIds);
+    const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+    if (allFilteredSelected) {
+      setSelectedIds(prev => prev.filter(id => !filteredIdSet.has(id)));
     } else {
-      setSelectedIds(filteredChemicals.map(c => c.id));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...filteredIds])));
     }
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`هل أنت متأكد من حذف ${selectedIds.length} مادة؟`)) return;
-    
+    const idsToDelete = selectedIds.filter(id => chemicals.some(c => c.id === id));
+    if (idsToDelete.length === 0) {
+      setIsBulkDeleteConfirmOpen(false);
+      return;
+    }
+
+    setIsDeletingBulk(true);
     try {
-      const { deleteChemical } = await import('../lib/api/chemicals');
-      await Promise.all(selectedIds.map(id => deleteChemical(id)));
-      await logActivity(schoolId, LogAction.DELETE, LogModule.CHEMICALS, `حذف جماعي لـ ${selectedIds.length} مادة`);
+      const { deleteChemicalsBulk } = await import('../lib/api/chemicals');
+      await deleteChemicalsBulk(idsToDelete);
+      const deletedSet = new Set(idsToDelete);
+      const remaining = chemicals.filter(c => !deletedSet.has(c.id));
+      setChemicals(remaining);
       setSelectedIds([]);
-      alert('تم الحذف بنجاح!');
+      if (selectedChemical && deletedSet.has(selectedChemical.id)) {
+        setSelectedChemical(remaining[0] || null);
+      }
+      await invalidate();
+      try {
+        await logActivity(schoolId, LogAction.DELETE, LogModule.CHEMICALS, `حذف جماعي لـ ${idsToDelete.length} مادة`);
+      } catch {
+        // Non-blocking activity log
+      }
+      showToast('success', `تم حذف ${idsToDelete.length} مادة من المخزن الكيميائي بنجاح.`);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'chemicals/bulk');
+      console.error('Error bulk deleting chemicals:', error);
+      showToast('error', 'تعذر حذف المواد المحددة. حاول مرة أخرى.');
+    } finally {
+      setIsDeletingBulk(false);
+      setIsBulkDeleteConfirmOpen(false);
     }
   };
 
@@ -1207,6 +1263,11 @@ export function useChemicalsLogic(isNested = false) {
     setIsBulkUpdating,
     isBulkConfirmOpen,
     setIsBulkConfirmOpen,
+    isBulkDeleteConfirmOpen,
+    setIsBulkDeleteConfirmOpen,
+    isDeletingBulk,
+    toast,
+    setToast,
     bulkProgress,
     setBulkProgress,
     selectedIds,

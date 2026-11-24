@@ -11,7 +11,7 @@ import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
-import { Equipment, MaintenanceLog } from '../types/equipment';
+import { Equipment, MaintenanceLog, getEquipmentStatusLabel } from '../types/equipment';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { generateEquipmentStickersHtml } from '../services/equipmentStickerService';
 
@@ -507,12 +507,24 @@ export function useEquipmentLogic(isNested = false) {
 
         const statusRaw = formatTextCell(rowData.status).toLowerCase();
         let status: Equipment['status'] = 'functional';
-        if (hasExited) {
-          status = 'broken';
+        if (statusRaw.includes('إسقاط') && !statusRaw.includes('مقترح') && !statusRaw.includes('تالف')) {
+          status = 'written_off';
+        } else if (statusRaw.includes('written_off') || statusRaw.includes('written off') || statusRaw === 'اسقاط') {
+          status = 'written_off';
+        } else if (statusRaw.includes('مفقود') || statusRaw.includes('missing')) {
+          status = 'missing';
+        } else if (statusRaw.includes('فحص') || statusRaw.includes('needs_inspection') || statusRaw.includes('inspection')) {
+          status = 'needs_inspection';
+        } else if (statusRaw.includes('محجوز') || statusRaw.includes('قيد الاستخدام') || statusRaw.includes('reserved')) {
+          status = 'reserved';
+        } else if (statusRaw.includes('مخزن') || statusRaw.includes('in_storage') || statusRaw.includes('storage')) {
+          status = 'in_storage';
         } else if (statusRaw.includes('صيانة') || statusRaw.includes('maintenance')) {
           status = 'maintenance';
-        } else if (statusRaw.includes('تالف') || statusRaw.includes('معطل') || statusRaw.includes('broken')) {
+        } else if (statusRaw.includes('تالف') || statusRaw.includes('معطل') || statusRaw.includes('مقترح') || statusRaw.includes('broken')) {
           status = 'broken';
+        } else if (hasExited) {
+          status = 'written_off';
         }
 
         const availableQty = hasExited ? 0 : totalQty;
@@ -651,7 +663,7 @@ export function useEquipmentLogic(isNested = false) {
       'مصدره': e.source || e.supplier || '---',
       'قیمته': e.price || '---',
       'التعيين': e.location || '---',
-      'خروجه': e.exitDate || (e.status === 'broken' ? 'تالف / مقترح للإسقاط' : '---'),
+      'خروجه': e.exitDate || (e.status === 'broken' || e.status === 'written_off' || e.status === 'missing' ? getEquipmentStatusLabel(e.status) : '---'),
       'ملاحظات': e.notes || '---'
     }));
 
@@ -818,7 +830,7 @@ export function useEquipmentLogic(isNested = false) {
       'الكمية': e.totalQuantity,
       'الممون': e.supplier || '---',
       'الموقع': e.location || '---',
-      'الحالة': e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف',
+      'الحالة': getEquipmentStatusLabel(e.status),
       'الجرد التأسيسي': e.foundationalInventory || '---',
       'المراجعة العشرية': e.decennialReview || '---',
       'ملاحظات': e.notes || '---'
@@ -844,7 +856,7 @@ export function useEquipmentLogic(isNested = false) {
         <td style="text-align: center;">${e.source || e.supplier || '-'}</td>
         <td style="text-align: center; font-weight: bold;">${e.price || '-'}</td>
         <td style="text-align: center;">${e.location || '-'}</td>
-        <td style="text-align: center;">${e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب'}</td>
+        <td style="text-align: center;">${getEquipmentStatusLabel(e.status)}</td>
         <td style="text-align: center; color: ${e.exitDate ? '#b91c1c' : 'inherit'}; font-weight: ${e.exitDate ? 'bold' : 'normal'};">${e.exitDate || '-'}</td>
         <td style="font-size: 0.85em;">${e.notes || '-'}</td>
       </tr>
@@ -967,7 +979,7 @@ export function useEquipmentLogic(isNested = false) {
       e.source || e.supplier || '-',
       e.price ? `${e.price} د.ج` : '-',
       e.location || '-',
-      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      getEquipmentStatusLabel(e.status),
       e.exitDate || '-',
       e.notes || '-'
     ]);
@@ -1012,7 +1024,7 @@ export function useEquipmentLogic(isNested = false) {
       e.source || e.supplier || '---',
       e.price || '---',
       e.location || '---',
-      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      getEquipmentStatusLabel(e.status),
       e.exitDate || '---',
       e.notes || '---'
     ]);
@@ -1032,7 +1044,7 @@ export function useEquipmentLogic(isNested = false) {
         summaryCards: [
           { label: 'إجمالي أصناف الجرد', value: filteredEquipment.length },
           { label: 'أصناف سليمة ونشطة', value: filteredEquipment.filter(e => e.status === 'functional').length },
-          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || (e.exitDate && e.exitDate !== '---')).length },
+          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || e.status === 'written_off' || e.status === 'missing' || (e.exitDate && e.exitDate !== '---')).length },
           { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
         ]
       }
@@ -1050,7 +1062,7 @@ export function useEquipmentLogic(isNested = false) {
       e.source || e.supplier || '---',
       e.price || '---',
       e.location || '---',
-      e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف / مشطوب',
+      getEquipmentStatusLabel(e.status),
       e.exitDate || '---',
       e.notes || '---'
     ]);
@@ -1070,7 +1082,7 @@ export function useEquipmentLogic(isNested = false) {
         summaryCards: [
           { label: 'إجمالي أصناف الجرد', value: filteredEquipment.length },
           { label: 'أصناف سليمة ونشطة', value: filteredEquipment.filter(e => e.status === 'functional').length },
-          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || (e.exitDate && e.exitDate !== '---')).length },
+          { label: 'أصناف خارج الخدمة / شطب', value: filteredEquipment.filter(e => e.status === 'broken' || e.status === 'written_off' || e.status === 'missing' || (e.exitDate && e.exitDate !== '---')).length },
           { label: 'تاريخ التقرير', value: new Date().toLocaleDateString('ar-DZ') }
         ]
       }
@@ -1163,7 +1175,7 @@ export function useEquipmentLogic(isNested = false) {
             <div class="item"><span class="label">اسم الصنف:</span> <span class="value">${e.name}</span></div>
             <div class="item"><span class="label">النوع:</span> <span class="value">${e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة تقنية' : 'أخرى'}</span></div>
             <div class="item"><span class="label">الرقم التسلسلي:</span> <span class="value">${e.serialNumber || 'N/A'}</span></div>
-            <div class="item"><span class="label">الحالة الحالية:</span> <span class="value">${e.status === 'functional' ? 'سليم' : e.status === 'maintenance' ? 'صيانة' : 'تالف'}</span></div>
+            <div class="item"><span class="label">الحالة الحالية:</span> <span class="value">${getEquipmentStatusLabel(e.status)}</span></div>
             <div class="item"><span class="label">الكمية الإجمالية:</span> <span class="value">${e.totalQuantity}</span></div>
             <div class="item"><span class="label">الكمية المتوفرة:</span> <span class="value">${e.availableQuantity}</span></div>
             <div class="item"><span class="label">الكمية التالفة:</span> <span class="value">${e.brokenQuantity}</span></div>
@@ -1182,7 +1194,7 @@ export function useEquipmentLogic(isNested = false) {
         details: [
           { label: 'النوع والتصنيف', value: e.type === 'glassware' ? 'زجاجيات' : e.type === 'tech' ? 'أجهزة ومعدات تقنية' : 'أخرى' },
           { label: 'الرقم التسلسلي', value: e.serialNumber || '—' },
-          { label: 'الحالة الحالية', value: e.status === 'functional' ? 'سليم وجاهز' : e.status === 'maintenance' ? 'صيانة' : 'تالف' },
+          { label: 'الحالة الحالية', value: e.status === 'functional' ? 'سليم وجاهز' : getEquipmentStatusLabel(e.status) },
           { label: 'الكمية الإجمالية', value: e.totalQuantity },
           { label: 'الكمية المتوفرة', value: e.availableQuantity },
           { label: 'الكمية التالفة', value: e.brokenQuantity },
@@ -1346,7 +1358,8 @@ export function useEquipmentLogic(isNested = false) {
           e.registrationDate?.toLowerCase().includes(s) ||
           e.foundationalInventory?.toLowerCase().includes(s) ||
           e.exitDate?.toLowerCase().includes(s) ||
-          e.notes?.toLowerCase().includes(s);
+          e.notes?.toLowerCase().includes(s) ||
+          getEquipmentStatusLabel(e.status).toLowerCase().includes(s);
         
         const matchesType = filterType === 'all' || 
                            (filterType === 'smart' ? !!e.smartNameAr : e.type === filterType);

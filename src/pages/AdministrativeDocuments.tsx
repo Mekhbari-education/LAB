@@ -747,6 +747,17 @@ export default function AdministrativeDocuments() {
     loadSavedDocuments();
   }, []);
 
+  const sanitizeNazirTerm = (val?: string) => (val ? String(val).replace(/ناظر\s*الدروس/g, 'الناظر') : '');
+
+  const normalizeSavedDoc = (doc: SavedAdminDoc): SavedAdminDoc => ({
+    ...doc,
+    recipient: sanitizeNazirTerm(doc.recipient),
+    subject: sanitizeNazirTerm(doc.subject),
+    content: sanitizeNazirTerm(doc.content),
+    notes: doc.notes ? sanitizeNazirTerm(doc.notes) : doc.notes,
+    signers: Array.isArray(doc.signers) ? doc.signers.map(s => sanitizeNazirTerm(s)) : doc.signers
+  });
+
   const loadSavedDocuments = async () => {
     setLoadingSaved(true);
     try {
@@ -768,7 +779,7 @@ export default function AdministrativeDocuments() {
         // Firestore may be offline or rules-limited
       }
 
-      setSavedDocs(combined);
+      setSavedDocs(combined.map(normalizeSavedDoc));
     } catch (e) {
       console.warn('Error loading saved documents:', e);
     } finally {
@@ -918,21 +929,22 @@ export default function AdministrativeDocuments() {
       signers: savedDoc.signers
     };
 
+    const normalizedDoc = normalizeSavedDoc(savedDoc);
     setSelectedTemplate(parentTpl);
-    setDocDate(savedDoc.date || new Date().toISOString().split('T')[0]);
-    setDocRef(savedDoc.reference || '');
-    setDocSender(savedDoc.sender || '');
-    setDocRecipient(savedDoc.recipient || '');
-    setDocDepartment(savedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية');
-    setDocAcademicYear(savedDoc.academicYear || '2026 / 2027');
-    setDocLocation(savedDoc.location || commune || 'عين كرشة');
-    setDocRouting((savedDoc.routing as RoutingType) || 'direct');
-    setDocSubject(savedDoc.subject || '');
-    setDocContent(savedDoc.content || '');
-    setDocNotes(savedDoc.notes || '');
-    setDocRows(savedDoc.rows || []);
-    setDocSigners(savedDoc.signers || ['الملحق الرئيس بالمخابر', 'مدير المؤسسة']);
-    setDocTableHeaders(savedDoc.tableHeaders || parentTpl.tableHeaders || ['الرقم', 'البيان والتعيين', 'الكمية / المواصفة', 'الملاحظات']);
+    setDocDate(normalizedDoc.date || new Date().toISOString().split('T')[0]);
+    setDocRef(normalizedDoc.reference || '');
+    setDocSender(normalizedDoc.sender || '');
+    setDocRecipient(normalizedDoc.recipient || '');
+    setDocDepartment(normalizedDoc.department || 'مخبر العلوم الفيزيائية والطبيعية');
+    setDocAcademicYear(normalizedDoc.academicYear || '2026 / 2027');
+    setDocLocation(normalizedDoc.location || commune || 'عين كرشة');
+    setDocRouting((normalizedDoc.routing as RoutingType) || 'direct');
+    setDocSubject(normalizedDoc.subject || '');
+    setDocContent(normalizedDoc.content || '');
+    setDocNotes(normalizedDoc.notes || '');
+    setDocRows(normalizedDoc.rows || []);
+    setDocSigners(normalizedDoc.signers || ['الملحق الرئيس بالمخابر', 'مدير المؤسسة']);
+    setDocTableHeaders(normalizedDoc.tableHeaders || parentTpl.tableHeaders || ['الرقم', 'البيان والتعيين', 'الكمية / المواصفة', 'الملاحظات']);
 
     // Restore format & paper preferences
     const fmt = savedDoc.formatType || parentTpl.formatType || 'correspondence';
@@ -1451,7 +1463,7 @@ export default function AdministrativeDocuments() {
         </div>
       </body>
       </html>
-    `;
+    `.replace(/ناظر\s*الدروس/g, 'الناظر');
   };
 
   // Open in-app print preview modal
@@ -1473,18 +1485,19 @@ export default function AdministrativeDocuments() {
     const tpl = templateItem || selectedTemplate;
     if (!tpl) return;
 
-    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
-    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const sender = sanitizeNazirTerm(customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault);
+    const recipient = sanitizeNazirTerm(customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault);
     const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || 'مخبر العلوم الفيزيائية والطبيعية';
     const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || '2026 / 2027';
     const location = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || 'عين كرشة';
-    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
-    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
-    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const subject = sanitizeNazirTerm(customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault);
+    const content = sanitizeNazirTerm(customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault);
+    const notesRaw = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const notes = notesRaw ? sanitizeNazirTerm(notesRaw) : notesRaw;
     const date = customData?.date || (templateItem ? new Date().toISOString().split('T')[0] : docDate);
     const ref = customData?.reference || (templateItem ? '' : docRef);
     const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
-    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const signers = (customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers).map(s => sanitizeNazirTerm(s));
     const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات']);
     const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || 'correspondence';
     const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
@@ -1555,18 +1568,19 @@ export default function AdministrativeDocuments() {
     const tpl = templateItem || selectedTemplate;
     if (!tpl) return;
 
-    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
-    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const sender = sanitizeNazirTerm(customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault);
+    const recipient = sanitizeNazirTerm(customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault);
     const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || 'مخبر العلوم الفيزيائية والطبيعية';
     const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || '2026 / 2027';
     const location = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || 'عين كرشة';
-    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
-    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
-    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const subject = sanitizeNazirTerm(customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault);
+    const content = sanitizeNazirTerm(customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault);
+    const notesRaw = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const notes = notesRaw ? sanitizeNazirTerm(notesRaw) : notesRaw;
     const date = customData?.date || (templateItem ? new Date().toISOString().split('T')[0] : docDate);
     const ref = customData?.reference || (templateItem ? '' : docRef);
     const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
-    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const signers = (customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers).map(s => sanitizeNazirTerm(s));
     const tableHeaders = (docTableHeaders && docTableHeaders.length > 0) ? docTableHeaders : (tpl.tableHeaders || ['الرقم', 'البيان والتسمية', 'الكمية', 'الملاحظات']);
     const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || 'correspondence';
     const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
@@ -1632,18 +1646,19 @@ export default function AdministrativeDocuments() {
     const tpl = templateItem || selectedTemplate;
     if (!tpl) return;
 
-    const sender = customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault;
-    const recipient = customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault;
+    const sender = sanitizeNazirTerm(customData?.sender || (templateItem ? templateItem.senderDefault : docSender) || tpl.senderDefault);
+    const recipient = sanitizeNazirTerm(customData?.recipient || (templateItem ? templateItem.recipientDefault : docRecipient) || tpl.recipientDefault);
     const dept = customData?.department || (templateItem ? templateItem.departmentDefault : docDepartment) || "مخبر العلوم الفيزيائية والطبيعية";
     const academicYear = customData?.academicYear || (templateItem ? templateItem.academicYearDefault : docAcademicYear) || "2026 / 2027";
     const releaseLoc = customData?.location || (templateItem ? templateItem.locationDefault : docLocation) || commune || "عين كرشة";
-    const subject = customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault;
-    const content = customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault;
-    const notes = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const subject = sanitizeNazirTerm(customData?.subject || (templateItem ? templateItem.subjectDefault : docSubject) || tpl.subjectDefault);
+    const content = sanitizeNazirTerm(customData?.content || (templateItem ? templateItem.contentDefault : docContent) || tpl.contentDefault);
+    const notesRaw = customData?.notes !== undefined ? customData.notes : (templateItem ? templateItem.notesDefault : docNotes);
+    const notes = notesRaw ? sanitizeNazirTerm(notesRaw) : notesRaw;
     const date = customData?.date || (templateItem ? new Date().toISOString().split("T")[0] : docDate);
     const ref = customData?.reference || (templateItem ? "" : docRef);
     const rows = customData?.rows || (templateItem ? templateItem.defaultRows : docRows) || [];
-    const signers = customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers;
+    const signers = (customData?.signers || (templateItem ? templateItem.signers : docSigners) || tpl.signers).map(s => sanitizeNazirTerm(s));
     const fmt = customData?.formatType || (templateItem ? templateItem.formatType : docFormatType) || "correspondence";
     const showCorresp = customData?.showCorrespondenceMeta !== undefined ? customData.showCorrespondenceMeta : showCorrespondenceMeta;
     const showAppr = customData?.showApprovalBox !== undefined ? customData.showApprovalBox : showApprovalBox;
