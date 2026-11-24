@@ -1,9 +1,31 @@
-import beakerErlenmeyerImg from '../assets/images/glassware_beaker_erlenmeyer_1795471743475.jpg';
-import volumetricCylinderImg from '../assets/images/glassware_volumetric_cylinder_1795471743774.jpg';
-import burettePipetteImg from '../assets/images/glassware_burette_pipette_1795471743645.jpg';
-import testTubesRackImg from '../assets/images/glassware_test_tubes_rack_1795471743838.jpg';
-import funnelsDistillationImg from '../assets/images/glassware_funnels_distillation_1795471744565.jpg';
-import petriWatchglassImg from '../assets/images/glassware_petri_watchglass_1795471745056.jpg';
+import singleBeakerImg from '../assets/images/single_beaker_1795512915437.jpg';
+import singleErlenmeyerImg from '../assets/images/single_erlenmeyer_1795512914663.jpg';
+import singleGraduatedCylinderImg from '../assets/images/single_graduated_cylinder_1795512916535.jpg';
+import singleVolumetricFlaskImg from '../assets/images/single_volumetric_flask_1795512915628.jpg';
+import singleMohrBuretteImg from '../assets/images/single_mohr_burette_1795512918162.jpg';
+import singleVolumetricPipetteImg from '../assets/images/single_volumetric_pipette_1795512917186.jpg';
+import singleGraduatedPipetteImg from '../assets/images/single_graduated_pipette_1795512917639.jpg';
+import singleTestTubeImg from '../assets/images/single_test_tube_1795512917508.jpg';
+import singleRoundFlaskImg from '../assets/images/single_round_flask_1795512918226.jpg';
+import singleStirringRodImg from '../assets/images/single_stirring_rod_1795512918612.jpg';
+import singleSeparatoryFunnelImg from '../assets/images/single_separatory_funnel_1795512918672.jpg';
+import singleLiebigCondenserImg from '../assets/images/single_liebig_condenser_1795512919260.jpg';
+import singleFilterFunnelImg from '../assets/images/single_filter_funnel_1795512920099.jpg';
+import singleWoulfeBottleImg from '../assets/images/single_woulfe_bottle_1795513043152.jpg';
+import singlePetriDishImg from '../assets/images/single_petri_dish_1795513042757.jpg';
+import singleWatchGlassImg from '../assets/images/single_watch_glass_1795513026995.jpg';
+import singleDropperBottleImg from '../assets/images/single_dropper_bottle_1795512967907.jpg';
+import singlePorcelainCrucibleImg from '../assets/images/single_porcelain_crucible_1795513043279.jpg';
+import singleDesiccatorImg from '../assets/images/single_desiccator_1795514960766.jpg';
+import singleAlcoholLampImg from '../assets/images/single_alcohol_lamp_1795514961855.jpg';
+import singleMortarPestleImg from '../assets/images/single_mortar_pestle_1795514961194.jpg';
+import singleCrystallizerImg from '../assets/images/single_crystallizer_1795514963145.jpg';
+import singleBuchnerFunnelImg from '../assets/images/single_buchner_funnel_1795514963001.jpg';
+import singleReagentBottleImg from '../assets/images/single_reagent_bottle_1795514964089.jpg';
+import singleLabThermometerImg from '../assets/images/single_lab_thermometer_1795514962857.jpg';
+import singleKippApparatusImg from '../assets/images/single_kipp_apparatus_1795514964548.jpg';
+import singleMicroscopeSlidesImg from '../assets/images/single_microscope_slides_1795514964018.jpg';
+import singleEvaporatingDishImg from '../assets/images/single_evaporating_dish_1795514964378.jpg';
 
 export type GlasswareCategoryId =
   | 'heating_mixing'
@@ -52,9 +74,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'بيشر',
     category: 'heating_mixing',
     categoryAr: 'أواني التسخين والخلط',
-    image: beakerErlenmeyerImg,
+    image: singleBeakerImg,
     material: 'زجاج البوروسيليكات 3.3 (Pyrex)',
-    capacities: ['50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
+    capacities: ['25 ml', '50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '250 ml',
     precisionClass: 'تقريبي (±5% للتحضير والخلط)',
     thermalResistance: 'مقاوم للتسخين المباشر والصدمات الحرارية حتى 500°C',
@@ -72,9 +94,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'حوجلة مخروطية',
     category: 'heating_mixing',
     categoryAr: 'أواني التسخين والخلط',
-    image: beakerErlenmeyerImg,
+    image: singleErlenmeyerImg,
     material: 'زجاج البوروسيليكات 3.3 (Pyrex)',
-    capacities: ['100 ml', '250 ml', '500 ml'],
+    capacities: ['50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '250 ml',
     precisionClass: 'تقريبي (±5% مع تدريجات بيضاء)',
     thermalResistance: 'مناسب للتسخين والارتداد البخاري حتى 500°C',
@@ -92,9 +114,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'مخبار مدرج',
     category: 'volumetric_measuring',
     categoryAr: 'أدوات القياس والحجوم',
-    image: volumetricCylinderImg,
+    image: singleGraduatedCylinderImg,
     material: 'زجاج البوروسيليكات 3.3 بدرجات زرقاء',
-    capacities: ['25 ml', '50 ml', '100 ml', '250 ml', '500 ml'],
+    capacities: ['10 ml', '25 ml', '50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '100 ml',
     precisionClass: 'Class A / B (دقة قراءة متوسطة وعالية)',
     thermalResistance: 'غير مخصص للتسخين المباشر (الحد الأقصى للغسيل 60°C للحفاظ على المعايرة)',
@@ -112,9 +134,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'دورق عياري',
     category: 'volumetric_measuring',
     categoryAr: 'أدوات القياس والحجوم',
-    image: volumetricCylinderImg,
+    image: singleVolumetricFlaskImg,
     material: 'زجاج البوروسيليكات المصنفر مع سدادة PE/زجاجية',
-    capacities: ['50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
+    capacities: ['25 ml', '50 ml', '100 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '100 ml',
     precisionClass: 'Class A (±0.10 ml عند 20°C)',
     thermalResistance: 'يُمنع تسخينها تماماً لأن التمدد الحراري يفسد عيار الحجم الدقيق',
@@ -132,9 +154,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'سحاحة',
     category: 'titration_pipetting',
     categoryAr: 'أدوات المعايرة والسحب',
-    image: burettePipetteImg,
+    image: singleMohrBuretteImg,
     material: 'زجاج بوروسيليكات + حنفية PTFE مقاومة للأحماض والأسس',
-    capacities: ['25 ml', '50 ml'],
+    capacities: ['10 ml', '25 ml', '50 ml'],
     defaultCapacity: '25 ml',
     precisionClass: 'Class A (±0.05 ml)',
     thermalResistance: 'تُستخدم في درجة حرارة المخبر الاعتيادية (20°C)',
@@ -152,9 +174,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'ماصة عيارية',
     category: 'titration_pipetting',
     categoryAr: 'أدوات المعايرة والسحب',
-    image: burettePipetteImg,
+    image: singleVolumetricPipetteImg,
     material: 'زجاج البوروسيليكات المقوى عند الفوهة',
-    capacities: ['5 ml', '10 ml', '20 ml', '25 ml'],
+    capacities: ['1 ml', '2 ml', '5 ml', '10 ml', '20 ml', '25 ml'],
     defaultCapacity: '10 ml',
     precisionClass: 'Class A (±0.02 ml)',
     thermalResistance: 'تُستخدم في درجة حرارة المخبر (20°C) ولا تُسخّن',
@@ -172,9 +194,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'ماصة مدرجة',
     category: 'titration_pipetting',
     categoryAr: 'أدوات المعايرة والسحب',
-    image: burettePipetteImg,
+    image: singleGraduatedPipetteImg,
     material: 'زجاج البوروسيليكات الشفاف',
-    capacities: ['1 ml', '2 ml', '5 ml', '10 ml'],
+    capacities: ['1 ml', '2 ml', '5 ml', '10 ml', '20 ml', '25 ml'],
     defaultCapacity: '10 ml',
     precisionClass: 'Class A (±0.05 ml)',
     thermalResistance: 'درجة حرارة الغرفة (20°C)',
@@ -192,9 +214,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'أنبوب اختبار',
     category: 'tubes_rods',
     categoryAr: 'الأنابيب والقضبان',
-    image: testTubesRackImg,
+    image: singleTestTubeImg,
     material: 'زجاج البوروسيليكات الحراري 3.3',
-    capacities: ['16×160 mm', '18×180 mm (30 ml)', '20×200 mm'],
+    capacities: ['12×100 mm', '16×160 mm', '18×180 mm (30 ml)', '20×200 mm'],
     defaultCapacity: '18×180 mm',
     precisionClass: 'أنابيب تفاعل قياسية بحافة مدورة',
     thermalResistance: 'مقاومة ممتازة للهب المباشر حتى 500°C عند الإمساك بملقط خشبي',
@@ -212,9 +234,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'حوجلة كروية',
     category: 'heating_mixing',
     categoryAr: 'أواني التسخين والخلط',
-    image: testTubesRackImg,
+    image: singleRoundFlaskImg,
     material: 'زجاج البوروسيليكات المقوى ذو سمك منتظم',
-    capacities: ['100 ml', '250 ml', '500 ml'],
+    capacities: ['100 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '250 ml',
     precisionClass: 'تصميم كروي لتوزيع الحرارة بالتساوي',
     thermalResistance: 'مثالي للتسخين في حاضنة التسخين (Chauffe-ballon) أو التقطير تحت الارتداد',
@@ -232,7 +254,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'قضيب زجاجي',
     category: 'tubes_rods',
     categoryAr: 'الأنابيب والقضبان',
-    image: testTubesRackImg,
+    image: singleStirringRodImg,
     material: 'زجاج صلب مصقول الأطراف بالنار',
     capacities: ['200×6 mm', '250×6 mm', '300×8 mm'],
     defaultCapacity: '250×6 mm',
@@ -252,9 +274,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'قمع فصل',
     category: 'distillation_separation',
     categoryAr: 'أدوات التقطير والفصل',
-    image: funnelsDistillationImg,
+    image: singleSeparatoryFunnelImg,
     material: 'زجاج البوروسيليكات + صنبور PTFE وسدادة مصنفرة',
-    capacities: ['125 ml', '250 ml', '500 ml'],
+    capacities: ['125 ml', '250 ml', '500 ml', '1000 ml'],
     defaultCapacity: '250 ml',
     precisionClass: 'مدرج لتقدير حجم الأطوار السائلة',
     thermalResistance: 'درجة حرارة الغرفة (بدون تسخين)',
@@ -272,7 +294,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'مكثف تقطير',
     category: 'distillation_separation',
     categoryAr: 'أدوات التقطير والفصل',
-    image: funnelsDistillationImg,
+    image: singleLiebigCondenserImg,
     material: 'زجاج البوروسيليكات مزدوج الغلاف',
     capacities: ['250 mm', '300 mm', '400 mm'],
     defaultCapacity: '250 mm',
@@ -292,7 +314,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'قمع',
     category: 'distillation_separation',
     categoryAr: 'أدوات التقطير والفصل',
-    image: funnelsDistillationImg,
+    image: singleFilterFunnelImg,
     material: 'زجاج البوروسيليكات زاوية 60°',
     capacities: ['Ø 60 mm', 'Ø 75 mm', 'Ø 100 mm'],
     defaultCapacity: 'Ø 75 mm',
@@ -312,7 +334,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'قارورة وولف',
     category: 'distillation_separation',
     categoryAr: 'أدوات التقطير والفصل',
-    image: funnelsDistillationImg,
+    image: singleWoulfeBottleImg,
     material: 'زجاج سميك مقاوم للضغط المنخفض',
     capacities: ['250 ml', '500 ml'],
     defaultCapacity: '500 ml',
@@ -332,7 +354,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'علب بيتري',
     category: 'biology_containers',
     categoryAr: 'البيولوجيا والقطارات',
-    image: petriWatchglassImg,
+    image: singlePetriDishImg,
     material: 'زجاج البوروسيليكات القابل للتعقيم بالفرن/الأوتوكلاف',
     capacities: ['Ø 80×15 mm', 'Ø 90×15 mm', 'Ø 100×20 mm'],
     defaultCapacity: 'Ø 90 mm',
@@ -352,7 +374,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'زجاجة ساعة',
     category: 'biology_containers',
     categoryAr: 'البيولوجيا والقطارات',
-    image: petriWatchglassImg,
+    image: singleWatchGlassImg,
     material: 'زجاج مصقول الحواف عالي النقاء',
     capacities: ['Ø 60 mm', 'Ø 80 mm', 'Ø 100 mm'],
     defaultCapacity: 'Ø 80 mm',
@@ -372,9 +394,9 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'قارورة تقطير',
     category: 'biology_containers',
     categoryAr: 'البيولوجيا والقطارات',
-    image: petriWatchglassImg,
+    image: singleDropperBottleImg,
     material: 'زجاج شفاف أو زجاج عسلي واقٍ من الأشعة فوق البنفسجية',
-    capacities: ['60 ml', '125 ml'],
+    capacities: ['30 ml', '60 ml', '125 ml'],
     defaultCapacity: '125 ml',
     precisionClass: 'رأس قطارة قياسي معاير',
     thermalResistance: 'حفظ في درجة حرارة الغرفة بعيداً عن أشعة الشمس',
@@ -392,7 +414,7 @@ export const GLASSWARE_CATALOG: GlasswareCatalogTemplate[] = [
     type: 'جفنة خزفية',
     category: 'biology_containers',
     categoryAr: 'البيولوجيا والقطارات',
-    image: petriWatchglassImg,
+    image: singlePorcelainCrucibleImg,
     material: 'خزف مخبري مزجج مقاوم للحرارة العالية',
     capacities: ['25 ml', '30 ml', '50 ml'],
     defaultCapacity: '30 ml',
@@ -430,3 +452,421 @@ export function findGlasswareCatalogMatch(
   }
   return GLASSWARE_CATALOG[0];
 }
+
+export interface GlasswareQuickFillModel {
+  id: string;
+  nameAr: string;
+  designationFr: string;
+  capacity: string;
+  type: string;
+  categoryAr: string;
+  image: string;
+  unit: string;
+  location: string;
+  suggestedQuantity: number;
+  notes: string;
+}
+
+interface ExtraGlasswareSpec {
+  id: string;
+  nameAr: string;
+  designationFr: string;
+  type: string;
+  categoryAr: string;
+  image: string;
+  capacities: string[];
+  unit: string;
+  location: string;
+  suggestedQuantity: number;
+  notes: string;
+  keywords: string[];
+}
+
+const EXTRA_GLASSWARE_SPECS: ExtraGlasswareSpec[] = [
+  {
+    id: 'flat_bottom_flask',
+    nameAr: 'حوجلة مسطحة القاع',
+    designationFr: 'Ballon à fond plat en verre borosilicaté',
+    type: 'حوجلة مسطحة القاع',
+    categoryAr: 'أواني التسخين والخلط',
+    image: singleRoundFlaskImg,
+    capacities: ['100 ml', '250 ml', '500 ml', '1000 ml'],
+    unit: 'قطعة',
+    location: 'خزانة الزجاجيات — الرف A3',
+    suggestedQuantity: 6,
+    notes: 'زجاج البوروسيليكات 3.3؛ تُستعمل لحفظ وغلي المحاليل مع إمكانية وضعها مباشرة على الطاولة.',
+    keywords: ['مسطحة القاع', 'fond plat'],
+  },
+  {
+    id: 'distillation_flask_side_arm',
+    nameAr: 'حوجلة تقطير بذراع جانبي',
+    designationFr: 'Ballon à distiller à tubulure latérale (Pyrex)',
+    type: 'حوجلة تقطير',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleRoundFlaskImg,
+    capacities: ['250 ml', '500 ml'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E2',
+    suggestedQuantity: 3,
+    notes: 'تُثبّت بماسك على الحامل وتوصل بالمكثف عبر الذراع الجانبي مع استعمال حبات الخفان.',
+    keywords: ['حوجلة تقطير', 'ذراع جانبي', 'ballon à distiller'],
+  },
+  {
+    id: 'buchner_vacuum_flask',
+    nameAr: 'حوجلة الترشيح بالشفط (تحت الفراغ)',
+    designationFr: 'Fiole à vide / Erlenmeyer à tubulure latérale',
+    type: 'حوجلة ترشيح بالشفط',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleErlenmeyerImg,
+    capacities: ['250 ml', '500 ml', '1000 ml'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E1',
+    suggestedQuantity: 4,
+    notes: 'زجاج سميك مقاوم للضغط المنخفض؛ تُستعمل مع قمع بوخنر ومضخة الشفط المائية.',
+    keywords: ['ترشيح بالشفط', 'تحت الفراغ', 'fiole à vide', 'fiole a vide'],
+  },
+  {
+    id: 'buchner_funnel_porcelain',
+    nameAr: 'قمع بوخنر خزفي للترشيح بالشفط',
+    designationFr: 'Entonnoir Büchner en porcelaine perforée',
+    type: 'قمع بوخنر',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleBuchnerFunnelImg,
+    capacities: ['Ø 70 mm', 'Ø 90 mm', 'Ø 110 mm'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E1',
+    suggestedQuantity: 4,
+    notes: 'يوضع قرص ورق الترشيح مطابقاً لقطر القمع مع حلقة مطاطية محكمة فوق حوجلة الفراغ.',
+    keywords: ['بوخنر', 'büchner', 'buchner'],
+  },
+  {
+    id: 'allihn_condenser',
+    nameAr: 'مكثف كروي للارتداد (أليهن)',
+    designationFr: 'Réfrigérant à boules d’Allihn à rodage normalisé',
+    type: 'مكثف كروي',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleLiebigCondenserImg,
+    capacities: ['300 mm', '400 mm'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E2',
+    suggestedQuantity: 3,
+    notes: 'مخصص للتسخين بالارتداد (Reflux) في الكيمياء العضوية؛ يدخل ماء التبريد من الأسفل ويخرج من الأعلى.',
+    keywords: ['مكثف كروي', 'أليهن', 'allihn', 'à boules'],
+  },
+  {
+    id: 'drechsel_gas_wash_bottle',
+    nameAr: 'قارورة غسل الغازات (دريشل)',
+    designationFr: 'Flacon laveur de gaz de Drechsel en verre',
+    type: 'قارورة غسل غازات',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleWoulfeBottleImg,
+    capacities: ['250 ml', '500 ml'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E3',
+    suggestedQuantity: 3,
+    notes: 'لتنقية الغازات أو الكشف عنها عبر تمريرها داخل محلول كاشف؛ يُراعى اتجاه الدخول والخروج.',
+    keywords: ['دريشل', 'غسل الغازات', 'drechsel', 'laveur de gaz'],
+  },
+  {
+    id: 'kipp_gas_generator',
+    nameAr: 'جهاز كيب لتوليد الغازات',
+    designationFr: 'Appareil de Kipp en verre borosilicaté',
+    type: 'جهاز كيب',
+    categoryAr: 'أدوات التقطير والفصل',
+    image: singleKippApparatusImg,
+    capacities: ['500 ml', '1000 ml'],
+    unit: 'قطعة',
+    location: 'خزانة الفصل والتقطير — الرف E3',
+    suggestedQuantity: 2,
+    notes: 'تُشحّم الوصلات المصنفرة جيداً وتُفحص السدادات قبل تحضير غازات H2 أو CO2.',
+    keywords: ['كيب', 'kipp'],
+  },
+  {
+    id: 'crystallizer_dish',
+    nameAr: 'حوض التبلور الزجاجي',
+    designationFr: 'Cristallisoir en verre borosilicaté sans/avec bec',
+    type: 'حوض تبلور',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleCrystallizerImg,
+    capacities: ['250 ml (Ø 95 mm)', '500 ml (Ø 115 mm)', '1000 ml (Ø 140 mm)'],
+    unit: 'قطعة',
+    location: 'خزانة الزجاجيات — الرف B3',
+    suggestedQuantity: 6,
+    notes: 'يُستعمل لتبلور الأملاح وتحضير الحمامات المائية والتجارب الكهربائية والكيميائية.',
+    keywords: ['تبلور', 'cristallisoir'],
+  },
+  {
+    id: 'glass_desiccator',
+    nameAr: 'مجفف زجاجي بغطاء وصفيحة خزفية',
+    designationFr: 'Dessiccateur en verre avec plaque en porcelaine',
+    type: 'مجفف زجاجي',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleDesiccatorImg,
+    capacities: ['Ø 150 mm', 'Ø 200 mm', 'Ø 250 mm'],
+    unit: 'قطعة',
+    location: 'خزانة الحفظ الجاف — الرف B4',
+    suggestedQuantity: 2,
+    notes: 'تُشحّم حافة الغطاء بالفازلين السيليكوني ويُفتح الغطاء بالانزلاق الأفقي لا بالرفع العمودي.',
+    keywords: ['مجفف', 'dessiccateur', 'desiccator'],
+  },
+  {
+    id: 'glass_water_trough',
+    nameAr: 'حوض زجاجي للتجارب (تجميع الغازات / البصريات)',
+    designationFr: 'Cuve en verre à parois parallèles',
+    type: 'حوض زجاجي',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleCrystallizerImg,
+    capacities: ['سعة 2 L', 'سعة 4 L'],
+    unit: 'قطعة',
+    location: 'خزانة الزجاجيات — الرف B4',
+    suggestedQuantity: 4,
+    notes: 'يُحمل من القاعدة بكلتا اليدين ويُفرغ ويجفف بعد تجارب جمع الغازات بالإزاحة المائية.',
+    keywords: ['حوض زجاجي', 'cuve en verre'],
+  },
+  {
+    id: 'reagent_bottle_clear',
+    nameAr: 'قارورة حفظ الكواشف بسدادة مصنفرة (شفافة)',
+    designationFr: 'Flacon de réactif en verre clair à bouchon rodé',
+    type: 'قارورة كواشف',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleReagentBottleImg,
+    capacities: ['125 ml', '250 ml', '500 ml', '1000 ml'],
+    unit: 'قطعة',
+    location: 'رفوف الكواشف الجاهزة — الرف F3',
+    suggestedQuantity: 10,
+    notes: 'يُلصق ملصق اسم المحلول وتركيزه وتاريخ التحضير ورمز الخطر GHS بشكل واضح.',
+    keywords: ['قارورة حفظ', 'قارورة كواشف', 'flacon de réactif', 'bouchon rodé'],
+  },
+  {
+    id: 'reagent_bottle_amber',
+    nameAr: 'قارورة حفظ الكواشف بسدادة مصنفرة (عسلية معتمة)',
+    designationFr: 'Flacon de réactif en verre ambré à bouchon rodé',
+    type: 'قارورة كواشف عسلية',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleReagentBottleImg,
+    capacities: ['125 ml', '250 ml', '500 ml', '1000 ml'],
+    unit: 'قطعة',
+    location: 'رفوف الكواشف الحساسة للضوء — الرف F3',
+    suggestedQuantity: 10,
+    notes: 'مخصصة لحفظ المحاليل الحساسة للضوء مثل نترات الفضة وماء اليود وبرمنغنات البوتاسيوم.',
+    keywords: ['عسلية', 'معتمة', 'ambré', 'ambre'],
+  },
+  {
+    id: 'pycnometer_glass',
+    nameAr: 'بكنومتر زجاجي لقياس الكتلة الحجمية',
+    designationFr: 'Pycnomètre en verre calibré avec bouchon capillaire',
+    type: 'بكنومتر',
+    categoryAr: 'أدوات القياس والحجوم',
+    image: singleVolumetricFlaskImg,
+    capacities: ['25 ml', '50 ml'],
+    unit: 'قطعة',
+    location: 'خزانة القياسات — الرف B2',
+    suggestedQuantity: 4,
+    notes: 'أداة دقيقة لتعيين الكتلة الحجمية والكثافة للسوائل؛ يُجفف خارجياً بمنديل قبل الوزن.',
+    keywords: ['بكنومتر', 'pycnomètre', 'pycnometer'],
+  },
+  {
+    id: 'weighing_bottle_glass',
+    nameAr: 'قنينة وزن زجاجية بسدادة مصنفرة',
+    designationFr: 'Flacon à peser (Pèse-filtre) à bouchon rodé',
+    type: 'قنينة وزن',
+    categoryAr: 'أدوات القياس والحجوم',
+    image: singleReagentBottleImg,
+    capacities: ['30 ml', '50 ml'],
+    unit: 'قطعة',
+    location: 'درج أدوات الوزن والملاحظة — F2',
+    suggestedQuantity: 6,
+    notes: 'لوزن المواد الماصة للرطوبة أو المتطايرة بدقة على الميزان التحليلي.',
+    keywords: ['قنينة وزن', 'flacon à peser', 'pèse-filtre'],
+  },
+  {
+    id: 'lab_glass_thermometer',
+    nameAr: 'مقياس حرارة مخبري زجاجي',
+    designationFr: 'Thermomètre de laboratoire en verre gradué',
+    type: 'مقياس حرارة زجاجي',
+    categoryAr: 'أدوات القياس والحجوم',
+    image: singleLabThermometerImg,
+    capacities: ['-10°C إلى +110°C', '-10°C إلى +250°C'],
+    unit: 'قطعة',
+    location: 'درج أدوات القياس — B3',
+    suggestedQuantity: 10,
+    notes: 'يُمنع استعماله للتحريك؛ يُحفظ في غلافه الواقي أفقياً بعيداً عن الصدمات.',
+    keywords: ['مقياس حرارة', 'محرار', 'thermomètre', 'thermometer'],
+  },
+  {
+    id: 'side_arm_test_tube',
+    nameAr: 'أنبوب اختبار بذراع جانبي لتوليد الغازات',
+    designationFr: 'Tube à essais à dégagement latéral (Pyrex)',
+    type: 'أنبوب اختبار جانبي',
+    categoryAr: 'الأنابيب والقضبان',
+    image: singleTestTubeImg,
+    capacities: ['18×180 mm', '20×200 mm'],
+    unit: 'قطعة',
+    location: 'خزانة الأنابيب — الرف D1',
+    suggestedQuantity: 12,
+    notes: 'لتوليد وتمرير الغازات عبر أنبوب توصيل مطاطي؛ يُثبت بملقط خشبي أو حامل معدني.',
+    keywords: ['أنبوب اختبار جانبي', 'dégagement latéral'],
+  },
+  {
+    id: 'pasteur_pipette_glass',
+    nameAr: 'ماصة باستور زجاجية (قطارة دقيقة)',
+    designationFr: 'Pipette Pasteur en verre étiré',
+    type: 'ماصة باستور',
+    categoryAr: 'أدوات المعايرة والسحب',
+    image: singleGraduatedPipetteImg,
+    capacities: ['150 mm', '230 mm'],
+    unit: 'قطعة',
+    location: 'درج الماصات الأفقي — الرف C2',
+    suggestedQuantity: 25,
+    notes: 'تُستعمل لنقل القطرات الدقيقة وتغذية المزارع البيولوجية؛ تُركب عليها حلمة مطاطية.',
+    keywords: ['باستور', 'pasteur'],
+  },
+  {
+    id: 'thistle_safety_funnel',
+    nameAr: 'أنبوب أمان بقمع طويل (لتوليد الغازات)',
+    designationFr: 'Tube à entonnoir / Tube de sûreté en verre',
+    type: 'أنبوب أمان',
+    categoryAr: 'الأنابيب والقضبان',
+    image: singleFilterFunnelImg,
+    capacities: ['300 mm'],
+    unit: 'قطعة',
+    location: 'درج الأدوات المساعدة — D2',
+    suggestedQuantity: 6,
+    notes: 'يُغمر طرفه السفلي في السائل داخل القارورة لمنع تسرب الغاز وضبط الضغط.',
+    keywords: ['أنبوب أمان', 'tube à entonnoir', 'sûreté'],
+  },
+  {
+    id: 'bent_glass_delivery_tubes',
+    nameAr: 'أنابيب توصيل زجاجية مثنية بزاوية',
+    designationFr: 'Tubes de dégagement coudés en verre (Ø 6-8 mm)',
+    type: 'أنبوب توصيل زجاجي',
+    categoryAr: 'الأنابيب والقضبان',
+    image: singleStirringRodImg,
+    capacities: ['زاوية 90°', 'حرف U'],
+    unit: 'قطعة',
+    location: 'درج الأدوات المساعدة — D2',
+    suggestedQuantity: 15,
+    notes: 'تُرطب أو تُدهن بالجليسرول عند إدخالها في السدادات المطاطية المثقوبة لتفادي الكسر.',
+    keywords: ['أنبوب توصيل', 'أنابيب توصيل', 'coudés', 'dégagement'],
+  },
+  {
+    id: 'glass_alcohol_lamp',
+    nameAr: 'مصباح كحولي زجاجي بفتيل وغطاء',
+    designationFr: 'Lampe à alcool en verre avec mèche et capuchon',
+    type: 'مصباح كحولي',
+    categoryAr: 'أواني التسخين والخلط',
+    image: singleAlcoholLampImg,
+    capacities: ['100 ml', '150 ml', '250 ml'],
+    unit: 'قطعة',
+    location: 'خزانة التسخين — الرف A4',
+    suggestedQuantity: 8,
+    notes: 'يُملأ بالكحول الإيثيلي حتى ثلثيه فقط ويُطفأ بالغطاء المخصص دون نفخ.',
+    keywords: ['مصباح كحولي', 'lampe à alcool', 'alcohol lamp'],
+  },
+  {
+    id: 'porcelain_evaporating_dish',
+    nameAr: 'جفنة تبخير خزفية بفوهة صب',
+    designationFr: 'Capsule d’évaporation en porcelaine à fond plat/rond',
+    type: 'جفنة تبخير',
+    categoryAr: 'أواني التسخين والخلط',
+    image: singleEvaporatingDishImg,
+    capacities: ['50 ml', '100 ml', '150 ml'],
+    unit: 'قطعة',
+    location: 'خزانة التسخين — الرف A4',
+    suggestedQuantity: 8,
+    notes: 'لتبخير المحاليل والحصول على البلورات الجافة؛ تُمسك بملقط وتُترك لتبرد قبل الغسل.',
+    keywords: ['جفنة تبخير', 'تبخير', 'capsule', 'évaporation', 'evaporating'],
+  },
+  {
+    id: 'porcelain_mortar_pestle',
+    nameAr: 'هاون ومدقة خزفية للسحق',
+    designationFr: 'Mortier et pilon en porcelaine non vernissée intérieurement',
+    type: 'هاون ومدقة',
+    categoryAr: 'زجاجيات عامة وحفظ الكواشف',
+    image: singleMortarPestleImg,
+    capacities: ['Ø 90 mm', 'Ø 120 mm', 'Ø 150 mm'],
+    unit: 'قطعة',
+    location: 'خزانة التحضير — الرف A4',
+    suggestedQuantity: 6,
+    notes: 'لسحق الأملاح والعينات الصلبة؛ يُمنع سحق المواد المؤكسدة مع المختزلة معاً.',
+    keywords: ['هاون', 'مدقة', 'mortier', 'pilon', 'mortar'],
+  },
+  {
+    id: 'microscope_slides_covers',
+    nameAr: 'شرائح مجهرية وغطاء شرائح زجاجية',
+    designationFr: 'Lames porte-objet et lamelles couvre-objet en verre',
+    type: 'شرائح مجهرية',
+    categoryAr: 'البيولوجيا والقطارات',
+    image: singleMicroscopeSlidesImg,
+    capacities: ['علبة 50 قطعة', 'علبة 100 قطعة'],
+    unit: 'علبة',
+    location: 'خزانة علوم الطبيعة والحياة — الرف F1',
+    suggestedQuantity: 10,
+    notes: 'شرائح رقيقة هشة للفحص المجهري؛ تُمسك من الحواف وتُنظف بورق ناعم.',
+    keywords: ['شرائح', 'شريحة', 'لآمل', 'lames', 'lamelles', 'slides'],
+  },
+];
+
+export const GLASSWARE_QUICK_FILL_LIST: GlasswareQuickFillModel[] = [
+  ...GLASSWARE_CATALOG.flatMap(tpl =>
+    tpl.capacities.map(cap => ({
+      id: `${tpl.id}__${cap}`,
+      nameAr: `${tpl.nameAr} ${cap}`,
+      designationFr: `${tpl.designationFr} (${cap})`,
+      capacity: cap,
+      type: tpl.type,
+      categoryAr: tpl.categoryAr,
+      image: tpl.image,
+      unit: tpl.defaultUnit,
+      location: tpl.defaultLocation,
+      suggestedQuantity: tpl.suggestedQuantity,
+      notes: tpl.careAndSafety,
+    }))
+  ),
+  ...EXTRA_GLASSWARE_SPECS.flatMap(spec =>
+    spec.capacities.map(cap => ({
+      id: `${spec.id}__${cap}`,
+      nameAr: `${spec.nameAr} ${cap}`,
+      designationFr: `${spec.designationFr} (${cap})`,
+      capacity: cap,
+      type: spec.type,
+      categoryAr: spec.categoryAr,
+      image: spec.image,
+      unit: spec.unit,
+      location: spec.location,
+      suggestedQuantity: spec.suggestedQuantity,
+      notes: spec.notes,
+    }))
+  ),
+];
+
+export function resolveGlasswareImage(
+  nameAr?: string,
+  designationFr?: string,
+  type?: string,
+  quickModelId?: string
+): string {
+  if (quickModelId) {
+    const quickHit = GLASSWARE_QUICK_FILL_LIST.find(m => m.id === quickModelId);
+    if (quickHit) return quickHit.image;
+  }
+
+  const haystack = `${nameAr || ''} ${designationFr || ''} ${type || ''}`.toLowerCase().trim();
+  if (!haystack) {
+    return GLASSWARE_CATALOG[0].image;
+  }
+
+  for (const extra of EXTRA_GLASSWARE_SPECS) {
+    if (
+      extra.keywords.some(k => haystack.includes(k.toLowerCase())) ||
+      haystack.includes(extra.nameAr.toLowerCase()) ||
+      haystack.includes(extra.type.toLowerCase())
+    ) {
+      return extra.image;
+    }
+  }
+
+  return findGlasswareCatalogMatch(nameAr, designationFr, type).image;
+}
+
+

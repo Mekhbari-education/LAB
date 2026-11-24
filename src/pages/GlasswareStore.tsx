@@ -49,9 +49,12 @@ import {
 import {
   GLASSWARE_CATALOG,
   GLASSWARE_CATEGORIES,
+  GLASSWARE_QUICK_FILL_LIST,
   GlasswareCategoryId,
   GlasswareCatalogTemplate,
+  GlasswareQuickFillModel,
   findGlasswareCatalogMatch,
+  resolveGlasswareImage,
 } from '../data/glasswareCatalog';
 import { buildGlasswareStockCardsHtml } from '../services/glasswareStockCardPrintService';
 
@@ -129,6 +132,8 @@ export default function GlasswareStore() {
   } | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GlasswareItem | null>(null);
+  const [quickTemplateSearch, setQuickTemplateSearch] = useState('');
+  const [selectedQuickTemplateId, setSelectedQuickTemplateId] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -223,8 +228,48 @@ export default function GlasswareStore() {
     [items]
   );
 
+  const groupedQuickFillModels = useMemo(() => {
+    const q = quickTemplateSearch.trim().toLowerCase();
+    const filtered = q
+      ? GLASSWARE_QUICK_FILL_LIST.filter(
+          m =>
+            m.nameAr.toLowerCase().includes(q) ||
+            m.designationFr.toLowerCase().includes(q) ||
+            m.type.toLowerCase().includes(q) ||
+            m.capacity.toLowerCase().includes(q) ||
+            m.categoryAr.toLowerCase().includes(q)
+        )
+      : GLASSWARE_QUICK_FILL_LIST;
+
+    const groups = new Map<string, GlasswareQuickFillModel[]>();
+    for (const model of filtered) {
+      const list = groups.get(model.categoryAr) || [];
+      list.push(model);
+      groups.set(model.categoryAr, list);
+    }
+    return Array.from(groups.entries());
+  }, [quickTemplateSearch]);
+
+  const selectedQuickModel = useMemo(
+    () => GLASSWARE_QUICK_FILL_LIST.find(m => m.id === selectedQuickTemplateId),
+    [selectedQuickTemplateId]
+  );
+
+  const modalPreviewImage = useMemo(
+    () =>
+      resolveGlasswareImage(
+        formState.nameAr,
+        formState.designationFr,
+        formState.type,
+        selectedQuickTemplateId || undefined
+      ),
+    [formState.nameAr, formState.designationFr, formState.type, selectedQuickTemplateId]
+  );
+
   const openAddModal = () => {
     setEditingItem(null);
+    setQuickTemplateSearch('');
+    setSelectedQuickTemplateId('');
     setFormState({
       nameAr: '',
       designationFr: '',
@@ -240,6 +285,8 @@ export default function GlasswareStore() {
 
   const openEditModal = (item: GlasswareItem) => {
     setEditingItem(item);
+    setQuickTemplateSearch('');
+    setSelectedQuickTemplateId('');
     setFormState({
       nameAr: item.nameAr || '',
       designationFr: item.designationFr || '',
@@ -278,13 +325,30 @@ export default function GlasswareStore() {
     }
   };
 
-  const handleApplyTemplateToForm = (templateId: string) => {
-    const tpl = GLASSWARE_CATALOG.find(t => t.id === templateId);
+  const handleApplyTemplateToForm = (modelId: string) => {
+    setSelectedQuickTemplateId(modelId);
+    if (!modelId) return;
+    const quickModel = GLASSWARE_QUICK_FILL_LIST.find(m => m.id === modelId);
+    if (quickModel) {
+      setFormState(prev => ({
+        ...prev,
+        nameAr: quickModel.nameAr,
+        designationFr: quickModel.designationFr,
+        type: quickModel.type,
+        unit: quickModel.unit,
+        quantity: quickModel.suggestedQuantity,
+        location: quickModel.location,
+        notes: quickModel.notes,
+      }));
+      return;
+    }
+
+    const tpl = GLASSWARE_CATALOG.find(t => t.id === modelId);
     if (!tpl) return;
     setFormState(prev => ({
       ...prev,
       nameAr: `${tpl.nameAr} ${tpl.defaultCapacity}`,
-      designationFr: `${tpl.designationFr} ${tpl.defaultCapacity}`,
+      designationFr: `${tpl.designationFr} (${tpl.defaultCapacity})`,
       type: tpl.type,
       unit: tpl.defaultUnit,
       quantity: tpl.suggestedQuantity,
@@ -1151,6 +1215,11 @@ export default function GlasswareStore() {
                       item.designationFr,
                       item.type
                     );
+                    const itemImage = resolveGlasswareImage(
+                      item.nameAr,
+                      item.designationFr,
+                      item.type
+                    );
                     const isSelected = activeSelectedIds.includes(item.id);
                     return (
                       <tr
@@ -1184,14 +1253,20 @@ export default function GlasswareStore() {
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
-                              onClick={() => setPreviewTemplate({ template: matched, item })}
-                              className="w-12 h-12 rounded-xl overflow-hidden border border-outline/10 shrink-0 hover:ring-2 hover:ring-primary/30 transition-all"
+                              onClick={() =>
+                                setPreviewTemplate({
+                                  template: { ...matched, image: itemImage },
+                                  item,
+                                })
+                              }
+                              className="w-12 h-12 rounded-xl overflow-hidden border border-outline/10 shrink-0 hover:ring-2 hover:ring-primary/30 transition-all bg-[#eef1f5] dark:bg-slate-900"
                               title="معاينة الصورة والمواصفات"
                             >
                               <GlasswareThumb
-                                src={matched.image}
+                                key={itemImage}
+                                src={itemImage}
                                 alt={item.nameAr}
-                                className="w-full h-full"
+                                className="w-full h-full object-contain"
                               />
                             </button>
                             <div className="min-w-0">
@@ -1460,11 +1535,11 @@ export default function GlasswareStore() {
       {previewTemplate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
           <div className="bg-surface border border-outline/15 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl">
-            <div className="relative h-56 sm:h-64 bg-slate-100 dark:bg-slate-900">
+            <div className="relative h-60 sm:h-72 bg-[#e3e6ea] dark:bg-slate-900">
               <GlasswareThumb
                 src={previewTemplate.template.image}
                 alt={previewTemplate.template.nameAr}
-                className="w-full h-full"
+                className="w-full h-full object-contain"
               />
               <button
                 onClick={() => setPreviewTemplate(null)}
@@ -1603,24 +1678,98 @@ export default function GlasswareStore() {
 
             <form onSubmit={handleSaveForm} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
               {!editingItem && (
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-primary">
-                    تعبئة سريعة من النماذج القياسية (اختياري)
-                  </label>
+                <div className="space-y-2 p-3.5 rounded-2xl bg-surface-container-low/70 border border-outline/10">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="block text-xs font-bold text-primary">
+                      تعبئة سريعة من النماذج القياسية (اختياري)
+                    </label>
+                    <span className="text-[11px] font-bold text-secondary/70 tabular-nums">
+                      {GLASSWARE_QUICK_FILL_LIST.length} نموذجاً وقياساً
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <Search
+                      size={14}
+                      className="absolute start-3 top-1/2 -translate-y-1/2 text-secondary/50 pointer-events-none"
+                    />
+                    <input
+                      type="text"
+                      value={quickTemplateSearch}
+                      onChange={e => setQuickTemplateSearch(e.target.value)}
+                      placeholder="تصفية سريعة للقائمة (بيشر، سحاحة، مجفف، 250 ml...)"
+                      className="w-full bg-surface border border-outline/15 rounded-xl ps-8 pe-8 py-2 text-xs font-medium text-primary placeholder:text-secondary/50"
+                    />
+                    {quickTemplateSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setQuickTemplateSearch('')}
+                        className="absolute end-2.5 top-1/2 -translate-y-1/2 text-secondary/60 hover:text-primary"
+                      >
+                        <X size={13} />
+                      </button>
+                    )}
+                  </div>
                   <select
-                    defaultValue=""
+                    value={selectedQuickTemplateId}
                     onChange={e => handleApplyTemplateToForm(e.target.value)}
-                    className="w-full bg-surface-container-low border border-outline/15 rounded-xl px-3.5 py-2.5 text-xs font-bold text-primary"
+                    className="w-full bg-surface border border-outline/15 rounded-xl px-3.5 py-2.5 text-xs font-bold text-primary"
                   >
-                    <option value="">-- اختر نموذجاً لتعبئة المواصفات تلقائياً --</option>
-                    {GLASSWARE_CATALOG.map(tpl => (
-                      <option key={tpl.id} value={tpl.id}>
-                        {tpl.nameAr} ({tpl.defaultCapacity}) — {tpl.categoryAr}
-                      </option>
+                    <option value="">
+                      -- اختر نموذجاً لتعبئة المواصفات تلقائياً (
+                      {groupedQuickFillModels.reduce((acc, [, list]) => acc + list.length, 0)} خيار متاح) --
+                    </option>
+                    {groupedQuickFillModels.map(([categoryLabel, models]) => (
+                      <optgroup key={categoryLabel} label={`${categoryLabel} (${models.length})`}>
+                        {models.map(model => (
+                          <option key={model.id} value={model.id}>
+                            {model.nameAr} — {model.designationFr}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
                 </div>
               )}
+
+              {/* LIVE REAL PICTURE PREVIEW OF SELECTED ITEM */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 rounded-2xl bg-surface-container-low/50 border border-outline/15">
+                <div className="w-full sm:w-40 h-28 rounded-xl bg-[#eef1f5] dark:bg-slate-900 border border-outline/10 overflow-hidden shrink-0 flex items-center justify-center p-1.5">
+                  <GlasswareThumb
+                    key={modalPreviewImage}
+                    src={modalPreviewImage}
+                    alt={formState.nameAr || 'صورة الزجاجية المختارة'}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="flex-1 min-w-0 w-full space-y-1.5 text-center sm:text-start">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1.5">
+                    <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                      صورة الصنف المختار
+                    </span>
+                    {formState.type && (
+                      <span className="text-[10px] font-bold text-secondary bg-surface border border-outline/15 px-2 py-0.5 rounded-md">
+                        {formState.type}
+                      </span>
+                    )}
+                    {selectedQuickModel?.capacity && (
+                      <span
+                        className="text-[10px] font-mono font-bold text-primary bg-surface border border-primary/20 px-2 py-0.5 rounded-md"
+                        dir="ltr"
+                      >
+                        {selectedQuickModel.capacity}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-black text-primary truncate">
+                    {formState.nameAr || selectedQuickModel?.nameAr || 'اختر نموذجاً أو أدخل تسمية الزجاجية'}
+                  </p>
+                  <p className="text-[11px] font-mono text-secondary/75 truncate" dir="ltr">
+                    {formState.designationFr ||
+                      selectedQuickModel?.designationFr ||
+                      'Désignation de la verrerie de laboratoire'}
+                  </p>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
