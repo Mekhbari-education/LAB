@@ -139,9 +139,10 @@ var init_auth = __esm({
       try {
         const decodedToken = await adminAuth.verifyIdToken(token);
         req.user = decodedToken;
-        req.isAdmin = Boolean(
-          decodedToken.admin === true || decodedToken.email === "faycalassoul@gmail.com" && decodedToken.email_verified === true
-        );
+        const normalizedEmail = (decodedToken.email || "").trim().toLowerCase();
+        const isVerifiedOwner = Boolean(normalizedEmail === "faycalassoul@gmail.com" && decodedToken.email_verified === true);
+        req.isOwner = isVerifiedOwner;
+        req.isAdmin = Boolean(decodedToken.admin === true || isVerifiedOwner);
         const headerSchoolId = req.headers["x-school-id"] ? String(req.headers["x-school-id"]) : void 0;
         try {
           req.schoolId = await resolveVerifiedSchoolId(decodedToken.uid, headerSchoolId, req.isAdmin);
@@ -133539,15 +133540,22 @@ async function startServer() {
       if (contentStr.length > 25e3) {
         return res.status(400).json({ error: "\u062D\u062C\u0645 \u0627\u0644\u0637\u0644\u0628 \u064A\u062A\u062C\u0627\u0648\u0632 \u0627\u0644\u062D\u062F \u0627\u0644\u0645\u0633\u0645\u0648\u062D \u0628\u0647 (25000 \u062D\u0631\u0641)." });
       }
-      const ALLOWED_MODELS = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      const ALLOWED_MODELS = ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
       if (!model || !ALLOWED_MODELS.includes(model)) {
-        model = "gemini-3.8-flash";
+        model = "gemini-4-hydrogen";
       }
-      const ai = new import_genai.GoogleGenAI({ apiKey });
+      const ai = new import_genai.GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build"
+          }
+        }
+      });
       const candidateModels = [
         model,
-        "gemini-3.1-flash-lite",
-        "gemini-flash-latest"
+        "gemini-4-hydrogen",
+        "gemini-3.1-flash-lite"
       ];
       const modelsToTry = Array.from(new Set(candidateModels));
       let lastError = null;
@@ -133573,6 +133581,87 @@ async function startServer() {
       const isDev = process.env.NODE_ENV !== "production";
       if (isDev) console.error("Gemini error:", error);
       res.status(500).json({ error: isDev ? error.message || "Failed" : "\u062E\u0637\u0623 \u0641\u064A \u062E\u0627\u062F\u0645 \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A." });
+    }
+  });
+  app.post("/api/admin/ai-insights", requireAuth, userGeminiLimiter, async (req, res) => {
+    try {
+      if (!req.isOwner) {
+        return res.status(403).json({
+          error: "\u0647\u0630\u0627 \u0627\u0644\u0645\u0633\u0627\u0631 \u0645\u062D\u0635\u0648\u0631 \u0628\u0645\u0627\u0644\u0643 \u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0627\u0644\u0645\u0648\u062B\u0642 \u0641\u0642\u0637."
+        });
+      }
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "\u0645\u0641\u062A\u0627\u062D \u0627\u0644\u0630\u0643\u0627\u0621 \u0627\u0644\u0627\u0635\u0637\u0646\u0627\u0639\u064A \u063A\u064A\u0631 \u0645\u0647\u064A\u0623 \u0639\u0644\u0649 \u0627\u0644\u062E\u0627\u062F\u0645." });
+      }
+      const payload = req.body || {};
+      const serialized = JSON.stringify(payload).slice(0, 22e3);
+      const ai = new import_genai.GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            "User-Agent": "aistudio-build"
+          }
+        }
+      });
+      const response = await ai.models.generateContent({
+        model: "gemini-4-hydrogen",
+        contents: `Analyze this anonymized platform operational snapshot for LabEducationDZ (Algerian School Laboratories Management Platform) and provide a concise executive briefing, anomaly alerts, and actionable recommendations in Arabic with exact technical identifiers where helpful.
+
+Snapshot JSON:
+${serialized}`,
+        config: {
+          systemInstruction: "You are a senior systems & laboratory governance analyst assisting the platform owner. Respond strictly in structured JSON. Never fabricate metrics not present in the snapshot. Keep Arabic crisp, direct, and executive.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: import_genai.Type.OBJECT,
+            properties: {
+              executiveSummary: {
+                type: import_genai.Type.STRING,
+                description: "2-4 sentence executive briefing in Arabic summarizing platform health, activity, and key risks."
+              },
+              riskLevel: {
+                type: import_genai.Type.STRING,
+                enum: ["nominal", "elevated", "critical"]
+              },
+              anomalies: {
+                type: import_genai.Type.ARRAY,
+                items: {
+                  type: import_genai.Type.OBJECT,
+                  properties: {
+                    title: { type: import_genai.Type.STRING },
+                    severity: { type: import_genai.Type.STRING, enum: ["info", "warning", "critical"] },
+                    category: { type: import_genai.Type.STRING },
+                    evidence: { type: import_genai.Type.STRING },
+                    affectedTarget: { type: import_genai.Type.STRING },
+                    recommendation: { type: import_genai.Type.STRING }
+                  }
+                }
+              },
+              actionItems: {
+                type: import_genai.Type.ARRAY,
+                items: {
+                  type: import_genai.Type.OBJECT,
+                  properties: {
+                    priority: { type: import_genai.Type.STRING, enum: ["high", "medium", "low"] },
+                    action: { type: import_genai.Type.STRING },
+                    targetWorkspace: { type: import_genai.Type.STRING }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      const rawText = (response.text ?? "{}").trim();
+      const parsed = JSON.parse(rawText);
+      return res.status(200).json(parsed);
+    } catch (error) {
+      const statusCode = Number(error?.status || error?.code) || 500;
+      const safeStatus = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+      return res.status(safeStatus).json({
+        error: error?.message || "\u062A\u0639\u0630\u0631 \u062A\u0648\u0644\u064A\u062F \u0627\u0644\u062A\u062D\u0644\u064A\u0644 \u0627\u0644\u0630\u0643\u064A \u0645\u0646 \u0627\u0644\u062E\u0627\u062F\u0645."
+      });
     }
   });
   app.post("/api/setup-admin", requireLocalhost, adminLimiter, async (req, res) => {
