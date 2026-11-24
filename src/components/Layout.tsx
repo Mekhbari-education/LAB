@@ -151,6 +151,7 @@ export default function Layout() {
           { name: t('nav.pedagogical_dashboard', 'اللوحة البيداغوجية'), path: ROUTES.PEDAGOGICAL_DASHBOARD, icon: BookOpen },
           { name: t('nav.safety_hub', 'قطب الأمن والسلامة'), path: ROUTES.SAFETY_HUB, icon: ShieldAlert },
           { name: t('nav.scientific_hub', 'فضاء الموارد العلمية'), path: ROUTES.SCIENTIFIC_HUB, icon: Atom },
+          { name: t('nav.settings_hub', 'الإدارة والإعدادات'), path: ROUTES.SETTINGS_HUB, icon: Settings },
         ] : []),
         ...(currentRole === 'teacher' ? [
           { name: 'فضاء الأستاذ (الرئيسي)', path: ROUTES.TEACHER_PORTAL, icon: GraduationCap },
@@ -251,6 +252,7 @@ export default function Layout() {
         { name: t('nav.astronomy', 'الفضاء وعلم الفلك'), path: ROUTES.ASTRONOMY, icon: Telescope },
         { name: t('nav.earth_sciences', 'علوم الأرض والجيولوجيا'), path: ROUTES.EARTH_SCIENCES, icon: Globe },
         { name: t('nav.anatomy', 'نماذج التشريح 3D'), path: ROUTES.ANATOMY, icon: Heart },
+        { name: t('nav.worksheet_generator', 'مولد أوراق العمل'), path: ROUTES.WORKSHEET_GENERATOR, icon: FileSpreadsheet },
       ]
     },
     {
@@ -267,6 +269,7 @@ export default function Layout() {
         { name: t('nav.employee_space', 'فضاء الموظف'), path: 'https://mowadaf.education.dz/', icon: ExternalLink, external: true },
         { name: t('nav.important_links', 'موارد وروابط هامة'), path: ROUTES.IMPORTANT_LINKS, icon: ExternalLink },
         { name: t('nav.diagnostic', 'تشخيص النظام والاتصال'), path: ROUTES.DIAGNOSTIC, icon: Activity },
+        { name: t('nav.design_system', 'نظام التصميم والواجهة'), path: ROUTES.DESIGN_SYSTEM, icon: Sparkles },
         { name: t('nav.support', 'الدعم والاقتراحات'), path: ROUTES.SUPPORT, icon: MessageSquare },
       ]
     },

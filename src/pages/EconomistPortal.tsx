@@ -23,7 +23,10 @@ import {
   FileSpreadsheet,
   Layers,
   Search,
-  ExternalLink
+  ExternalLink,
+  Beaker,
+  Scale,
+  BarChart3
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
@@ -441,7 +444,7 @@ export default function EconomistPortal() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div 
                 onClick={() => navigate(ROUTES.INVENTORY_CARDS)}
                 className="p-5 rounded-2xl bg-surface-container-lowest border border-outline/10 hover:border-purple-500/40 hover:shadow-md transition-all cursor-pointer group"
@@ -450,6 +453,17 @@ export default function EconomistPortal() {
                 <h4 className="text-sm font-bold text-primary mb-1">سجل بطاقات الجرد الرسمي</h4>
                 <p className="text-xs text-on-surface/70">
                   إدارة الأرقام التسلسلية، الترقيم الدائم، وتوزيع البطاقات وفق المنشور الوزاري.
+                </p>
+              </div>
+
+              <div 
+                onClick={() => navigate(ROUTES.GLASSWARE_STORE)}
+                className="p-5 rounded-2xl bg-surface-container-lowest border border-outline/10 hover:border-purple-500/40 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <Beaker size={24} className="text-cyan-600 mb-2 group-hover:scale-110 transition-transform" />
+                <h4 className="text-sm font-bold text-primary mb-1">مخزن الزجاجيات وبطاقات المخزون</h4>
+                <p className="text-xs text-on-surface/70">
+                  متابعة أرصدة الزجاجيات المخبرية وطباعة بطاقات المخزون والتعيينات القياسية.
                 </p>
               </div>
 
@@ -469,7 +483,7 @@ export default function EconomistPortal() {
                 className="p-5 rounded-2xl bg-surface-container-lowest border border-outline/10 hover:border-purple-500/40 hover:shadow-md transition-all cursor-pointer group"
               >
                 <Package size={24} className="text-emerald-600 mb-2 group-hover:scale-110 transition-transform" />
-                <h4 className="text-sm font-bold text-primary mb-1">سجل التجهيزات والأدوات المخبرية</h4>
+                <h4 className="text-sm font-bold text-primary mb-1">سجل العتاد والأدوات المخبرية</h4>
                 <p className="text-xs text-on-surface/70">
                   معاينة إجمالي عتاد الفيزياء، الكيمياء، وعلوم الحياة والتوزيع في القاعات.
                 </p>
@@ -539,16 +553,32 @@ export default function EconomistPortal() {
         )}
 
         {activeTab === 'templates' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-bold text-primary">النماذج الرسمية للمصالح الاقتصادية والمخابر</h3>
-              <Link
-                to={ROUTES.ADMIN_TEMPLATES}
-                className="text-xs font-bold text-purple-700 hover:underline flex items-center gap-1"
-              >
-                <span>المكتبة الكاملة للنماذج الإدارية</span>
-                <ExternalLink size={13} />
-              </Link>
+              <div className="flex flex-wrap items-center gap-4">
+                <Link
+                  to={ROUTES.REPORTS}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <BarChart3 size={13} />
+                  <span>التقارير الإحصائية</span>
+                </Link>
+                <Link
+                  to={ROUTES.SCHOOL_LEGISLATION}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <Scale size={13} />
+                  <span>التشريع المدرسي</span>
+                </Link>
+                <Link
+                  to={ROUTES.ADMIN_TEMPLATES}
+                  className="text-xs font-bold text-purple-700 hover:underline flex items-center gap-1"
+                >
+                  <span>المكتبة الكاملة للنماذج الإدارية</span>
+                  <ExternalLink size={13} />
+                </Link>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

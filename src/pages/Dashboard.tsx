@@ -8,9 +8,11 @@ import * as XLSX from 'xlsx';
 import { ensureApiKey, getEquipmentIntelligence } from '../services/geminiService';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import { LabReservation } from '../lib/api/labSchedule';
+import { GlasswareItem } from '../lib/api/glassware';
 import { 
   FileText, 
   FlaskConical, 
+  Beaker,
   Users, 
   BookOpen, 
   ShieldAlert, 
@@ -34,12 +36,9 @@ import {
   CalendarCheck,
   ArrowUpRight,
   FileDown,
-  Building2,
   FileCheck,
-  GraduationCap,
   Wallet,
-  FileSpreadsheet,
-  Coins
+  FileSpreadsheet
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
@@ -226,9 +225,20 @@ export default function Dashboard() {
   const [brokenItems, setBrokenItems] = useState<EquipmentItem[]>([]);
   const [incidentList, setIncidentList] = useState<SafetyIncidentItem[]>([]);
 
-  // Fetch Lab Schedule from SQL
+  // Fetch Lab Schedule & Glassware Inventory from SQL
   const { data: rawReservations, loading: scheduleLoading } = 
     useSqlCollection<LabReservation>('lab_schedule', '/api/db/lab-schedule');
+
+  const { data: rawGlassware } =
+    useSqlCollection<GlasswareItem>('glassware_inventory', '/api/db/glassware');
+
+  const glasswareStats = useMemo(() => {
+    const list = Array.isArray(rawGlassware) ? rawGlassware : [];
+    const totalTypes = list.length;
+    const totalUnits = list.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+    const issueCount = list.filter((item) => item.status && item.status !== 'جيدة').length;
+    return { totalTypes, totalUnits, issueCount };
+  }, [rawGlassware]);
 
   const todaySessions = useMemo(() => {
     if (!Array.isArray(rawReservations)) return [];
@@ -686,13 +696,13 @@ export default function Dashboard() {
     }
   };
 
-  // Specialized Functional Modules - Strictly filtered by role
+  // Specialized Functional Modules - Strictly filtered by role (balanced 6-card grid)
   const coreModules = useMemo(() => {
     const list = [
       { 
         title: 'الجرد والمخزون', 
-        desc: 'إدارة الكواشف الكيميائية، الأجهزة، بطاقات الجرد، ومصفوفات التوافق المخبري.', 
-        count: `${counts.chemicals + counts.equipment} مادة وجهاز`, 
+        desc: 'إدارة الكواشف الكيميائية، مخزن الزجاجيات، الأجهزة، بطاقات الجرد، ومصفوفات التوافق المخبري.', 
+        count: `${counts.chemicals + counts.equipment + glasswareStats.totalTypes} صنف`, 
         icon: Database, 
         path: ROUTES.INVENTORY_DASHBOARD 
       },
@@ -718,8 +728,15 @@ export default function Dashboard() {
         path: ROUTES.SCIENTIFIC_HUB 
       },
       { 
+        title: 'التقارير الإحصائية والأرشيف', 
+        desc: 'توليد التقارير الإحصائية الشاملة لنشاط المخبر، الجرد السنوي، واستخراج السجلات الرسمية.', 
+        count: `${counts.reports} تقرير`, 
+        icon: BarChart3, 
+        path: ROUTES.REPORTS 
+      },
+      { 
         title: 'الإدارة والإعدادات', 
-        desc: 'إعدادات المؤسسة، الميزانية والمشتريات، واستيراد ونسخ قواعد البيانات.', 
+        desc: 'إعدادات المؤسسة، الميزانية والمشتريات، النماذج الإدارية، ونسخ قواعد البيانات.', 
         count: 'مركز التحكم', 
         icon: Settings, 
         path: ROUTES.SETTINGS_HUB 
@@ -733,21 +750,21 @@ export default function Dashboard() {
       }] : [])
     ];
     return list.filter(item => isRouteAllowedForRole(currentRole, item.path));
-  }, [counts.chemicals, counts.equipment, counts.experiments, counts.incidents, isAdmin, currentRole]);
+  }, [counts.chemicals, counts.equipment, counts.experiments, counts.incidents, counts.reports, glasswareStats.totalTypes, isAdmin, currentRole]);
 
-  // Dynamic quick actions filtered strictly by role
+  // Dynamic quick actions filtered strictly by role (12 balanced actions: 2x6)
   const quickActions = useMemo(() => {
     const allActions = [
-      { title: 'فضاء الإدارة العليا', icon: Building2, path: ROUTES.DIRECTOR_PORTAL },
+      { title: 'مخزن الزجاجيات', icon: Beaker, path: ROUTES.GLASSWARE_STORE },
+      { title: 'المخزن الكيميائي', icon: FlaskConical, path: ROUTES.CHEMICALS },
+      { title: 'بطاقات الجرد', icon: Database, path: ROUTES.INVENTORY_CARDS },
       { title: 'تحرير تقرير يومي', icon: FileText, path: ROUTES.DAILY_REPORT },
-      { title: 'تسجيل تجربة مخبرية', icon: FlaskConical, path: ROUTES.LAB_EXPERIMENTS },
-      { title: 'جرد عتاد أو مادة', icon: Database, path: ROUTES.INVENTORY_DASHBOARD },
+      { title: 'تسجيل تجربة مخبرية', icon: Microscope, path: ROUTES.LAB_EXPERIMENTS },
       { title: 'سجل صيانة وأعطال', icon: Hammer, path: ROUTES.MAINTENANCE },
       { title: 'طلب إعارة أجهزة', icon: ArrowUpRight, path: ROUTES.LOAN_REQUEST },
       { title: 'بروتوكولات السلامة', icon: ShieldCheck, path: ROUTES.SAFETY_HUB },
       { title: 'التقارير السنوية', icon: BarChart3, path: ROUTES.REPORTS },
       { title: 'الميزانية والمشتريات', icon: Wallet, path: ROUTES.BUDGET_PURCHASES },
-      { title: 'الأرشيف والسجلات', icon: BookOpen, path: ROUTES.ARCHIVE },
       { title: 'التشريع المدرسي', icon: FileCheck, path: ROUTES.SCHOOL_LEGISLATION },
       { title: 'وثائق الإدارة', icon: FileSpreadsheet, path: ROUTES.ADMIN_TEMPLATES },
     ];
@@ -794,7 +811,6 @@ export default function Dashboard() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs font-bold text-primary">
-              <span className="w-2 h-2 rounded-full bg-primary" />
               <span>الأرضية الرقمية للمخابر التعليمية</span>
               <span aria-hidden="true">·</span>
               <span className="text-on-surface/60 font-mono tabular-nums">{currentDateAr}</span>
@@ -1019,7 +1035,7 @@ export default function Dashboard() {
           مؤشرات الأداء والجاهزية التشغيلية
         </h2>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KPICard
             title="نسبة الجاهزية"
             value={`${labReadinessPercent}%`}
@@ -1038,6 +1054,16 @@ export default function Dashboard() {
             badge={counts.lowStock > 0 ? `${counts.lowStock} نقص` : 'كافٍ'}
             badgeType={counts.lowStock > 0 ? 'warning' : 'default'}
             onClick={() => navigate(ROUTES.CHEMICALS)}
+          />
+
+          <KPICard
+            title="مخزن الزجاجيات"
+            value={glasswareStats.totalTypes}
+            subtitle={`${glasswareStats.totalUnits} قطعة مسجلة`}
+            icon={Beaker}
+            badge={glasswareStats.issueCount > 0 ? `${glasswareStats.issueCount} تنبيه` : 'مستقر'}
+            badgeType={glasswareStats.issueCount > 0 ? 'warning' : 'success'}
+            onClick={() => navigate(ROUTES.GLASSWARE_STORE)}
           />
 
           <KPICard
@@ -1075,6 +1101,16 @@ export default function Dashboard() {
             icon={Users}
             badge="مؤطر"
             onClick={() => navigate(ROUTES.TEACHERS)}
+          />
+
+          <KPICard
+            title="الأمن والحوادث"
+            value={counts.incidents}
+            subtitle="بلاغات وحالة السلامة"
+            icon={ShieldAlert}
+            badge={counts.incidents > 0 ? 'متابعة' : 'آمن'}
+            badgeType={counts.incidents > 0 ? 'warning' : 'success'}
+            onClick={() => navigate(ROUTES.SAFETY_HUB)}
           />
         </div>
       </section>

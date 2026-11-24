@@ -22,7 +22,11 @@ import {
   ChevronRight, 
   X, 
   ExternalLink,
-  School 
+  School,
+  BarChart3,
+  Scale,
+  Archive,
+  FileText
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
@@ -294,6 +298,34 @@ export default function DirectorPortal() {
           <button onClick={() => setNotification(null)} className="p-1 hover:opacity-70"><X size={16} /></button>
         </motion.div>
       )}
+
+      {/* Executive Quick Access Strip (6 balanced cards) */}
+      <section aria-label="الوصول الإداري السريع" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { title: 'التقارير الإحصائية', icon: BarChart3, path: ROUTES.REPORTS },
+          { title: 'الوثائق الإدارية', icon: FileText, path: ROUTES.ADMIN_TEMPLATES },
+          { title: 'فضاء الأمن والسلامة', icon: ShieldCheck, path: ROUTES.SAFETY_HUB },
+          { title: 'الميزانية والطلبيات', icon: Coins, path: ROUTES.BUDGET_PURCHASES },
+          { title: 'التشريع المدرسي', icon: Scale, path: ROUTES.SCHOOL_LEGISLATION },
+          { title: 'الأرشيف الرقمي', icon: Archive, path: ROUTES.ARCHIVE },
+        ].map((item) => {
+          const NavIcon = item.icon;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl bg-surface-container-lowest border border-outline/10 hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all text-center group"
+            >
+              <div className="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <NavIcon size={19} />
+              </div>
+              <span className="text-xs font-bold text-on-surface group-hover:text-primary transition-colors">
+                {item.title}
+              </span>
+            </Link>
+          );
+        })}
+      </section>
 
       {/* TAB 1: Principal Visas & Signatures */}
       {activeTab === 'visas' && (

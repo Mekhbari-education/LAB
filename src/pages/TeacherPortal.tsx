@@ -27,7 +27,10 @@ import {
   ChevronRight,
   ShieldAlert,
   SlidersHorizontal,
-  X
+  X,
+  Microscope,
+  FileSpreadsheet,
+  Atom
 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'motion/react';
@@ -996,20 +999,20 @@ export default function TeacherPortal() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
               to={ROUTES.VIRTUAL_LAB}
-              className="bg-surface p-6 rounded-3xl border border-outline-variant hover:border-sky-400 hover:shadow-lg transition-all group"
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-sky-400 hover:shadow-md transition-all group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                 <FlaskConical size={24} />
               </div>
               <h3 className="text-base font-black text-primary mb-1">المختبر الافتراضي</h3>
-              <p className="text-xs text-secondary leading-relaxed">تجارب كيميائية وفيزيائية تفاعلية ثلاثية الأبعاد بدون مخاطر.</p>
+              <p className="text-xs text-secondary leading-relaxed">تجارب كيميائية وفيزيائية تفاعلية بدون مخاطر.</p>
             </Link>
 
             <Link
               to={ROUTES.PERIODIC_TABLE}
-              className="bg-surface p-6 rounded-3xl border border-outline-variant hover:border-emerald-400 hover:shadow-lg transition-all group"
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-emerald-400 hover:shadow-md transition-all group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                 <Layers size={24} />
               </div>
               <h3 className="text-base font-black text-primary mb-1">الجدول الدوري التفاعلي</h3>
@@ -1018,9 +1021,9 @@ export default function TeacherPortal() {
 
             <Link
               to={ROUTES.PHYSICS_SIMULATIONS}
-              className="bg-surface p-6 rounded-3xl border border-outline-variant hover:border-purple-400 hover:shadow-lg transition-all group"
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-purple-400 hover:shadow-md transition-all group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                 <Sparkles size={24} />
               </div>
               <h3 className="text-base font-black text-primary mb-1">محاكيات الفيزياء</h3>
@@ -1028,14 +1031,58 @@ export default function TeacherPortal() {
             </Link>
 
             <Link
-              to={ROUTES.LAB_ASSISTANT}
-              className="bg-surface p-6 rounded-3xl border border-outline-variant hover:border-indigo-400 hover:shadow-lg transition-all group"
+              to={ROUTES.CHEMISTRY_TOOLS}
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-indigo-400 hover:shadow-md transition-all group"
             >
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                <Beaker size={24} />
+              </div>
+              <h3 className="text-base font-black text-primary mb-1">أدوات الكيمياء والمحاليل</h3>
+              <p className="text-xs text-secondary leading-relaxed">موازن المعادلات، حاسبة الكتلة المولية وجداول الذوبان.</p>
+            </Link>
+
+            <Link
+              to={ROUTES.VIRTUAL_MICROSCOPE}
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-green-400 hover:shadow-md transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-green-50 dark:bg-green-950/60 text-green-600 dark:text-green-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                <Microscope size={24} />
+              </div>
+              <h3 className="text-base font-black text-primary mb-1">المجهر الافتراضي</h3>
+              <p className="text-xs text-secondary leading-relaxed">شرائح مجهرية للخلايا والأنسجة لمادة علوم الطبيعة.</p>
+            </Link>
+
+            <Link
+              to={ROUTES.WORKSHEET_GENERATOR}
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-amber-400 hover:shadow-md transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                <FileSpreadsheet size={24} />
+              </div>
+              <h3 className="text-base font-black text-primary mb-1">مولد أوراق العمل</h3>
+              <p className="text-xs text-secondary leading-relaxed">توليد تمارين وبطاقات تطبيقية جاهزة للطباعة.</p>
+            </Link>
+
+            <Link
+              to={ROUTES.LAB_EXPERIMENTS}
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-rose-400 hover:shadow-md transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
                 <BookOpen size={24} />
               </div>
-              <h3 className="text-base font-black text-primary mb-1">المساعد العلمي الذكي</h3>
-              <p className="text-xs text-secondary leading-relaxed">إرشادات السلامة، الحسابات المولية، والتشريعات المدرسية.</p>
+              <h3 className="text-base font-black text-primary mb-1">سجل التجارب المقررة</h3>
+              <p className="text-xs text-secondary leading-relaxed">بروتوكولات التجارب المعتمدة في المنهاج الرسمي.</p>
+            </Link>
+
+            <Link
+              to={ROUTES.SCIENTIFIC_HUB}
+              className="bg-surface p-6 rounded-2xl border border-outline-variant hover:border-primary/50 hover:shadow-md transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+                <Atom size={24} />
+              </div>
+              <h3 className="text-base font-black text-primary mb-1">الفضاء العلمي الشامل</h3>
+              <p className="text-xs text-secondary leading-relaxed">تصفح كافة المحاكيات ثلاثية الأبعاد، الفلك والتشريح.</p>
             </Link>
           </div>
         </motion.div>
