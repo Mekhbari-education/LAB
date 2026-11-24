@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../config/routes';
 import { useUserRole } from '../context/UserRoleContext';
-import { isRouteAllowedForRole } from '../config/permissions';
-import { auth, checkIsAdmin } from '../firebase';
+import { useSystemConfig } from '../context/SystemConfigContext';
+import { auth, isProjectOwner } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import {
   Settings,
   Database,
@@ -177,24 +178,27 @@ const MANAGEMENT_SECTIONS: ManagementSection[] = [
 export default function ManagementDashboard() {
   const navigate = useNavigate();
   const { currentRole, roleConfig } = useUserRole();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { isRouteEffectivelyAllowed } = useSystemConfig();
+  const [isOwner, setIsOwner] = useState<boolean>(() => isProjectOwner(auth.currentUser));
 
   useEffect(() => {
-    if (auth.currentUser) {
-      checkIsAdmin(auth.currentUser).then(setIsAdmin);
-    }
-  }, [auth.currentUser]);
+    setIsOwner(isProjectOwner(auth.currentUser));
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setIsOwner(isProjectOwner(user));
+    });
+    return () => unsub();
+  }, []);
 
   const visibleSections = useMemo(() => {
     return MANAGEMENT_SECTIONS.map((sec) => ({
       ...sec,
       modules: sec.modules.filter((mod) => {
-        if (mod.adminOnly) return isAdmin;
+        if (mod.adminOnly) return isOwner;
         if (mod.external) return true;
-        return isRouteAllowedForRole(currentRole, mod.path);
+        return isRouteEffectivelyAllowed(currentRole, mod.path, isOwner);
       }),
     })).filter((sec) => sec.modules.length > 0);
-  }, [currentRole, isAdmin]);
+  }, [currentRole, isOwner, isRouteEffectivelyAllowed]);
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-24 rtl font-sans" dir="rtl">

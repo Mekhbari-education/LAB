@@ -17,6 +17,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './pages/NotFound';
 import OfflineBanner from './components/OfflineBanner';
 import { ThemeProvider } from './context/ThemeContext';
+import { SystemConfigProvider } from './context/SystemConfigContext';
 
 // Lazy-loaded pages
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
@@ -147,11 +148,12 @@ export default function App() {
     <HelmetProvider>
       <ErrorBoundary>
         <ThemeProvider>
-          <SchoolProvider>
-            <UserRoleProvider>
-              <PrintSettingsProvider>
-                <PdfPreviewProvider>
-                  <Router>
+          <SystemConfigProvider>
+            <SchoolProvider>
+              <UserRoleProvider>
+                <PrintSettingsProvider>
+                  <PdfPreviewProvider>
+                    <Router>
                   <OfflineBanner />
                   <PrintPreviewModal />
                   <PrintSettingsModal />
@@ -288,6 +290,7 @@ export default function App() {
       </PrintSettingsProvider>
     </UserRoleProvider>
   </SchoolProvider>
+</SystemConfigProvider>
 </ThemeProvider>
 </ErrorBoundary>
 </HelmetProvider>

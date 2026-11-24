@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { onSnapshot, query, where, collection } from 'firebase/firestore';
 import { db, getUserCollection, auth } from '../firebase';
 import { useSchool } from '../context/SchoolContext';
+import { useUserRole } from '../context/UserRoleContext';
 import { Link } from 'react-router-dom';
 
 interface Notification {
@@ -20,6 +21,7 @@ interface Notification {
 
 export default function NotificationCenter() {
   const { schoolId } = useSchool();
+  const { currentRole, userProfile } = useUserRole();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -147,13 +149,70 @@ export default function NotificationCenter() {
       updateNotifications(calNotifs, 'cal_');
     });
 
+    // Listen to central targeted announcements (system_announcements)
+    const annQ = query(collection(db, 'system_announcements'), where('active', '==', true));
+    const unsubAnn = onSnapshot(
+      annQ,
+      (snap) => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const userWilaya = (userProfile?.wilaya || userProfile?.directorate || '').toLowerCase();
+        const userCycle =
+          userProfile?.educationLevel === 'CEM'
+            ? 'متوسط'
+            : userProfile?.educationLevel === 'Lycée'
+            ? 'ثانوي'
+            : (userProfile?.educationLevel || '').toLowerCase();
+
+        const annNotifs: Notification[] = [];
+        snap.docs.forEach((docSnap) => {
+          const data = docSnap.data() as any;
+          if (data.expiresAt && data.expiresAt < todayStr) return;
+
+          const scope = data.targetScope || 'all';
+          const targets: string[] = Array.isArray(data.targetValues) ? data.targetValues : [];
+          let matches = true;
+
+          if (scope === 'role' && targets.length > 0) {
+            matches = targets.includes(currentRole);
+          } else if (scope === 'wilaya' && targets.length > 0) {
+            matches = targets.some((t) => userWilaya.includes(t.toLowerCase()) || t.toLowerCase().includes(userWilaya));
+          } else if (scope === 'cycle' && targets.length > 0) {
+            matches = targets.some((t) => t === userCycle || userCycle.includes(t.toLowerCase()));
+          }
+
+          if (!matches) return;
+
+          const createdMs =
+            typeof data.createdAt?.toDate === 'function'
+              ? data.createdAt.toDate().toISOString()
+              : new Date().toISOString();
+
+          annNotifs.push({
+            id: `ann_${docSnap.id}`,
+            title: data.title || 'تعميم مركزي',
+            description: data.message || '',
+            type: data.priority === 'high' || data.category === 'urgent' ? 'alert' : 'info',
+            date: createdMs,
+            read: false,
+            icon: FileText,
+          });
+        });
+
+        updateNotifications(annNotifs, 'ann_');
+      },
+      () => {
+        // Ignore if announcements unavailable offline
+      }
+    );
+
     return () => {
       unsubChem();
       unsubEquip();
       unsubExpiry();
       unsubCal();
+      unsubAnn();
     };
-  }, []);
+  }, [schoolId, currentRole, userProfile?.wilaya, userProfile?.directorate, userProfile?.educationLevel]);
 
   const updateNotifications = (newNotifs: Notification[], prefix: string) => {
     setNotifications(prev => {

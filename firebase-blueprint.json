@@ -116,6 +116,101 @@
         "createdAt": { "type": "object" }
       },
       "required": ["title", "category"]
+    },
+    "system_announcement": {
+      "title": "System Announcement Entity",
+      "description": "Platform-wide ministerial and technical announcements published by the project owner.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string", "enum": ["urgent", "technical", "pedagogical", "update"] },
+        "priority": { "type": "string", "enum": ["normal", "high"] },
+        "authorName": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["title", "message"]
+    },
+    "diagnostic_log": {
+      "title": "Diagnostic Log Entity",
+      "description": "Firestore connectivity and client diagnostic test entries.",
+      "type": "object",
+      "properties": {
+        "testBy": { "type": "string" },
+        "message": { "type": "string" },
+        "databaseId": { "type": "string" },
+        "userAgent": { "type": "string" },
+        "timestamp": { "type": "object" }
+      }
+    },
+    "purchase_order": {
+      "title": "Purchase Order Entity",
+      "description": "Laboratory budget purchase order per school.",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "items": { "type": "array" },
+        "createdAt": { "type": "object" }
+      }
+    },
+    "delegated_admin": {
+      "title": "Delegated Legislation Admin Entity",
+      "description": "Owner-managed delegated legislation administrator records.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "active": { "type": "boolean" },
+        "grantedBy": { "type": "string" },
+        "updatedAt": { "type": "object" }
+      }
+    },
+    "system_config": {
+      "title": "Global System Configuration Entity",
+      "description": "Platform-wide maintenance mode, feature flags, and dynamic role route overrides.",
+      "type": "object",
+      "properties": {
+        "maintenanceMode": { "type": "boolean" },
+        "maintenanceMessage": { "type": "string" },
+        "maintenanceEta": { "type": "string" },
+        "readOnlyMode": { "type": "boolean" },
+        "enforceStatutorySetup": { "type": "boolean" },
+        "features": { "type": "object" },
+        "roleRouteOverrides": { "type": "object" },
+        "updatedBy": { "type": "string" },
+        "updatedAt": { "type": "object" }
+      }
+    },
+    "admin_audit_log": {
+      "title": "Owner Audit Log Entity",
+      "description": "Immutable audit trail of central admin actions executed by the project owner.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "targetType": { "type": "string" },
+        "targetIds": { "type": "array", "items": { "type": "string" } },
+        "summary": { "type": "string" },
+        "details": { "type": "object" },
+        "timestamp": { "type": "object" }
+      }
+    },
+    "safety_incident": {
+      "title": "Safety Incident Entity",
+      "description": "Laboratory safety incidents and resolutions per school.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "severity": { "type": "string" },
+        "status": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -145,7 +240,15 @@
     },
     "schools/{userId}/logs": {
       "schema": "log",
-      "description": "User-isolated activity logs."
+      "description": "User-isolated activity logs (queryable by project owner via collectionGroup)."
+    },
+    "schools/{userId}/purchase_orders": {
+      "schema": "purchase_order",
+      "description": "School-isolated purchase orders (queryable by project owner via collectionGroup)."
+    },
+    "schools/{userId}/safety_incidents": {
+      "schema": "safety_incident",
+      "description": "School-isolated safety incidents (queryable by project owner via collectionGroup)."
     },
     "settings/{userId}": {
       "schema": "settings",
@@ -153,7 +256,27 @@
     },
     "users/{userId}": {
       "schema": "settings",
-      "description": "User basic profile."
+      "description": "User profile, role, and account status."
+    },
+    "admins/{adminId}": {
+      "schema": "delegated_admin",
+      "description": "Delegated public legislation editors managed exclusively by the project owner."
+    },
+    "system_announcements/{announcementId}": {
+      "schema": "system_announcement",
+      "description": "Targeted platform announcements managed exclusively by the project owner."
+    },
+    "system_config/{configId}": {
+      "schema": "system_config",
+      "description": "Global platform configuration, feature flags, and maintenance mode controlled exclusively by the project owner."
+    },
+    "admin_audit_logs/{logId}": {
+      "schema": "admin_audit_log",
+      "description": "Immutable owner governance audit trail."
+    },
+    "diagnostics_log/{diagnosticId}": {
+      "schema": "diagnostic_log",
+      "description": "Client diagnostic test records readable across all entries only by the project owner."
     }
   }
 }

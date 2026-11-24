@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, memo, useMemo } from 'react';
 import { logger } from '../services/loggingService';
 import { useSchool } from '../context/SchoolContext';
 import { onSnapshot, doc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType, getUserCollection, auth, checkIsAdmin } from '../firebase';
+import { db, handleFirestoreError, OperationType, getUserCollection, auth, isProjectOwner } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { ensureApiKey, getEquipmentIntelligence } from '../services/geminiService';
@@ -198,7 +199,7 @@ export default function Dashboard() {
   const [isImporting, setIsImporting] = useState(false);
   const [isSmartUpdating, setIsSmartUpdating] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isOwner, setIsOwner] = useState<boolean>(() => isProjectOwner(auth.currentUser));
 
   // Active filters and views
   const [alertsTab, setAlertsTab] = useState<'all' | 'stock' | 'expiry' | 'maintenance' | 'incidents'>('all');
@@ -245,13 +246,19 @@ export default function Dashboard() {
     return rawReservations.filter(r => r.day === todayArabicDay && r.status !== 'cancelled');
   }, [rawReservations, todayArabicDay]);
 
+  useEffect(() => {
+    setIsOwner(isProjectOwner(auth.currentUser));
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      setIsOwner(isProjectOwner(u));
+    });
+    return () => unsubAuth();
+  }, []);
+
   // Firestore Subscriptions
   useEffect(() => {
     if (!auth.currentUser) {
       return;
     }
-
-    checkIsAdmin(auth.currentUser).then(setIsAdmin);
 
     const unsubReports = onSnapshot(getUserCollection(schoolId, 'reports'), (snap) => {
       setCounts(prev => ({ ...prev, reports: snap.size }));
@@ -741,16 +748,16 @@ export default function Dashboard() {
         icon: Settings, 
         path: ROUTES.SETTINGS_HUB 
       },
-      ...(isAdmin ? [{ 
+      ...(isOwner ? [{ 
         title: 'لوحة الإدارة المركزية', 
         desc: 'التحكم الشامل في المستخدمين، الصلاحيات المتقدمة، وسجلات النظام الكاملة.', 
-        count: 'مشرف النظام', 
+        count: 'مالك المشروع', 
         icon: ShieldCheck, 
         path: ROUTES.ADMIN 
       }] : [])
     ];
-    return list.filter(item => isRouteAllowedForRole(currentRole, item.path));
-  }, [counts.chemicals, counts.equipment, counts.experiments, counts.incidents, counts.reports, glasswareStats.totalTypes, isAdmin, currentRole]);
+    return list.filter(item => item.path === ROUTES.ADMIN ? isOwner : isRouteAllowedForRole(currentRole, item.path));
+  }, [counts.chemicals, counts.equipment, counts.experiments, counts.incidents, counts.reports, glasswareStats.totalTypes, isOwner, currentRole]);
 
   // Dynamic quick actions filtered strictly by role (12 balanced actions: 2x6)
   const quickActions = useMemo(() => {

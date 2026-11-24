@@ -11,12 +11,19 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Verified Project Owner ONLY (Faycalassoul@gmail.com)
+    function isProjectOwner() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email.lower() == 'faycalassoul@gmail.com';
+    }
+
+    // Delegated public legislation admin OR project owner
     function isAdmin() {
-      return isSignedIn() && (
+      return isProjectOwner() || (isSignedIn() && (
         request.auth.token.admin == true ||
-        (request.auth.token.email_verified == true && request.auth.token.email == 'faycalassoul@gmail.com') ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      ));
     }
 
     function getUserDoc() {
@@ -29,44 +36,81 @@ service cloud.firestore {
 
     function isSchoolMember(schoolId) {
       return isSignedIn() && (
-        isAdmin() ||
+        isProjectOwner() ||
         (hasUserDoc() && getUserDoc().schoolId == schoolId) ||
         (request.auth.uid == schoolId)
       );
     }
 
-    // --- Trusted Admin Directory ---
+    // --- Trusted Admin Directory (Managed exclusively by Project Owner) ---
     match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow get: if isOwner(adminId) || isProjectOwner();
+      allow list: if isProjectOwner();
+      allow write: if isProjectOwner();
     }
 
-    // --- User Documents (PII Protection & Role Tamper Proofing) ---
+    // --- User Documents (PII Protection & Owner-Only Central Control) ---
     match /users/{userId} {
-      // Profile can only be read by the owner user or verified admin
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
+      allow get: if isOwner(userId) || isProjectOwner();
+      allow list: if isProjectOwner();
 
-      // Users cannot elevate themselves to admin or change their role/isAdmin flag
-      allow create: if isOwner(userId) && 
+      allow create: if isOwner(userId) &&
         (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
-        (!('role' in request.resource.data) || request.resource.data.role != 'Admin' || isAdmin());
+        (!('roleOverride' in request.resource.data)) &&
+        (!('disabled' in request.resource.data) || request.resource.data.disabled == false) &&
+        (!('role' in request.resource.data) || !(request.resource.data.role in ['Admin', 'admin']) || isProjectOwner());
 
-      allow update: if (isOwner(userId) && 
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'role'])) || 
-        isAdmin();
+      allow update: if (isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'role', 'roleOverride', 'disabled'])) ||
+        isProjectOwner();
 
-      allow delete: if isAdmin();
+      allow delete: if isProjectOwner();
     }
 
-    // --- Registered Schools Directory (School Registration & Verification) ---
+    // --- Registered Schools Directory ---
     match /registered_schools/{schoolId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if isSchoolMember(schoolId) || isAdmin();
+      allow update, delete: if isSchoolMember(schoolId) || isProjectOwner();
     }
     match /registered_schools {
       allow list: if isSignedIn();
+    }
+
+    // --- Owner-Only CollectionGroup Access for System Oversight ---
+    match /{path=**}/logs/{logId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/purchase_orders/{orderId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/chemicals/{itemId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/equipment/{itemId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/safety_incidents/{itemId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/experiment_logs/{itemId} {
+      allow read: if isProjectOwner();
+    }
+    match /{path=**}/reports/{itemId} {
+      allow read: if isProjectOwner();
+    }
+
+    // --- Global System Config (Feature Flags, Maintenance Mode, Policy Overrides) ---
+    match /system_config/{configId} {
+      allow get: if configId == 'global' || isProjectOwner();
+      allow list: if isProjectOwner();
+      allow write: if isProjectOwner();
+    }
+
+    // --- Immutable Owner Audit Trail ---
+    match /admin_audit_logs/{logId} {
+      allow read, create: if isProjectOwner();
+      allow update, delete: if false;
     }
 
     // --- School-Scoped Isolated Data (All Subcollections: chemicals, equipment, etc.) ---
@@ -79,38 +123,42 @@ service cloud.firestore {
 
     match /school_metadata/{schoolId} {
       allow read: if isSignedIn();
-      allow write: if isSchoolMember(schoolId) || isAdmin();
+      allow write: if isSchoolMember(schoolId) || isProjectOwner();
     }
 
     // --- Settings Profiles (School Settings & User Calibration) ---
-    // Strictly requires sign-in and school membership or owner verification
     match /settings/{settingId} {
-      allow read: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isAdmin());
-      allow write: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isAdmin()) &&
-        // Prevent setting-based admin privilege escalation
-        ((!('role' in request.resource.data) || request.resource.data.role != 'Admin' || isAdmin()) &&
-         (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || isAdmin()));
+      allow read: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isProjectOwner());
+      allow write: if isSignedIn() && (isOwner(settingId) || isSchoolMember(settingId) || isProjectOwner()) &&
+        ((!('role' in request.resource.data) || !(request.resource.data.role in ['Admin', 'admin']) || isProjectOwner()) &&
+         (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false || isProjectOwner()));
     }
     match /settings {
-      allow list: if isAdmin();
+      allow list: if isProjectOwner();
     }
 
     // --- Teachers Directory ---
     match /teachers/{id} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || (resource != null && 'schoolId' in resource.data ? isSchoolMember(resource.data.schoolId) : true));
+      allow write: if isSignedIn() && (isProjectOwner() || (resource != null && 'schoolId' in resource.data ? isSchoolMember(resource.data.schoolId) : true));
     }
     match /teachers {
       allow list: if isSignedIn();
     }
 
-    // --- Public National Legislation (Read by authenticated school staff, write by Admin only) ---
+    // --- Public National Legislation (Read by authenticated school staff, write by Admin/Owner) ---
     match /public_legislation/{id} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
     match /public_legislation {
       allow list: if isSignedIn();
+    }
+
+    // --- Platform Announcements (Managed exclusively by Project Owner) ---
+    match /system_announcements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isProjectOwner();
     }
 
     // --- Resilient PDF File Storage Chunks ---
@@ -125,7 +173,7 @@ service cloud.firestore {
       allow read, update, delete: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
         (('schoolId' in resource.data) && isSchoolMember(resource.data.schoolId)) ||
-        isAdmin()
+        isProjectOwner()
       );
     }
     match /user_admin_documents {
@@ -135,18 +183,18 @@ service cloud.firestore {
     // --- Support Tickets & Purchase Requests ---
     match /support_tickets/{id} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow read, update, delete: if isProjectOwner() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
     match /support_tickets {
-      allow list: if isAdmin() || isSignedIn();
+      allow list: if isProjectOwner() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     match /purchase_requests/{id} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow read, update, delete: if isProjectOwner() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
     match /purchase_requests {
-      allow list: if isAdmin() || isSignedIn();
+      allow list: if isProjectOwner() || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     // --- Connection Test & Diagnostics ---
@@ -156,24 +204,25 @@ service cloud.firestore {
 
     match /diagnostics_log/{id} {
       allow create: if isSignedIn();
-      allow read, update, delete: if isAdmin();
+      allow get: if isProjectOwner() || (isSignedIn() && resource.data.testBy == request.auth.token.email);
+      allow list, update, delete: if isProjectOwner();
     }
 
     // --- Fallback Root Collections (Scoped by school membership) ---
     match /chemicals/{id} {
-      allow read, write: if isSchoolMember(id) || isAdmin();
+      allow read, write: if isSchoolMember(id) || isProjectOwner();
     }
     match /equipment/{id} {
-      allow read, write: if isSchoolMember(id) || isAdmin();
+      allow read, write: if isSchoolMember(id) || isProjectOwner();
     }
     match /reports/{id} {
-      allow read, write: if isSchoolMember(id) || isAdmin();
+      allow read, write: if isSchoolMember(id) || isProjectOwner();
     }
     match /experiment_logs/{id} {
-      allow read, write: if isSchoolMember(id) || isAdmin();
+      allow read, write: if isSchoolMember(id) || isProjectOwner();
     }
     match /safety_incidents/{id} {
-      allow read, write: if isSchoolMember(id) || isAdmin();
+      allow read, write: if isSchoolMember(id) || isProjectOwner();
     }
   }
 }

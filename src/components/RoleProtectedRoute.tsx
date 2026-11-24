@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useUserRole } from '../context/UserRoleContext';
-import { isRouteAllowedForRole } from '../config/permissions';
+import { useSystemConfig } from '../context/SystemConfigContext';
 import { ROUTES } from '../config/routes';
+import { auth, isProjectOwner } from '../firebase';
 
 interface RoleProtectedRouteProps {
   children: React.ReactNode;
@@ -10,17 +12,25 @@ interface RoleProtectedRouteProps {
 
 /**
  * Route protection wrapper enforcing:
- * "تقييد كامل: إخفاء تام لأي صفحة أو بطاقة خارج اختصاص الرتبة"
+ * 1) Owner-exclusive access for /admin
+ * 2) Dynamic RBAC matrix + global feature flags from SystemConfigContext
  */
 export default function RoleProtectedRoute({ children }: RoleProtectedRouteProps) {
   const { currentRole, roleConfig } = useUserRole();
+  const { isRouteEffectivelyAllowed } = useSystemConfig();
   const location = useLocation();
+  const [authUser, setAuthUser] = useState<any>(() => auth.currentUser);
 
-  const isAllowed = isRouteAllowedForRole(currentRole, location.pathname);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setAuthUser(u));
+    return () => unsub();
+  }, []);
+
+  const isOwner = isProjectOwner(authUser || auth.currentUser);
+  const isAllowed = isRouteEffectivelyAllowed(currentRole, location.pathname, isOwner);
 
   if (!isAllowed) {
     const fallbackPath = roleConfig?.defaultPath || ROUTES.HOME;
-    // Prevent redirect loops
     if (fallbackPath !== location.pathname) {
       return <Navigate to={fallbackPath} replace />;
     }

@@ -63,15 +63,16 @@ import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import ErrorBoundary from './ErrorBoundary';
 import { doc, getDoc, onSnapshot, query, where, setDoc } from 'firebase/firestore';
-import { db, getUserCollection, checkIsAdmin } from '../firebase';
+import { db, getUserCollection, isProjectOwner } from '../firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import GlobalSearch from './GlobalSearch';
 import Breadcrumbs from './Breadcrumbs';
 import NotificationCenter from './NotificationCenter';
 import logo from '/ministry-logo.png';
 import { ROUTES } from '../config/routes';
-import { isRouteAllowedForRole } from '../config/permissions';
 import { useTheme } from '../context/ThemeContext';
 import { useUserRole, ROLE_CONFIGS, UserRole } from '../context/UserRoleContext';
+import { useSystemConfig } from '../context/SystemConfigContext';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import RoleProtectedRoute from './RoleProtectedRoute';
 import StatutoryProfileModal from './StatutoryProfileModal';
@@ -90,7 +91,9 @@ export default function Layout() {
     setIsStatutoryModalOpen
   } = useUserRole();
   const { openPrintSettingsModal } = usePrintSettings();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { config: systemConfig, isRouteEffectivelyAllowed } = useSystemConfig();
+  const [isOwner, setIsOwner] = useState<boolean>(() => isProjectOwner(auth.currentUser));
+  const [isAccountDisabled, setIsAccountDisabled] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth >= 1024;
@@ -125,10 +128,28 @@ export default function Layout() {
   }, [auth.currentUser]);
 
   useEffect(() => {
-    if (auth.currentUser) {
-      checkIsAdmin(auth.currentUser).then(setIsAdmin);
+    setIsOwner(isProjectOwner(auth.currentUser));
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setIsOwner(isProjectOwner(u));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || isOwner) {
+      setIsAccountDisabled(false);
+      return;
     }
-  }, [auth.currentUser]);
+    const unsub = onSnapshot(
+      doc(db, 'users', uid),
+      (snap) => {
+        setIsAccountDisabled(Boolean(snap.data()?.disabled));
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [auth.currentUser?.uid, isOwner]);
 
   const { t, i18n } = useTranslation();
 
@@ -176,7 +197,7 @@ export default function Layout() {
           { name: t('nav.inventory_cards', 'سجل بطاقات الجرد'), path: ROUTES.INVENTORY_CARDS, icon: FileText },
           { name: t('nav.scrapping', 'إسقاط التجهيزات والتكهين'), path: ROUTES.SCRAPPING, icon: Trash2 },
         ] : []),
-        ...(isAdmin ? [{ name: t('nav.admin_dashboard', 'لوحة الإدارة المركزية'), path: ROUTES.ADMIN, icon: ShieldCheck }] : []),
+        ...(isOwner ? [{ name: t('nav.admin_dashboard', 'لوحة الإدارة المركزية'), path: ROUTES.ADMIN, icon: ShieldCheck }] : []),
       ]
     },
     {
@@ -282,10 +303,11 @@ export default function Layout() {
       ...group,
       items: group.items.filter(item => {
         if (item.external) return true;
-        return isRouteAllowedForRole(currentRole, item.path);
+        if (item.path === ROUTES.ADMIN) return isOwner;
+        return isRouteEffectivelyAllowed(currentRole, item.path, isOwner);
       })
     })).filter(group => group.items.length > 0);
-  }, [navigationGroups, currentRole]);
+  }, [navigationGroups, currentRole, isOwner, isRouteEffectivelyAllowed]);
 
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['فضاءات الرتب والمهام', 'لوحة التحكم الرئيسية', 'الجرد والمخزون']);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -425,6 +447,81 @@ export default function Layout() {
   }, []);
 
   const isRtl = i18n.language?.startsWith('ar');
+  const cleanPathname = location.pathname.split('?')[0].split('#')[0];
+  const isAdminRoute = cleanPathname === ROUTES.ADMIN || cleanPathname.startsWith(`${ROUTES.ADMIN}/`);
+
+  // Suspended account screen for non-owner users
+  if (!isOwner && isAccountDisabled) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center p-6 rtl font-sans" dir="rtl">
+        <div className="max-w-md w-full bg-surface-container-lowest p-8 rounded-2xl border border-error/25 text-center shadow-sm space-y-4">
+          <div className="w-14 h-14 bg-error/10 text-error rounded-xl flex items-center justify-center mx-auto">
+            <ShieldAlert size={28} />
+          </div>
+          <h2 className="text-xl font-black text-error">تم تعليق صلاحيات هذا الحساب مؤقتاً</h2>
+          <p className="text-xs sm:text-sm text-on-surface/75 leading-relaxed">
+            يرجى التواصل مع الإدارة المركزية للمنصة أو مسؤول المؤسسة لإعادة تفعيل حسابك.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="w-full py-3 px-5 rounded-xl bg-error text-on-error font-bold text-sm hover:opacity-90 cursor-pointer"
+          >
+            تسجيل الخروج
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Maintenance mode screen for non-owner users
+  if (!isOwner && systemConfig.maintenanceMode) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center p-6 rtl font-sans" dir="rtl">
+        <div className="max-w-lg w-full bg-surface-container-lowest p-8 rounded-2xl border border-outline/15 text-center shadow-sm space-y-5">
+          <img src={logo} alt="شعار المنصة" className="w-16 h-16 mx-auto object-contain" />
+          <div className="w-12 h-12 bg-amber-500/10 text-amber-700 dark:text-amber-300 rounded-xl flex items-center justify-center mx-auto">
+            <Wrench size={24} />
+          </div>
+          <h2 className="text-xl font-black text-primary">المنصة قيد الصيانة والتحديث</h2>
+          <p className="text-xs sm:text-sm text-on-surface/80 leading-relaxed">
+            {systemConfig.maintenanceMessage}
+          </p>
+          {systemConfig.maintenanceEta && (
+            <div className="text-xs font-bold text-primary bg-surface-container px-4 py-2 rounded-xl inline-block">
+              المدة المتوقعة: {systemConfig.maintenanceEta}
+            </div>
+          )}
+          <div>
+            <button
+              onClick={handleLogout}
+              className="px-6 py-2.5 rounded-xl border border-outline/20 text-xs font-bold text-on-surface/80 hover:border-primary/40 cursor-pointer"
+            >
+              تسجيل الخروج
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Dedicated full-viewport command center shell for /admin (owner only)
+  if (isOwner && isAdminRoute) {
+    return (
+      <ErrorBoundary>
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-background flex items-center justify-center">
+              <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+          }
+        >
+          <RoleProtectedRoute>
+            <Outlet />
+          </RoleProtectedRoute>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface flex text-foreground">
@@ -831,7 +928,7 @@ export default function Layout() {
                       <span>{roleConfig.label}</span>
                     </Link>
 
-                    {isAdmin && (
+                    {isOwner && (
                       <Link 
                         to={ROUTES.ADMIN} 
                         onClick={() => setIsProfileMenuOpen(false)}
@@ -878,6 +975,12 @@ export default function Layout() {
         </header>
 
         <main role="main" aria-label="المحتوى الرئيسي" className="p-4 md:p-8 print:p-0 overflow-x-hidden print:overflow-visible print:w-full">
+          {!isOwner && systemConfig.readOnlyMode && (
+            <div className="mb-4 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-2 no-print">
+              <ShieldAlert size={16} className="shrink-0" />
+              <span>المنصة في وضع القراءة والأرشفة المؤقتة (Read-Only Mode) — قد تكون بعض التعديلات معلقة مؤقتاً.</span>
+            </div>
+          )}
           <Breadcrumbs />
           <ErrorBoundary>
             <Suspense fallback={
@@ -1031,9 +1134,9 @@ export default function Layout() {
 
       {/* Statutory Profile Modal for existing accounts to specify and fill information to determine workspace */}
       <StatutoryProfileModal
-        isOpen={isStatutoryModalOpen || needsStatutorySetup}
+        isOpen={isStatutoryModalOpen || (needsStatutorySetup && systemConfig.enforceStatutorySetup)}
         onClose={() => setIsStatutoryModalOpen(false)}
-        isMandatory={needsStatutorySetup}
+        isMandatory={needsStatutorySetup && systemConfig.enforceStatutorySetup}
       />
     </div>
   );

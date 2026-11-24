@@ -4,7 +4,7 @@ import path from 'path';
 import admin from 'firebase-admin';
 import fs from 'fs';
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 
 // ─── Rate Limiter الأمني ──────────────────────────────────────────────────
@@ -172,18 +172,25 @@ async function startServer() {
       }
 
       // Model allowlist
-      const ALLOWED_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
+      const ALLOWED_MODELS = ['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
       if (!model || !ALLOWED_MODELS.includes(model)) {
-        model = 'gemini-3.8-flash';
+        model = 'gemini-4-hydrogen';
       }
 
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
 
       // Resilient fallback list in case of 503 high demand or 429 rate limiting
       const candidateModels = [
         model,
-        'gemini-3.1-flash-lite',
-        'gemini-flash-latest'
+        'gemini-4-hydrogen',
+        'gemini-3.1-flash-lite'
       ];
       const modelsToTry = Array.from(new Set(candidateModels));
 
@@ -218,6 +225,92 @@ async function startServer() {
       const isDev = process.env.NODE_ENV !== 'production';
       if (isDev) console.error('Gemini error:', error);
       res.status(500).json({ error: isDev ? (error.message || 'Failed') : 'خطأ في خادم الذكاء الاصطناعي.' });
+    }
+  });
+
+  // 2b. Owner-Only AI Executive Summary & Anomaly Detection Endpoint
+  app.post('/api/admin/ai-insights', requireAuth, userGeminiLimiter, async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.isOwner) {
+        return res.status(403).json({
+          error: 'هذا المسار محصور بمالك المشروع الموثق فقط.',
+        });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: 'مفتاح الذكاء الاصطناعي غير مهيأ على الخادم.' });
+      }
+
+      const payload = req.body || {};
+      const serialized = JSON.stringify(payload).slice(0, 22000);
+
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build',
+          },
+        },
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: `Analyze this anonymized platform operational snapshot for LabEducationDZ (Algerian School Laboratories Management Platform) and provide a concise executive briefing, anomaly alerts, and actionable recommendations in Arabic with exact technical identifiers where helpful.\n\nSnapshot JSON:\n${serialized}`,
+        config: {
+          systemInstruction:
+            'You are a senior systems & laboratory governance analyst assisting the platform owner. Respond strictly in structured JSON. Never fabricate metrics not present in the snapshot. Keep Arabic crisp, direct, and executive.',
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              executiveSummary: {
+                type: Type.STRING,
+                description: '2-4 sentence executive briefing in Arabic summarizing platform health, activity, and key risks.',
+              },
+              riskLevel: {
+                type: Type.STRING,
+                enum: ['nominal', 'elevated', 'critical'],
+              },
+              anomalies: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    severity: { type: Type.STRING, enum: ['info', 'warning', 'critical'] },
+                    category: { type: Type.STRING },
+                    evidence: { type: Type.STRING },
+                    affectedTarget: { type: Type.STRING },
+                    recommendation: { type: Type.STRING },
+                  },
+                },
+              },
+              actionItems: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    priority: { type: Type.STRING, enum: ['high', 'medium', 'low'] },
+                    action: { type: Type.STRING },
+                    targetWorkspace: { type: Type.STRING },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const rawText = (response.text ?? '{}').trim();
+      const parsed = JSON.parse(rawText);
+      return res.status(200).json(parsed);
+    } catch (error: any) {
+      const statusCode = Number(error?.status || error?.code) || 500;
+      const safeStatus = statusCode >= 400 && statusCode < 600 ? statusCode : 500;
+      return res.status(safeStatus).json({
+        error: error?.message || 'تعذر توليد التحليل الذكي من الخادم.',
+      });
     }
   });
 

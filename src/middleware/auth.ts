@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
   user?: DecodedIdToken;
   schoolId?: string;
   isAdmin?: boolean;
+  isOwner?: boolean;
 }
 
 // In-memory cache for user school membership (5-minute TTL to reduce Firestore reads)
@@ -73,11 +74,12 @@ export const requireAuth = async (
     const decodedToken = await adminAuth.verifyIdToken(token);
     req.user = decodedToken;
 
+    const normalizedEmail = (decodedToken.email || '').trim().toLowerCase();
+    const isVerifiedOwner = Boolean(normalizedEmail === 'faycalassoul@gmail.com' && decodedToken.email_verified === true);
+    req.isOwner = isVerifiedOwner;
+
     // Determine admin status strictly from server-verified token claims
-    req.isAdmin = Boolean(
-      decodedToken.admin === true || 
-      (decodedToken.email === 'faycalassoul@gmail.com' && decodedToken.email_verified === true)
-    );
+    req.isAdmin = Boolean(decodedToken.admin === true || isVerifiedOwner);
 
     const headerSchoolId = req.headers['x-school-id'] ? String(req.headers['x-school-id']) : undefined;
 

@@ -67,21 +67,28 @@ if (typeof window !== 'undefined') {
 
 export const storage = getStorage(app);
 
+export const PROJECT_OWNER_EMAIL = 'faycalassoul@gmail.com';
+
+export function isProjectOwner(user: any): boolean {
+  if (!user || !user.email) return false;
+  return String(user.email).trim().toLowerCase() === PROJECT_OWNER_EMAIL && user.emailVerified === true;
+}
+
 export async function checkIsAdmin(user: any): Promise<boolean> {
   if (!user) return false;
   try {
+    // 0. Project owner (verified primary administrator email)
+    if (isProjectOwner(user)) {
+      return true;
+    }
+
     // 1. Primary server-set custom claims check (authoritative)
     const idTokenResult = await user.getIdTokenResult(true);
     if (idTokenResult?.claims?.admin === true) {
       return true;
     }
 
-    // 2. Primary root administrator email with email verification
-    if (user.email === 'faycalassoul@gmail.com' && user.emailVerified) {
-      return true;
-    }
-
-    // 3. Trusted server-protected admin document check (/admins/{uid})
+    // 2. Trusted server-protected admin document check (/admins/{uid})
     // Regular users have write: if false; on /admins
     const adminDocRef = doc(db, 'admins', user.uid);
     const adminSnap = await getDoc(adminDocRef);

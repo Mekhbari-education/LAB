@@ -42,6 +42,7 @@ import { getWilayasList, getWilayaDetail } from '../services/schoolDirectoryServ
 import logo from '/ministry-logo.png';
 import { cn } from '../lib/utils';
 import { useTheme } from '../context/ThemeContext';
+import { useSystemConfig } from '../context/SystemConfigContext';
 import { useUserRole, UserRole, UserProfileData, ROLE_CONFIGS } from '../context/UserRoleContext';
 import { ROUTES } from '../config/routes';
 import { Helmet } from 'react-helmet-async';
@@ -66,6 +67,7 @@ export default function Signup() {
   const navigate = useNavigate();
   const { setRole } = useUserRole();
   const { isDarkMode } = useTheme();
+  const { config: systemConfig } = useSystemConfig();
 
   // Selected Decree 25-54 Category - starts null, user chooses
   const [selectedCategoryTitle, setSelectedCategoryTitle] = useState<PersonnelCategoryType | null>(null);
@@ -455,6 +457,33 @@ export default function Signup() {
       setLoading(false);
     }
   };
+
+  if (!systemConfig.features.allowSignups) {
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 font-sans rtl" dir="rtl">
+        <Helmet>
+          <title>التسجيل متوقف مؤقتاً | الأرضية الرقمية</title>
+        </Helmet>
+        <div className="max-w-md w-full bg-surface-container-lowest p-8 rounded-2xl border border-outline/15 text-center shadow-sm space-y-4">
+          <img className="h-16 w-auto mx-auto" src={logo} alt="شعار وزارة التربية الوطنية" />
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-300 flex items-center justify-center mx-auto">
+            <LockIcon size={24} />
+          </div>
+          <h1 className="text-xl font-black text-primary">تسجيل الحسابات الجديدة متوقف مؤقتاً</h1>
+          <p className="text-xs sm:text-sm text-on-surface/75 leading-relaxed">
+            قامت الإدارة المركزية بإيقاف فتح حسابات جديدة مؤقتاً لأغراض التنظيم والمراجعة. إذا كان لديك حساب مفعل يمكنك تسجيل الدخول مباشرة.
+          </p>
+          <Link
+            to={ROUTES.LOGIN}
+            className="inline-flex items-center justify-center gap-2 w-full py-3 px-6 rounded-xl bg-primary text-on-primary font-bold text-sm hover:bg-primary/90 transition-colors"
+          >
+            <span>العودة لتسجيل الدخول</span>
+            <ArrowLeft size={16} />
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface flex flex-col justify-center py-10 px-4 sm:px-6 lg:px-8 font-sans" dir="rtl">

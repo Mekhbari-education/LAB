@@ -399,9 +399,12 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
       const gradeIdentifier = data?.gradeCode || data?.grade || teacherDocData?.rank;
       const officialGrade = gradeIdentifier ? findGradeByCodeOrName(gradeIdentifier) : undefined;
 
-      // Determine role strictly according to statutory grade & official role
+      // Determine role strictly according to owner override (if set) or statutory grade & official role
       let role: UserRole = 'lab_manager';
-      if (officialGrade) {
+      const overrideRole = typeof data?.roleOverride === 'string' ? data.roleOverride.trim().toLowerCase() : '';
+      if (['director', 'censor', 'teacher', 'lab_manager', 'economist'].includes(overrideRole)) {
+        role = overrideRole as UserRole;
+      } else if (officialGrade) {
         role = getWorkspaceRoleForGrade(officialGrade);
       } else if (data?.role) {
         const rawRole = (data.role || '').toLowerCase();
