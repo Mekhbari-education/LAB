@@ -595,9 +595,7 @@ export default function Login({ onRoleLogin }: LoginProps) {
             </div>
           </div>
         </div>
-        {/* Gradient Layer */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1b3d2f]/95 via-[#234e3c]/85 to-[#0f241c]/90 z-10"></div>
-        
+
         {/* Branding Content */}
         <div className="relative z-20 h-full flex flex-col justify-between">
           <div className="flex items-center gap-4">
