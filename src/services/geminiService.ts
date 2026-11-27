@@ -3,8 +3,8 @@ import { logger } from './loggingService';
 import { auth } from '../firebase';
 
 // ── اسم الموديل في مكان واحد — غيّره هنا فقط إذا احتجت ─────────────────────
-const GEMINI_MODEL = "gemini-3.8-flash";
-const GEMINI_MODEL_VISION = "gemini-3.8-flash"; // للصور والمحادثة
+const GEMINI_MODEL = "gemini-4-hydrogen";
+const GEMINI_MODEL_VISION = "gemini-4-hydrogen"; // للصور والمحادثة
 // ────────────────────────────────────────────────────────────────────────────
 
 
@@ -95,7 +95,7 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
     const callGemini = httpsCallable(functions, 'generateContent');
     const response = await callGemini({
       model: GEMINI_MODEL,
-      contents: `Provide detailed chemical information for: \`<input>\${sanitizeInput(name, 200)}</input>\`. 
+      contents: `Provide detailed chemical information for: \`<input>${sanitizeInput(name, 200)}</input>\`. 
       Return the data in JSON format with the following fields:
       - nameEn: English name
       - nameAr: Arabic name
@@ -160,6 +160,247 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
     }
     
     logger.error("Error fetching chemical intelligence:", error);
+    return null;
+  }
+}
+
+export interface ChemicalBatchIntelligenceItem extends ChemicalIntelligence {
+  id: string;
+}
+
+export async function getChemicalsBatchIntelligence(
+  items: { id: string; name: string }[],
+  retries = 3,
+  delay = 2500
+): Promise<ChemicalBatchIntelligenceItem[] | null> {
+  if (!items || items.length === 0) return [];
+
+  try {
+    const hasKey = await ensureApiKey();
+    if (!hasKey) {
+      logger.error("No API key available for Gemini.");
+      return null;
+    }
+
+    const sanitizedItems = items.map(item => ({
+      id: item.id,
+      name: sanitizeInput(item.name, 160)
+    }));
+
+    const callGemini = httpsCallable(functions, 'generateContent');
+    const response = await callGemini({
+      model: GEMINI_MODEL,
+      contents: `You are a laboratory chemistry reference expert.
+Provide accurate chemical metadata for each item in the input array, keeping the exact same "id" for every item.
+Input items: ${JSON.stringify(sanitizedItems)}
+
+For each item return JSON object fields:
+- id: exact matching id from input
+- nameEn: standard English IUPAC/common chemical name
+- nameAr: standard Arabic chemical name
+- formula: chemical formula (e.g. "H2SO4", "NaCl", or "" if complex mixture)
+- casNumber: CAS registry number (e.g. "7664-93-9", or "" if unknown/mixture)
+- storageTemp: recommended storage temperature (e.g. "Room Temp", "2-8°C", "Cool & Dry")
+- hazardClass: either "safe" or "danger"
+- ghs: array of applicable GHS codes from ["GHS01","GHS02","GHS03","GHS04","GHS05","GHS06","GHS07","GHS08","GHS09"]
+- expiryYears: typical shelf life in years as a number (e.g. 2, 3, 5)
+- notes: concise Arabic laboratory safety & storage instructions (1-2 short sentences)`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              nameEn: { type: Type.STRING },
+              nameAr: { type: Type.STRING },
+              formula: { type: Type.STRING },
+              casNumber: { type: Type.STRING },
+              storageTemp: { type: Type.STRING },
+              hazardClass: { type: Type.STRING, enum: ['safe', 'danger'] },
+              ghs: { type: Type.ARRAY, items: { type: Type.STRING } },
+              expiryYears: { type: Type.NUMBER },
+              notes: { type: Type.STRING },
+            },
+            required: ["id", "nameEn", "nameAr", "formula", "casNumber", "storageTemp", "hazardClass", "ghs", "expiryYears", "notes"],
+          },
+        },
+      },
+    });
+
+    const text = (response.data as any).text;
+    if (!text) return null;
+    const parsed = JSON.parse(text.trim());
+    return Array.isArray(parsed) ? (parsed as ChemicalBatchIntelligenceItem[]) : null;
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const isQuotaExceeded =
+      errorMessage.includes("quota") ||
+      errorMessage.includes("RESOURCE_EXHAUSTED") ||
+      errorMessage.includes("429") ||
+      errorMessage.includes("تم تجاوز الحد");
+
+    if (isQuotaExceeded) {
+      if (errorMessage.includes("check your plan and billing details") || errorMessage.includes("Hard quota limit reached")) {
+        logger.error("Hard quota limit reached during batch chemical update.");
+        throw new Error("RESOURCE_EXHAUSTED: تم تجاوز حصة الاستخدام المسموح بها (Quota Exceeded).");
+      }
+
+      if (retries > 0) {
+        logger.warn(`Rate limit hit for chemical batch. Retrying in ${delay}ms... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return getChemicalsBatchIntelligence(items, retries - 1, Math.round(delay * 1.6));
+      }
+
+      throw new Error("RESOURCE_EXHAUSTED: تم تجاوز حد الطلبات المؤقت (429). يرجى المحاولة بعد دقيقة.");
+    }
+
+    logger.error("Error fetching batch chemical intelligence:", error);
+    return null;
+  }
+}
+
+export interface ChemicalSafetyGuide {
+  ppe: string[];
+  incompatibleWith: string[];
+  firstAid: string;
+  spillAndDisposal: string;
+  prepTips: string;
+  storageRules: string;
+}
+
+export async function getChemicalSafetyGuide(chemical: {
+  nameEn?: string;
+  nameAr?: string;
+  formula?: string;
+  casNumber?: string;
+}): Promise<ChemicalSafetyGuide | null> {
+  try {
+    const hasKey = await ensureApiKey();
+    if (!hasKey) return null;
+
+    const label = sanitizeInput(
+      `${chemical.nameEn || ''} ${chemical.nameAr ? `(${chemical.nameAr})` : ''} ${chemical.formula || ''} ${chemical.casNumber ? `CAS:${chemical.casNumber}` : ''}`.trim(),
+      240
+    );
+    if (!label) return null;
+
+    const callGemini = httpsCallable(functions, 'generateContent');
+    const response = await callGemini({
+      model: GEMINI_MODEL,
+      contents: `You are an Algerian high-school laboratory safety specialist (FDS / MSDS expert).
+Generate a concise, practical Arabic safety & lab preparation card for this reagent: "${label}".
+Return JSON with:
+- ppe: array of 3-5 required personal protective equipment items in Arabic (e.g. ["نظارات واقية", "قفازات نيتريل", "ساحب هواء (Hotte)"])
+- incompatibleWith: array of 3-5 chemical classes or common reagents that must NOT be stored/mixed with it (Arabic)
+- firstAid: clear emergency first-aid summary for skin/eye contact or inhalation (Arabic, 2-3 sentences)
+- spillAndDisposal: safe neutralization/disposal instructions for a school lab (Arabic, 1-2 sentences)
+- prepTips: practical solution preparation or dilution advice for teachers/technicians (Arabic, 1-2 sentences)
+- storageRules: specific cabinet/shelf ventilation & containment advice (Arabic, 1-2 sentences)`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            ppe: { type: Type.ARRAY, items: { type: Type.STRING } },
+            incompatibleWith: { type: Type.ARRAY, items: { type: Type.STRING } },
+            firstAid: { type: Type.STRING },
+            spillAndDisposal: { type: Type.STRING },
+            prepTips: { type: Type.STRING },
+            storageRules: { type: Type.STRING },
+          },
+          required: ["ppe", "incompatibleWith", "firstAid", "spillAndDisposal", "prepTips", "storageRules"],
+        },
+      },
+    });
+
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as ChemicalSafetyGuide;
+  } catch (error) {
+    logger.error("Error generating chemical safety guide:", error);
+    return null;
+  }
+}
+
+export interface ParsedChemicalDraft {
+  nameEn: string;
+  nameAr: string;
+  formula: string;
+  casNumber: string;
+  quantity: number;
+  unit: 'g' | 'kg' | 'ml' | 'L' | 'unit';
+  state: 'solid' | 'liquid' | 'gas';
+  hazardClass: 'safe' | 'danger';
+  ghs: string[];
+  storageTemp: string;
+  shelf: string;
+  notes: string;
+}
+
+export async function parseChemicalsFromText(rawText: string): Promise<ParsedChemicalDraft[] | null> {
+  try {
+    const hasKey = await ensureApiKey();
+    if (!hasKey) return null;
+
+    const cleaned = sanitizeInput(rawText, 6000);
+    if (!cleaned.trim()) return [];
+
+    const callGemini = httpsCallable(functions, 'generateContent');
+    const response = await callGemini({
+      model: GEMINI_MODEL,
+      contents: `Parse the following unstructured laboratory chemical supply list (in Arabic, French, or English) into structured chemical inventory entries.
+Text:
+"""
+${cleaned}
+"""
+
+For each chemical mentioned, infer accurate chemistry metadata and return a JSON array of objects:
+- nameEn: standard English chemical name
+- nameAr: standard Arabic chemical name
+- formula: chemical formula (e.g. "HCl", "NaOH", "CuSO4")
+- casNumber: CAS registry number if known, else ""
+- quantity: numeric quantity mentioned (default 100 if unspecified)
+- unit: one of "g", "kg", "ml", "L", "unit"
+- state: "solid", "liquid", or "gas"
+- hazardClass: "safe" or "danger"
+- ghs: applicable GHS codes from ["GHS01","GHS02","GHS03","GHS04","GHS05","GHS06","GHS07","GHS08","GHS09"]
+- storageTemp: e.g. "Room Temp" or "2-8°C"
+- shelf: shelf/cabinet if mentioned in text, else ""
+- notes: short Arabic safety/storage note`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              nameEn: { type: Type.STRING },
+              nameAr: { type: Type.STRING },
+              formula: { type: Type.STRING },
+              casNumber: { type: Type.STRING },
+              quantity: { type: Type.NUMBER },
+              unit: { type: Type.STRING, enum: ["g", "kg", "ml", "L", "unit"] },
+              state: { type: Type.STRING, enum: ["solid", "liquid", "gas"] },
+              hazardClass: { type: Type.STRING, enum: ["safe", "danger"] },
+              ghs: { type: Type.ARRAY, items: { type: Type.STRING } },
+              storageTemp: { type: Type.STRING },
+              shelf: { type: Type.STRING },
+              notes: { type: Type.STRING },
+            },
+            required: ["nameEn", "nameAr", "formula", "casNumber", "quantity", "unit", "state", "hazardClass", "ghs", "storageTemp", "shelf", "notes"],
+          },
+        },
+      },
+    });
+
+    const text = (response.data as any).text;
+    if (!text) return null;
+    const parsed = JSON.parse(text.trim());
+    return Array.isArray(parsed) ? (parsed as ParsedChemicalDraft[]) : null;
+  } catch (error) {
+    logger.error("Error parsing chemicals from text:", error);
     return null;
   }
 }

@@ -101,13 +101,21 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
     const aYear = data.academicYear || data.schoolYear || '2025/2026';
     const cName = data.communeName || data.commune || 'سيدي عقبة';
     const logoUrl = data.schoolLogo || data.logoUrl || data.institutionLogo || '';
-    const edLevel = data.educationLevel || (sName.includes('متوسط') ? 'CEM' : 'Lycée');
+    const edLevel =
+      data.educationLevel ||
+      (data.cycle === 'متوسط' ? 'CEM' : data.cycle === 'ثانوي' ? 'Lycée' : data.cycle === 'ابتدائي' ? 'Autre' : '') ||
+      (sName.includes('متوسط') ? 'CEM' : 'Lycée');
 
     setSchoolName(sName);
     setDirectorate(dName);
     setCommune(cName);
-    const jTitle = data.jobTitle || data.grade;
-    if (jTitle && !jTitle.includes('مدير المؤسسة')) {
+    const jTitle = (data.jobTitle || data.grade || '').trim();
+    if (
+      jTitle &&
+      !jTitle.includes('مدير المؤسسة') &&
+      !jTitle.includes('مسؤول / ملحق') &&
+      !jTitle.includes('المسؤول / ملحق')
+    ) {
       setJobTitle(jTitle);
       if (typeof window !== 'undefined') {
         localStorage.setItem('algeria_lab_job_title', jTitle);
@@ -225,15 +233,51 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      if (!loaded) {
-        try {
-          const userSettingsSnap = await getDoc(doc(db, 'settings', user.uid));
-          if (userSettingsSnap.exists()) {
-            syncStateFromData(userSettingsSnap.data(), targetSchoolId);
+      // Always hydrate user's personal rank & cycle from settings/{uid} and users/{uid}
+      try {
+        const userSettingsSnap = await getDoc(doc(db, 'settings', user.uid));
+        if (userSettingsSnap.exists()) {
+          const uSettings = userSettingsSnap.data();
+          if (!loaded) {
+            syncStateFromData(uSettings, targetSchoolId);
+          } else {
+            const personalRank = (uSettings.jobTitle || userData?.grade || '').trim();
+            if (
+              personalRank &&
+              !personalRank.includes('مدير المؤسسة') &&
+              !personalRank.includes('مسؤول / ملحق') &&
+              !personalRank.includes('المسؤول / ملحق')
+            ) {
+              setJobTitle(personalRank);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('algeria_lab_job_title', personalRank);
+              }
+            }
+            const personalCycle = (uSettings.cycle || userData?.educationLevel || '').trim();
+            if (personalCycle) {
+              const mappedLevel: 'CEM' | 'Lycée' | 'Autre' =
+                personalCycle === 'CEM' || personalCycle.includes('متوسط')
+                  ? 'CEM'
+                  : personalCycle === 'Lycée' || personalCycle.includes('ثانوي')
+                  ? 'Lycée'
+                  : 'Autre';
+              setEducationLevel(mappedLevel);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('algeria_lab_education_level', personalCycle);
+              }
+            }
           }
-        } catch (usErr) {
-          console.warn('Notice reading user settings doc:', usErr);
+        } else if (userData?.grade) {
+          const userGrade = String(userData.grade).trim();
+          if (userGrade && !userGrade.includes('مسؤول / ملحق') && !userGrade.includes('المسؤول / ملحق')) {
+            setJobTitle(userGrade);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('algeria_lab_job_title', userGrade);
+            }
+          }
         }
+      } catch (usErr) {
+        console.warn('Notice reading user settings doc:', usErr);
       }
     } catch (err) {
       console.warn('Non-fatal notice in loadSchoolData:', err);

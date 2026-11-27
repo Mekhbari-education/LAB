@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSchool } from '../context/SchoolContext';
+import { useUserRole } from '../context/UserRoleContext';
 import { 
   Settings, 
   User, 
@@ -68,6 +69,7 @@ export default function SettingsPage() {
     academicYear: contextAcademicYear, 
     setAcademicYear: setContextAcademicYear 
   } = useSchool();
+  const { userProfile, syncUserRoleFromAuth } = useUserRole();
   const [academicYear, setAcademicYear] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('algeria_lab_academic_year') || contextAcademicYear || '2025/2026';
@@ -783,7 +785,7 @@ export default function SettingsPage() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
-          const resolvedJob = cleanGradeName(data.jobTitle || 'ملحق بالمخابر');
+          const resolvedJob = cleanGradeName(data.jobTitle || userProfile?.grade || 'ملحق بالمخابر');
           setJobTitle(resolvedJob);
           if (typeof window !== 'undefined') {
             localStorage.setItem('algeria_lab_job_title', resolvedJob);
@@ -902,9 +904,13 @@ export default function SettingsPage() {
           }
         } catch (e) {}
 
-        // Store selected rank in localStorage for immediate sync across document sheets
+        // Store selected rank & education level in localStorage for immediate sync across document sheets
         localStorage.setItem('algeria_lab_job_title', jobTitle);
         localStorage.setItem('algeria_lab_statutory_grade', jobTitle);
+        localStorage.setItem('algeria_lab_grade_name', jobTitle);
+        if (selectedCycle) {
+          localStorage.setItem('algeria_lab_education_level', selectedCycle);
+        }
 
         // Broadcast change to all listening components, pages, and tabs
         window.dispatchEvent(new CustomEvent('academic_year_changed', { detail: cleanAcademicYear }));
@@ -959,6 +965,7 @@ export default function SettingsPage() {
             role: resolvedRole,
             updatedAt: serverTimestamp()
           }, { merge: true });
+          await syncUserRoleFromAuth(auth.currentUser.uid, auth.currentUser.email);
         } catch (uErr) {
           console.warn('Could not sync users doc in settings:', uErr);
         }

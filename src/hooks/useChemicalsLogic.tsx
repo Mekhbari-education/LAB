@@ -1,30 +1,52 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { handleFirestoreError, OperationType } from '../firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { useSchool } from '../context/SchoolContext';
+import { useUserRole } from '../context/UserRoleContext';
 import { useSqlCollection } from '../hooks/useSqlCollection';
 import * as XLSX from 'xlsx';
 import { useSearchParams } from 'react-router-dom';
-import { getChemicalIntelligence, ChemicalIntelligence, ensureApiKey } from '../services/geminiService';
+import {
+  getChemicalIntelligence,
+  getChemicalsBatchIntelligence,
+  getChemicalSafetyGuide,
+  ChemicalIntelligence,
+  ChemicalBatchIntelligenceItem,
+  ChemicalSafetyGuide,
+  ensureApiKey
+} from '../services/geminiService';
+import type { BulkSmartUpdateOptions } from '../components/ChemicalBulkConfirmModal';
+import { findDuplicateChemicalIds } from '../utils/chemistryCalc';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { logActivity, LogAction, LogModule } from '../services/loggingService';
 import { PDFService } from '../services/pdfService';
 import { PrintService } from '../services/printService';
-import { Chemical, GHS_ICONS, GHS_LABELS } from '../types/chemicals';
+import { Chemical, GHS_ICONS, GHS_LABELS, getGhsIcon, getGhsLabel } from '../types/chemicals';
 import { formatSchoolWithCommune } from '../lib/utils';
 import { usePrintSettings } from '../context/PrintSettingsContext';
 import { ChevronUp, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
+export type ChemicalStatusFilter = 'all' | 'danger' | 'expiring' | 'low' | 'incomplete' | 'duplicates';
+export type ChemicalStateFilter = 'all' | 'solid' | 'liquid' | 'gas';
+
 export function useChemicalsLogic(isNested = false) {
-  const { schoolId, schoolName, directorate: stateName, commune, academicYear: contextAcademicYear } = useSchool();
+  const { schoolId, schoolName, directorate: stateName, commune, academicYear: contextAcademicYear, jobTitle, educationLevel } = useSchool();
+  const { userProfile } = useUserRole();
   const { openPrintPreview } = usePrintSettings();
   const academicYear = contextAcademicYear || (typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_academic_year') : null) || '2025/2026';
   const [searchParams] = useSearchParams();
   const [chemicals, setChemicals] = useState<Chemical[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterLowStock, setFilterLowStock] = useState(searchParams.get('filter') === 'low');
+  const [statusFilter, setStatusFilter] = useState<ChemicalStatusFilter>(
+    searchParams.get('filter') === 'low' ? 'low' : 'all'
+  );
+  const [stateFilter, setStateFilter] = useState<ChemicalStateFilter>('all');
+  const [shelfFilter, setShelfFilter] = useState<string>('all');
+  const filterLowStock = statusFilter === 'low';
+  const setFilterLowStock = (val: boolean) => setStatusFilter(val ? 'low' : 'all');
   const [selectedChemical, setSelectedChemical] = useState<Chemical | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingChemical, setEditingChemical] = useState<Chemical | null>(null);
@@ -35,8 +57,20 @@ export function useChemicalsLogic(isNested = false) {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [isLabCalcOpen, setIsLabCalcOpen] = useState(false);
+  const [isSmartImportOpen, setIsSmartImportOpen] = useState(false);
+  const [isSafetyAuditOpen, setIsSafetyAuditOpen] = useState(false);
+  const [safetyGuidesCache, setSafetyGuidesCache] = useState<Record<string, ChemicalSafetyGuide>>({});
+  const [loadingSafetyGuideId, setLoadingSafetyGuideId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
-  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+  const [bulkProgress, setBulkProgress] = useState<{
+    current: number;
+    total: number;
+    successCount: number;
+    failCount: number;
+    currentLabel?: string;
+  }>({ current: 0, total: 0, successCount: 0, failCount: 0, currentLabel: '' });
+  const cancelBulkRef = useRef(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [suggestedUpdate, setSuggestedUpdate] = useState<ChemicalIntelligence | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
@@ -150,7 +184,7 @@ export function useChemicalsLogic(isNested = false) {
   const handleSmartFill = async () => {
     const nameToUse = newChemical.nameEn || newChemical.nameAr;
     if (!nameToUse) {
-      alert('يرجى إدخال اسم المادة أولاً (بالعربية أو الإنجليزية)');
+      showToast('error', 'يرجى إدخال اسم المادة أولاً (بالعربية أو الإنجليزية).');
       return;
     }
 
@@ -178,12 +212,13 @@ export function useChemicalsLogic(isNested = false) {
           expiryDate: expiryDate || prev.expiryDate,
           notes: info.notes || prev.notes
         }));
+        showToast('success', 'تم ملء البيانات الكيميائية ذكياً بنجاح.');
       } else {
-        alert('لم نتمكن من الحصول على معلومات دقيقة لهذه المادة. يرجى إدخالها يدوياً.');
+        showToast('error', 'لم نتمكن من الحصول على معلومات دقيقة لهذه المادة. يرجى إدخالها يدوياً.');
       }
     } catch (error) {
       console.error('Smart fill error:', error);
-      alert('حدث خطأ أثناء محاولة الحصول على المعلومات الذكية.');
+      showToast('error', 'حدث خطأ أثناء محاولة الحصول على المعلومات الذكية.');
     } finally {
       setIsGenerating(false);
     }
@@ -201,11 +236,11 @@ export function useChemicalsLogic(isNested = false) {
         if (chemical) setSelectedChemical(chemical);
         setIsReviewModalOpen(true);
       } else {
-        alert('لم نتمكن من الحصول على اقتراحات تحديث لهذه المادة.');
+        showToast('error', 'لم نتمكن من الحصول على اقتراحات تحديث لهذه المادة.');
       }
     } catch (error) {
       console.error('Smart update request error:', error);
-      alert('حدث خطأ أثناء طلب التحديث الذكي.');
+      showToast('error', 'حدث خطأ أثناء طلب التحديث الذكي.');
     } finally {
       setIsGenerating(false);
     }
@@ -223,7 +258,7 @@ export function useChemicalsLogic(isNested = false) {
       }
 
       const { updateChemical } = await import('../lib/api/chemicals');
-      await updateChemical(selectedChemical.id, {
+      const patch: Partial<Chemical> = {
         nameEn: suggestedUpdate.nameEn,
         nameAr: suggestedUpdate.nameAr,
         formula: suggestedUpdate.formula,
@@ -233,82 +268,252 @@ export function useChemicalsLogic(isNested = false) {
         ghs: suggestedUpdate.ghs,
         expiryDate: expiryDate,
         notes: suggestedUpdate.notes,
-      } as Chemical);
-      
+      };
+      await updateChemical(selectedChemical.id, patch);
+      setChemicals(prev => prev.map(item => (item.id === selectedChemical.id ? { ...item, ...patch } : item)));
+      setSelectedChemical(prev => (prev?.id === selectedChemical.id ? { ...prev, ...patch } : prev));
+      await invalidate();
       setIsReviewModalOpen(false);
       setSuggestedUpdate(null);
-      alert('تم تحديث معلومات المادة بنجاح!');
+      showToast('success', 'تم تحديث معلومات المادة بنجاح!');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `chemicals/${selectedChemical.id}`);
     }
   };
 
-  const handleBulkSmartUpdate = async () => {
+  const isChemicalMissingInfo = (c: Chemical) =>
+    !c.formula?.trim() ||
+    !c.casNumber?.trim() ||
+    !c.storageTemp?.trim() ||
+    !c.notes?.trim() ||
+    !c.nameEn?.trim() ||
+    !c.nameAr?.trim();
+
+  const missingChemicalsCount = useMemo(
+    () => chemicals.filter(isChemicalMissingInfo).length,
+    [chemicals]
+  );
+
+  const cancelBulkUpdate = () => {
+    cancelBulkRef.current = true;
+    showToast('info', 'جاري إيقاف التحديث الذكي بعد انتهاء الدفعة الحالية...');
+  };
+
+  const handleBulkSmartUpdate = async (
+    options: BulkSmartUpdateOptions = { scope: 'missing', overwriteExisting: false }
+  ) => {
     setIsBulkConfirmOpen(false);
-    
-    // Ensure API key is available before starting
+
     const hasKey = await ensureApiKey();
     if (!hasKey) {
-      alert('يرجى اختيار مفتاح API الخاص بك لاستخدام ميزة التحديث الذكي.');
+      showToast('error', 'يرجى التأكد من تفعيل مفتاح Gemini API لاستخدام ميزة التحديث الذكي.');
       return;
     }
 
+    let targets: Chemical[] = [];
+    if (options.scope === 'selected' && selectedIds.length > 0) {
+      const selectedSet = new Set(selectedIds);
+      targets = chemicals.filter(c => selectedSet.has(c.id));
+    } else if (options.scope === 'missing') {
+      targets = chemicals.filter(isChemicalMissingInfo);
+    } else {
+      targets = [...chemicals];
+    }
+
+    targets = targets.filter(c => (c.nameEn || c.nameAr || '').trim().length > 0);
+
+    if (targets.length === 0) {
+      showToast('info', 'لا توجد مواد تحتاج إلى تحديث ضمن النطاق المحدد.');
+      return;
+    }
+
+    cancelBulkRef.current = false;
     setIsBulkUpdating(true);
-    setBulkProgress({ current: 0, total: chemicals.length });
+    setBulkProgress({
+      current: 0,
+      total: targets.length,
+      successCount: 0,
+      failCount: 0,
+      currentLabel: targets[0]?.nameAr || targets[0]?.nameEn || '',
+    });
 
     let successCount = 0;
     let failCount = 0;
+    let processedCount = 0;
+    let stoppedByQuota = false;
 
-    for (let i = 0; i < chemicals.length; i++) {
-      const c = chemicals[i];
-      setBulkProgress({ current: i + 1, total: chemicals.length });
+    const BATCH_SIZE = 12;
+    const { updateChemicalsBulk } = await import('../lib/api/chemicals');
+
+    const buildPatch = (c: Chemical, info: ChemicalIntelligence): Partial<Chemical> => {
+      const overwrite = options.overwriteExisting;
+      let nextExpiry = c.expiryDate || '';
+      if (info.expiryYears > 0 && (overwrite || !c.expiryDate?.trim())) {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() + info.expiryYears);
+        nextExpiry = d.toISOString().split('T')[0];
+      }
+
+      const pickStr = (existingVal: string | undefined, aiVal: string | undefined) => {
+        const cleanAi = (aiVal || '').trim();
+        const cleanExisting = (existingVal || '').trim();
+        if (overwrite) return cleanAi || cleanExisting;
+        return cleanExisting || cleanAi;
+      };
+
+      const nextGhs =
+        overwrite || !Array.isArray(c.ghs) || c.ghs.length === 0
+          ? Array.isArray(info.ghs) && info.ghs.length > 0
+            ? info.ghs
+            : c.ghs || []
+          : c.ghs;
+
+      const nextHazard =
+        overwrite || !c.hazardClass
+          ? info.hazardClass || c.hazardClass || 'safe'
+          : c.hazardClass === 'safe' && info.hazardClass === 'danger'
+          ? 'danger'
+          : c.hazardClass;
+
+      return {
+        nameEn: pickStr(c.nameEn, info.nameEn),
+        nameAr: pickStr(c.nameAr, info.nameAr),
+        formula: pickStr(c.formula, info.formula),
+        casNumber: pickStr(c.casNumber, info.casNumber),
+        storageTemp: pickStr(c.storageTemp, info.storageTemp),
+        hazardClass: nextHazard,
+        ghs: nextGhs,
+        expiryDate: nextExpiry,
+        notes: pickStr(c.notes, info.notes),
+      };
+    };
+
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      if (cancelBulkRef.current) break;
+
+      const chunk = targets.slice(i, i + BATCH_SIZE);
+      const firstLabel = chunk[0]?.nameAr || chunk[0]?.nameEn || '';
+      setBulkProgress({
+        current: processedCount,
+        total: targets.length,
+        successCount,
+        failCount,
+        currentLabel: `${firstLabel}${chunk.length > 1 ? ` (+${chunk.length - 1})` : ''}`,
+      });
+
+      const batchPayload = chunk.map(c => ({
+        id: c.id,
+        name: (c.nameEn && c.nameAr && c.nameEn !== c.nameAr ? `${c.nameEn} (${c.nameAr})` : c.nameEn || c.nameAr).trim(),
+      }));
+
+      let infoMap = new Map<string, ChemicalBatchIntelligenceItem>();
 
       try {
-        const info = await getChemicalIntelligence(c.nameEn || c.nameAr);
-        if (info) {
-          let expiryDate = c.expiryDate;
-          if (info.expiryYears > 0) {
-            const date = new Date();
-            date.setFullYear(date.getFullYear() + info.expiryYears);
-            expiryDate = date.toISOString().split('T')[0];
-          }
+        const batchResults = await getChemicalsBatchIntelligence(batchPayload);
+        if (Array.isArray(batchResults)) {
+          batchResults.forEach(item => {
+            if (item?.id) infoMap.set(item.id, item);
+          });
+        }
+      } catch (error: any) {
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.includes('RESOURCE_EXHAUSTED') || errorMessage.includes('quota') || errorMessage.includes('429')) {
+          stoppedByQuota = true;
+          failCount += targets.length - processedCount;
+          showToast(
+            'error',
+            'تم إيقاف التحديث الذكي مؤقتاً بسبب بلوغ حد الطلبات المسموح به (Gemini Quota). يمكنك المتابعة بعد قليل.'
+          );
+          break;
+        }
+      }
 
-          const { updateChemical } = await import('../lib/api/chemicals');
-          await updateChemical(c.id, {
-            nameEn: info.nameEn || c.nameEn,
-            nameAr: info.nameAr || c.nameAr,
-            formula: info.formula || c.formula,
-            casNumber: info.casNumber || c.casNumber,
-            storageTemp: info.storageTemp || c.storageTemp,
-            hazardClass: info.hazardClass || c.hazardClass,
-            ghs: info.ghs || c.ghs,
-            expiryDate: expiryDate || c.expiryDate,
-            notes: info.notes || c.notes,
-          } as Chemical);
+      // Single-item fallback only for any chemical missed by the batch JSON response
+      const missingInBatch = chunk.filter(c => !infoMap.has(c.id));
+      if (missingInBatch.length > 0 && !cancelBulkRef.current) {
+        for (const missed of missingInBatch) {
+          if (cancelBulkRef.current) break;
+          try {
+            const single = await getChemicalIntelligence((missed.nameEn || missed.nameAr).trim(), 2, 1500);
+            if (single) {
+              infoMap.set(missed.id, { ...single, id: missed.id });
+            }
+          } catch {
+            // Counted below as failed
+          }
+        }
+      }
+
+      const updatesToPersist: { id: string; data: Partial<Chemical> }[] = [];
+      for (const c of chunk) {
+        const info = infoMap.get(c.id);
+        if (info) {
+          updatesToPersist.push({ id: c.id, data: buildPatch(c, info) });
           successCount++;
         } else {
           failCount++;
-          // If we get null back, it might be a hard quota limit. 
-          // We can't be 100% sure without changing the service return type, 
-          // but we can check if the console logged a hard quota error.
         }
-      } catch (error: any) {
-        console.error(`Error updating chemical ${c.nameEn}:`, error);
-        failCount++;
-        
-        const errorMessage = error?.message || String(error);
-        if (errorMessage.includes("quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-          alert("تم إيقاف التحديث التلقائي بسبب تجاوز حصة الاستخدام المسموح بها (Quota Exceeded). يرجى المحاولة لاحقاً أو التحقق من حساب Gemini API الخاص بك.");
-          break; // Stop the loop
+        processedCount++;
+      }
+
+      if (updatesToPersist.length > 0) {
+        try {
+          await updateChemicalsBulk(updatesToPersist);
+          const patchMap = new Map(updatesToPersist.map(u => [u.id, u.data]));
+          setChemicals(prev =>
+            prev.map(item => {
+              const p = patchMap.get(item.id);
+              return p ? { ...item, ...p } : item;
+            })
+          );
+          setSelectedChemical(prev => {
+            if (!prev) return prev;
+            const p = patchMap.get(prev.id);
+            return p ? { ...prev, ...p } : prev;
+          });
+        } catch (persistErr) {
+          console.error('Error persisting bulk chemical batch:', persistErr);
         }
       }
-      
-      // Increase delay to 5 seconds to stay well within the 15 RPM limit for Gemini 3 Flash
-      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      setBulkProgress({
+        current: processedCount,
+        total: targets.length,
+        successCount,
+        failCount,
+        currentLabel: firstLabel,
+      });
+
+      if (i + BATCH_SIZE < targets.length && !cancelBulkRef.current) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    try {
+      await invalidate();
+      if (successCount > 0) {
+        await logActivity(
+          schoolId,
+          LogAction.UPDATE,
+          LogModule.CHEMICALS,
+          `تحديث ذكي جماعي لـ ${successCount} مادة كيميائية`
+        );
+      }
+    } catch {
+      // Non-blocking
     }
 
     setIsBulkUpdating(false);
-    alert(`اكتمل التحديث الذكي!\nتم تحديث: ${successCount} مادة بنجاح\nفشل: ${failCount} مادة`);
+
+    if (!stoppedByQuota) {
+      if (cancelBulkRef.current) {
+        showToast('info', `تم إيقاف التحديث الذكي. حُدّثت ${successCount} مادة بنجاح.`);
+      } else if (failCount === 0) {
+        showToast('success', `اكتمل التحديث الذكي بنجاح لـ ${successCount} مادة!`);
+      } else {
+        showToast('info', `اكتمل التحديث: ${successCount} مادة بنجاح، وتعذر تحديث ${failCount} مادة.`);
+      }
+    }
   };
 
   const handleDeleteChemical = async (id: string, name: string) => {
@@ -340,9 +545,12 @@ export function useChemicalsLogic(isNested = false) {
 
     const tableRows = sortedChemicals.map((c, index) => {
       const isHazardous = (c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger';
-      const ghsPictograms = (c.ghs || []).map(code => 
-        `<div class="ghs-pic"><img src="${GHS_ICONS[code]}" alt="${code}" /></div>`
-      ).join('');
+      const ghsPictograms = (c.ghs || []).map(code => {
+        const icon = getGhsIcon(code);
+        return icon
+          ? `<div class="ghs-pic"><img src="${icon}" alt="${code}" /></div>`
+          : `<div class="ghs-pic"><span style="font-size:8px;font-weight:800;">${code}</span></div>`;
+      }).join('');
 
       return `
         <tr class="${isHazardous ? 'hazardous-row' : ''}">
@@ -759,10 +967,11 @@ export function useChemicalsLogic(isNested = false) {
         }));
         const { createChemicalsBulk } = await import('../lib/api/chemicals');
         await createChemicalsBulk(itemsToCreate);
-        alert(`تم استيراد ${itemsToCreate.length} مادة بنجاح!`);
+        await invalidate();
+        showToast('success', `تم استيراد ${itemsToCreate.length} مادة بنجاح!`);
       } catch (error) {
         console.error('Error importing XLS:', error);
-        alert('حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف.');
+        showToast('error', 'حدث خطأ أثناء استيراد الملف. يرجى التأكد من صيغة الملف.');
       } finally {
         setIsImporting(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
@@ -771,302 +980,73 @@ export function useChemicalsLogic(isNested = false) {
     reader.readAsBinaryString(file);
   };
 
-  const handlePrintInventoryCards = (items: Chemical[]) => {
-    const today = new Date();
+  const handlePrintInventoryCards = async (items: Chemical[]) => {
+    const { buildChemicalStockCardsHtml, isGenericRolePlaceholder } = await import(
+      '../services/chemicalStockCardPrintService'
+    );
 
-    const cardsHtml = items.map((c, index) => {
-      const stateAr = c.state === 'solid' ? 'صلب' : c.state === 'liquid' ? 'سائل' : 'غاز';
-      const hazardAr = c.hazardClass === 'danger' ? (c.ghs?.[0] ? GHS_LABELS[c.ghs[0]] : 'خطر') : 'آمن';
-      const ghsIcon = c.ghs?.[0] ? '☠️' : '—'; 
+    let settingsJobTitle: string | undefined;
+    let settingsCycle: string | undefined;
+    let settingsSchoolName: string | undefined;
+    let userDocGrade: string | undefined;
+    let userDocLevel: string | undefined;
 
-      return `
-        <div class="pcard">
-          <div class="ph-container">
-            <div class="ph">
-              <div class="ph-r">مديرية التربية لولاية: ${stateName}<br>${formatSchoolWithCommune(schoolName, commune)}</div>
-              <div class="ph-c">الجمهورية الجزائرية الديمقراطية الشعبية<br>وزارة التربية الوطنية</div>
-              <div class="ph-l">
-                <div>السنة الدراسية: ${academicYear}</div>
-                <div class="header-stamp">ختم المؤسسة</div>
-              </div>
-            </div>
-          </div>
+    if (auth.currentUser) {
+      const [settingsRes, userRes] = await Promise.allSettled([
+        getDoc(doc(db, 'settings', auth.currentUser.uid)),
+        getDoc(doc(db, 'users', auth.currentUser.uid)),
+      ]);
+      if (settingsRes.status === 'fulfilled' && settingsRes.value.exists()) {
+        const sData = settingsRes.value.data();
+        settingsJobTitle = sData?.jobTitle;
+        settingsCycle = sData?.cycle || sData?.educationLevel;
+        settingsSchoolName = sData?.schoolName || sData?.school;
+      }
+      if (userRes.status === 'fulfilled' && userRes.value.exists()) {
+        const uData = userRes.value.data();
+        userDocGrade = uData?.grade;
+        userDocLevel = uData?.educationLevel || uData?.cycle;
+      }
+    }
 
-          <div class="pcard-badge">رقم البطاقة: ${index + 1}</div>
-          <h1 class="pcard-title">بطاقة مخزون مادة كيميائية</h1>
-          
-          <div class="ic-meta-expressive">
-             <div class="ic-field main">
-                <span class="l">اسم المادة (AR)</span>
-                <span class="v">${c.nameAr}</span>
-             </div>
-             <div class="ic-field sub">
-                <span class="l">NOM DU PRODUIT</span>
-                <span class="v en">${c.nameEn}</span>
-             </div>
-          </div>
+    const lsJobTitle = typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_job_title') : null;
+    const lsStatutory = typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_statutory_grade') : null;
+    const lsGradeName = typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_grade_name') : null;
+    const lsCycle = typeof window !== 'undefined' ? localStorage.getItem('algeria_lab_education_level') : null;
 
-          <div class="ic-grid-info">
-             <div class="ic-info-box">
-                <span class="l">الصيغة</span>
-                <span class="v en-bold">${c.formula || '—'}</span>
-             </div>
-             <div class="ic-info-box">
-                <span class="l">الحالة</span>
-                <span class="v">${stateAr}</span>
-             </div>
-             <div class="ic-info-box">
-                <span class="l">الرف</span>
-                <span class="v">${c.shelf || '—'}</span>
-             </div>
-             <div class="ic-info-box danger">
-                <span class="l">GHS</span>
-                <span class="v emoji">${ghsIcon}</span>
-             </div>
-          </div>
+    const rankCandidates = [
+      settingsJobTitle,
+      userDocGrade,
+      userProfile?.grade,
+      lsJobTitle,
+      lsStatutory,
+      lsGradeName,
+      jobTitle,
+    ];
+    const resolvedRank = rankCandidates.find((r) => !isGenericRolePlaceholder(r)) || '';
 
-          <div class="ic-safety-strip">
-             <b>طبيعة الخطورة:</b> ${hazardAr} 
-             <span style="margin-right: 15px">|</span> 
-             <b>وحدة القياس:</b> ${c.unit}
-          </div>
+    if (resolvedRank && typeof window !== 'undefined') {
+      localStorage.setItem('algeria_lab_job_title', resolvedRank);
+    }
 
-          <div class="ic-table-container">
-            <table class="ic-tbl">
-              <thead>
-                <tr>
-                  <th rowspan="2" width="12%">التاريخ</th>
-                  <th colspan="2">سند الطلب</th>
-                  <th rowspan="2">المصدر</th>
-                  <th rowspan="2" width="10%">الثمن</th>
-                  <th colspan="3">الكمية</th>
-                  <th rowspan="2">ملاحظات</th>
-                </tr>
-                <tr><th>خروج</th><th>دخول</th><th>خروج</th><th>دخول</th><th>المخزون</th></tr>
-              </thead>
-              <tbody>
-                <tr class="initial-stock">
-                  <td>${today.toLocaleDateString('en-GB')}</td>
-                  <td>-</td><td>-</td>
-                  <td>رصيد أول المدة</td>
-                  <td>-</td>
-                  <td>-</td><td>${c.quantity}</td><td>${c.quantity}</td>
-                  <td>رصيد ابتدائي</td>
-                </tr>
-                ${Array(14).fill('<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('')}
-                <tr class="carry-over">
-                  <td colspan="5">الرصيد المنقول لظهر البطاقة</td>
-                  <td></td><td></td><td class="bold">..........</td>
-                  <td>ينقل ←</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+    const resolvedEducationLevel =
+      settingsCycle ||
+      userDocLevel ||
+      userProfile?.educationLevel ||
+      lsCycle ||
+      educationLevel;
 
-        <div class="pcard back">
-          <div class="back-header">
-             <span>تتمة حركة المخزون — ${c.nameAr}</span>
-             <span class="ref">REF: ${index + 1}</span>
-          </div>
-
-          <div class="ic-table-container">
-            <table class="ic-tbl">
-              <thead>
-                <tr>
-                  <th rowspan="2" width="12%">التاريخ</th>
-                  <th colspan="2">سند الطلب</th>
-                  <th rowspan="2">المصدر</th>
-                  <th rowspan="2" width="10%">الثمن</th>
-                  <th colspan="3">الكمية</th>
-                  <th rowspan="2">ملاحظات</th>
-                </tr>
-                <tr><th>خروج</th><th>دخول</th><th>خروج</th><th>دخول</th><th>المخزون</th></tr>
-              </thead>
-              <tbody>
-                <tr class="initial-stock">
-                  <td colspan="5">المجموع المنقول من وجه البطاقة</td>
-                  <td></td><td></td><td>..........</td>
-                  <td>نقل ←</td>
-                </tr>
-                ${Array(22).fill('<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="ic-safety-rules">
-             <h3>⚠️ تعليمات السلامة الخاصة بالتخزين</h3>
-             <div class="rules-box">
-                ${c.notes || 'يجب حفظ هذه المادة في ظروف ملائمة بعيداً عن الرطوبة والحرارة ووفق معايير السلامة المنصوص عليها في دليل المختبرات.'}
-             </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    const html = `
-      <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <title>بطاقة مخزون</title>
-          <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-          <style>
-            :root {
-              --primary: #006494;
-              --on-primary: #ffffff;
-              --primary-container: #cbe6ff;
-              --on-primary-container: #001e30;
-              --secondary: #50606e;
-              --tertiary: #65587b;
-              --error: #ba1a1a;
-              --outline: #71787e;
-              --surface: #fdfcff;
-              --surface-variant: #dee3eb;
-            }
-
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { 
-              font-family: 'Cairo', sans-serif; 
-              direction: rtl; 
-              background: transparent; 
-              color: #1a1c1e;
-              padding: 0;
-            }
-
-            #toolbar {
-              position: fixed; top: 0; left: 0; right: 0; 
-              z-index: 100; background: #1a1c1e; color: white;
-              padding: 12px 24px; display: flex; align-items: center; gap: 15px;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            }
-            #toolbar h3 { flex: 1; font-weight: 800; font-size: 16px; }
-            .tb-btn { 
-              padding: 10px 20px; border: none; border-radius: 20px; 
-              cursor: pointer; font-weight: 700; font-size: 13px; font-family: Cairo;
-              transition: all 0.2s;
-            }
-            .tb-print { background: #00b894; color: white; }
-            .tb-close { background: #e74c3c; color: white; }
-
-            #body { padding-top: 60px; max-width: 900px; margin: 0 auto; }
-
-            .pcard {
-              background: white;
-              width: 148mm;
-              height: 210mm;
-              margin: 20px auto;
-              padding: 8mm;
-              border-radius: 24px;
-              box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-              display: flex;
-              flex-direction: column;
-              border: 1px solid rgba(0,0,0,0.05);
-              position: relative;
-              overflow: hidden;
-            }
-
-            .pcard.back { border-style: dashed; }
-
-            .ph-container {
-              background: var(--surface-variant);
-              margin: -8mm -8mm 4mm -8mm;
-              padding: 6mm 8mm;
-              border-radius: 0 0 24px 24px;
-            }
-            .ph {
-              display: grid; grid-template-columns: 1fr 1.5fr 1fr;
-              font-size: 7.5pt; gap: 4px; align-items: start; color: var(--secondary);
-            }
-            .ph-r { text-align: right; line-height: 1.5; }
-            .ph-c { text-align: center; font-weight: 800; line-height: 1.5; }
-            .ph-l { text-align: left; line-height: 1.5; }
-
-            .header-stamp {
-              margin-top: 5px;
-              width: 35mm;
-              height: 20mm;
-              border: 1px dashed var(--outline);
-              border-radius: 8px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 6pt;
-              color: var(--outline);
-              font-weight: 400;
-            }
-
-            .pcard-badge {
-              position: absolute; top: 12mm; left: 8mm;
-              background: var(--primary-container); color: var(--on-primary-container);
-              padding: 2px 12px; border-radius: 12px; font-size: 8pt; font-weight: 700;
-            }
-
-            .pcard-title {
-              text-align: center; font-size: 14pt; font-weight: 900;
-              color: var(--primary); margin: 4mm 0;
-            }
-
-            .ic-meta-expressive { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6mm; }
-            .ic-field { border-radius: 12px; padding: 6px 12px; display: flex; align-items: center; justify-content: space-between; }
-            .ic-field.main { background: #f0f4f9; border-right: 4px solid var(--primary); }
-            .ic-field.sub { background: #fafbfc; border-right: 4px solid var(--outline); font-size: 9pt; }
-            .ic-field .l { font-weight: 700; color: var(--secondary); font-size: 8.5pt; }
-            .ic-field .v { font-weight: 800; font-size: 11pt; }
-            .ic-field .v.en { font-family: sans-serif; font-size: 9pt; text-transform: uppercase; }
-
-            .ic-grid-info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 6mm; }
-            .ic-info-box { background: #fff; border: 1px solid var(--surface-variant); border-radius: 12px; padding: 6px; text-align: center; }
-            .ic-info-box .l { display: block; font-size: 7pt; font-weight: 700; color: var(--tertiary); margin-bottom: 2px; }
-            .ic-info-box .v { font-weight: 800; font-size: 9.5pt; }
-            .ic-info-box .v.en-bold { font-family: monospace; font-weight: 900; font-size: 10pt; }
-            .ic-info-box.danger { border-color: var(--error); background: #fff8f8; }
-
-            .ic-safety-strip { background: var(--on-primary-container); color: white; border-radius: 8px; padding: 5px 12px; font-size: 8.5pt; margin-bottom: 6mm; }
-
-            .ic-table-container { flex: 1; margin-bottom: 4mm; }
-            .ic-tbl { width: 100%; border-collapse: collapse; font-size: 8pt; table-layout: fixed; }
-            .ic-tbl th, .ic-tbl td { border: 0.5pt solid var(--surface-variant); padding: 4px; text-align: center; }
-            .ic-tbl th { background: #e8ecef; color: var(--secondary); font-weight: 800; font-size: 7pt; }
-            .ic-tbl td { height: 6mm; }
-            tr.initial-stock { background: #f0fdf4; font-weight: 600; }
-            .bold { font-weight: 900; }
-
-            .back-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 5px; margin-bottom: 6mm; font-weight: 900; font-size: 11pt; color: var(--primary); }
-            .rules-box { background: #fffafa; border: 1px solid #ffeded; padding: 10px; border-radius: 12px; font-size: 8.5pt; color: #444; line-height: 1.6; }
-
-            @media print {
-              #toolbar { display: none !important; }
-              body { background: white !important; padding: 0 !important; }
-              @page { size: A5 portrait; margin: 3mm; }
-              .pcard {
-                width: 100% !important; height: calc(210mm - 6mm) !important;
-                margin: 0 !important; border: 1px solid rgba(0,0,0,0.15) !important;
-                border-radius: 24px !important; box-shadow: none !important;
-                page-break-after: always !important; padding: 6mm !important;
-                -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-              }
-              .pcard:last-child { page-break-after: avoid !important; }
-              .ph-container { margin: -6mm -6mm 4mm -6mm !important; padding: 5mm 6mm !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .ic-meta-expressive .ic-field, .ic-info-box, .ic-safety-strip, .pcard-badge, .rules-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .ic-tbl th { background: #e8ecef !important; border: 0.5pt solid var(--surface-variant) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .ic-tbl td { border: 0.5pt solid var(--surface-variant) !important; }
-            }
-          </style>
-        </head>
-        <body>
-          <div id="toolbar">
-              <h3>🎨 جرد كيميائي — ${items.length} عنصر</h3>
-              <button class="tb-btn tb-print" onclick="window.print()">🖨️ بدء الطباعة</button>
-              <button class="tb-btn tb-close" onclick="window.close()">✕ إغلاق المعاينة</button>
-          </div>
-          <div id="body">
-            ${cardsHtml}
-          </div>
-        </body>
-      </html>
-    `;
+    const html = buildChemicalStockCardsHtml(items, {
+      schoolName: settingsSchoolName || schoolName,
+      directorate: stateName,
+      commune,
+      academicYear,
+      officerRank: resolvedRank,
+      officerRankCandidates: rankCandidates,
+      educationLevel: resolvedEducationLevel,
+    });
     openPrintPreview({
-      title: `بطاقات جرد كيميائي (${items.length} عنصر)`,
+      title: `بطاقات مخزون المواد الكيميائية (${items.length} مادة)`,
       type: 'custom',
       customHtml: html,
       suggestedPaperSize: 'a5',
@@ -1108,12 +1088,16 @@ export function useChemicalsLogic(isNested = false) {
             <div class="item" style="grid-column: span 2;">
               <span class="label">رموز السلامة GHS:</span>
               <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
-                ${(c.ghs || []).map(code => `
+                ${(c.ghs || []).map(code => {
+                  const icon = getGhsIcon(code);
+                  const label = getGhsLabel(code);
+                  return `
                   <div style="display: flex; flex-direction: column; align-items: center; border: 1px solid #ccc; padding: 5px; border-radius: 8px; width: 70px; background: #fff;">
-                    <img src="${GHS_ICONS[code]}" style="width: 40px; height: 40px;" />
-                    <span style="font-size: 9px; margin-top: 4px; text-align: center; font-weight: bold;">${GHS_LABELS[code] || code}</span>
+                    ${icon ? `<img src="${icon}" alt="${label}" style="width: 40px; height: 40px;" />` : `<span style="font-size:10px;font-weight:800;">${code}</span>`}
+                    <span style="font-size: 9px; margin-top: 4px; text-align: center; font-weight: bold;">${label}</span>
                   </div>
-                `).join('')}
+                `;
+                }).join('')}
               </div>
             </div>
             <div class="item"><span class="label">تصنيف الخطورة:</span> <span class="${c.hazardClass === 'danger' ? 'hazard' : ''}">${c.hazardClass === 'danger' ? 'خطر' : 'آمن'}</span></div>
@@ -1190,13 +1174,175 @@ export function useChemicalsLogic(isNested = false) {
     }
   };
 
-  const filteredChemicals = chemicals.filter(c => {
-    const matchesSearch = c.nameEn?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         c.nameAr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         c.formula?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLowStock = !filterLowStock || c.quantity < 10;
-    return matchesSearch && matchesLowStock;
-  });
+  const handleQuickAdjustQuantity = async (
+    chemical: Chemical,
+    delta: number,
+    reason?: string
+  ) => {
+    const nextQty = Math.max(0, Math.round((Number(chemical.quantity) + delta) * 1000) / 1000);
+    if (nextQty === chemical.quantity) return;
+    try {
+      const { updateChemical } = await import('../lib/api/chemicals');
+      await updateChemical(chemical.id, { quantity: nextQty });
+      setChemicals(prev => prev.map(item => (item.id === chemical.id ? { ...item, quantity: nextQty } : item)));
+      setSelectedChemical(prev => (prev?.id === chemical.id ? { ...prev, quantity: nextQty } : prev));
+      await invalidate();
+      try {
+        const actionDesc = delta < 0
+          ? `استهلاك ${Math.abs(delta)} ${chemical.unit} من ${chemical.nameAr || chemical.nameEn}${reason ? ` (${reason})` : ''}`
+          : `توريد ${delta} ${chemical.unit} إلى ${chemical.nameAr || chemical.nameEn}${reason ? ` (${reason})` : ''}`;
+        await logActivity(schoolId, LogAction.UPDATE, LogModule.CHEMICALS, actionDesc, chemical.id);
+      } catch {
+        // Non-blocking
+      }
+      showToast(
+        'success',
+        `تم تحديث كمية "${chemical.nameAr || chemical.nameEn}" إلى ${nextQty} ${chemical.unit}.`
+      );
+    } catch (error) {
+      console.error('Error adjusting chemical quantity:', error);
+      showToast('error', 'تعذر تحديث الكمية. حاول مرة أخرى.');
+    }
+  };
+
+  const handleBulkAssignShelf = async (shelfName: string) => {
+    const trimmed = shelfName.trim();
+    const targetIds = selectedIds.filter(id => chemicals.some(c => c.id === id));
+    if (!trimmed || targetIds.length === 0) return;
+
+    try {
+      const { updateChemicalsBulk } = await import('../lib/api/chemicals');
+      await updateChemicalsBulk(targetIds.map(id => ({ id, data: { shelf: trimmed } })));
+      const idSet = new Set(targetIds);
+      setChemicals(prev => prev.map(c => (idSet.has(c.id) ? { ...c, shelf: trimmed } : c)));
+      setSelectedChemical(prev => (prev && idSet.has(prev.id) ? { ...prev, shelf: trimmed } : prev));
+      await invalidate();
+      try {
+        await logActivity(
+          schoolId,
+          LogAction.UPDATE,
+          LogModule.CHEMICALS,
+          `نقل جماعي لـ ${targetIds.length} مادة إلى الرف ${trimmed}`
+        );
+      } catch {
+        // Non-blocking
+      }
+      showToast('success', `تم تعيين الرف "${trimmed}" لـ ${targetIds.length} مادة بنجاح.`);
+    } catch (error) {
+      console.error('Error assigning shelf in bulk:', error);
+      showToast('error', 'تعذر تحديث الرف للمواد المحددة.');
+    }
+  };
+
+  const handleSmartTextImport = async (items: Partial<Chemical>[]) => {
+    if (!items || items.length === 0) return;
+    try {
+      const { createChemicalsBulk } = await import('../lib/api/chemicals');
+      await createChemicalsBulk(items);
+      await invalidate();
+      try {
+        await logActivity(
+          schoolId,
+          LogAction.CREATE,
+          LogModule.CHEMICALS,
+          `استيراد نصي ذكي لـ ${items.length} مادة كيميائية`
+        );
+      } catch {
+        // Non-blocking
+      }
+      showToast('success', `تمت إضافة ${items.length} مادة إلى المخزن الكيميائي بنجاح.`);
+    } catch (error) {
+      console.error('Smart text import error:', error);
+      showToast('error', 'تعذر حفظ المواد المستوردة.');
+      throw error;
+    }
+  };
+
+  const handleFetchSafetyGuide = async (chemical: Chemical, force = false) => {
+    if (!chemical) return;
+    if (!force && safetyGuidesCache[chemical.id]) return;
+
+    setLoadingSafetyGuideId(chemical.id);
+    try {
+      const guide = await getChemicalSafetyGuide({
+        nameEn: chemical.nameEn,
+        nameAr: chemical.nameAr,
+        formula: chemical.formula,
+        casNumber: chemical.casNumber,
+      });
+      if (guide) {
+        setSafetyGuidesCache(prev => ({ ...prev, [chemical.id]: guide }));
+      } else {
+        showToast('error', 'تعذر إنشاء بطاقة السلامة الذكية حالياً.');
+      }
+    } catch {
+      showToast('error', 'حدث خطأ أثناء الاتصال بالمساعد الذكي للسلامة.');
+    } finally {
+      setLoadingSafetyGuideId(null);
+    }
+  };
+
+  const isExpiringOrExpired = (c: Chemical) => {
+    if (!c.expiryDate) return false;
+    const expiry = new Date(c.expiryDate);
+    if (Number.isNaN(expiry.getTime())) return false;
+    const threeMonthsFromNow = new Date();
+    threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+    return expiry <= threeMonthsFromNow;
+  };
+
+  const duplicateIds = useMemo(() => findDuplicateChemicalIds(chemicals), [chemicals]);
+
+  const uniqueShelves = useMemo(() => {
+    const set = new Set<string>();
+    chemicals.forEach(c => {
+      const s = (c.shelf || '').trim();
+      if (s && s !== '—') set.add(s);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [chemicals]);
+
+  const dangerCount = useMemo(
+    () => chemicals.filter(c => (c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger').length,
+    [chemicals]
+  );
+
+  const expiringOrExpiredCount = useMemo(
+    () => chemicals.filter(isExpiringOrExpired).length,
+    [chemicals]
+  );
+
+  const lowStockCount = useMemo(
+    () => chemicals.filter(c => c.quantity < 10).length,
+    [chemicals]
+  );
+
+  const filteredChemicals = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return chemicals.filter(c => {
+      const matchesSearch =
+        !q ||
+        c.nameEn?.toLowerCase().includes(q) ||
+        c.nameAr?.toLowerCase().includes(q) ||
+        c.formula?.toLowerCase().includes(q) ||
+        c.casNumber?.toLowerCase().includes(q) ||
+        c.shelf?.toLowerCase().includes(q) ||
+        c.notes?.toLowerCase().includes(q);
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'low' && c.quantity < 10) ||
+        (statusFilter === 'danger' && ((c.ghs && c.ghs.length > 0) || c.hazardClass === 'danger')) ||
+        (statusFilter === 'expiring' && isExpiringOrExpired(c)) ||
+        (statusFilter === 'incomplete' && isChemicalMissingInfo(c)) ||
+        (statusFilter === 'duplicates' && duplicateIds.has(c.id));
+
+      const matchesState = stateFilter === 'all' || c.state === stateFilter;
+      const matchesShelf = shelfFilter === 'all' || (c.shelf || '').trim() === shelfFilter;
+
+      return matchesSearch && matchesStatus && matchesState && matchesShelf;
+    });
+  }, [chemicals, searchTerm, statusFilter, stateFilter, shelfFilter, duplicateIds]);
 
   const sortedChemicals = useMemo(() => {
     const sortableItems = [...filteredChemicals];
@@ -1226,8 +1372,6 @@ export function useChemicalsLogic(isNested = false) {
     return <div className="w-[14px] mr-1" />;
   };
 
-  const lowStockCount = chemicals.filter(c => c.quantity < 10).length;
-
   const parentRef = useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
@@ -1246,6 +1390,13 @@ export function useChemicalsLogic(isNested = false) {
     setLoading,
     searchTerm,
     setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    stateFilter,
+    setStateFilter,
+    shelfFilter,
+    setShelfFilter,
+    uniqueShelves,
     filterLowStock,
     setFilterLowStock,
     selectedChemical,
@@ -1266,6 +1417,18 @@ export function useChemicalsLogic(isNested = false) {
     isBulkDeleteConfirmOpen,
     setIsBulkDeleteConfirmOpen,
     isDeletingBulk,
+    isLabCalcOpen,
+    setIsLabCalcOpen,
+    isSmartImportOpen,
+    setIsSmartImportOpen,
+    isSafetyAuditOpen,
+    setIsSafetyAuditOpen,
+    safetyGuidesCache,
+    loadingSafetyGuideId,
+    handleFetchSafetyGuide,
+    handleQuickAdjustQuantity,
+    handleBulkAssignShelf,
+    handleSmartTextImport,
     toast,
     setToast,
     bulkProgress,
@@ -1288,6 +1451,11 @@ export function useChemicalsLogic(isNested = false) {
     handleRequestSmartUpdate,
     handleApproveUpdate,
     handleBulkSmartUpdate,
+    cancelBulkUpdate,
+    missingChemicalsCount,
+    dangerCount,
+    expiringOrExpiredCount,
+    duplicateIds,
     handleDeleteChemical,
     handlePrintList,
     handleExportPDF,

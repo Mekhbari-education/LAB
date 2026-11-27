@@ -367,17 +367,20 @@ export default function Signup() {
         directorate: dirName,
         educationLevel: eduLevel,
         phone: phone.trim(),
-        subject: selectedRole === 'teacher' ? teacherSubject : undefined,
+        ...(selectedRole === 'teacher'
+          ? {
+              subject: teacherSubject || 'العلوم الفيزيائية والتكنولوجيا',
+              levels: teacherLevels || [],
+            }
+          : {}),
         grade: finalGradeName,
         gradeCode: finalGradeCode,
-        levels: selectedRole === 'teacher' ? teacherLevels : undefined,
         status: 'active',
         createdAt: new Date().toISOString()
       };
 
-      // 1. Save profile to Firestore users collection with assignedSchoolId and Statutory Decree Data
-      try {
-        await setDoc(doc(db, 'users', uid), {
+      const sanitizedFirestorePayload = Object.fromEntries(
+        Object.entries({
           ...userProfile,
           schoolId: assignedSchoolId,
           roleTitle: ROLE_CONFIGS[selectedRole].label,
@@ -388,7 +391,12 @@ export default function Signup() {
           hasCompletedSchoolSetup: selectedRole === 'director' ? true : undefined,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        }, { merge: true });
+        }).filter(([, value]) => value !== undefined)
+      );
+
+      // 1. Save profile to Firestore users collection with assignedSchoolId and Statutory Decree Data
+      try {
+        await setDoc(doc(db, 'users', uid), sanitizedFirestorePayload, { merge: true });
       } catch (fsErr) {
         console.warn('Firestore write warning:', fsErr);
       }
@@ -401,8 +409,8 @@ export default function Signup() {
           name: fullName.trim(),
           email: email.trim(),
           phone: phone.trim(),
-          subject: teacherSubject,
-          levels: teacherLevels,
+          subject: teacherSubject || 'العلوم الفيزيائية والتكنولوجيا',
+          levels: teacherLevels || [],
           grade: finalGradeName,
           functionalCode: nationalId.trim(),
           status: 'active'

@@ -25,8 +25,13 @@ export interface UserProfileData {
   corps?: string;           // السلك الوظيفي
   categoryGroup?: string;   // الشعبة الوظيفية
   levels?: string[];        // الأطوار والمستويات
+  labSpecialty?: string;    // التخصص المخبري
   createdAt?: any;
   status: 'active';
+}
+
+function stripUndefinedFields<T extends Record<string, any>>(obj: T): Record<string, any> {
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value !== undefined));
 }
 
 export interface RoleInfo {
@@ -275,34 +280,45 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
       name: input.fullName,
       email: currentUser.email || '',
       role: resolvedRole,
-      nationalId: input.nationalId,
+      nationalId: input.nationalId || '',
       institution: input.institution,
       wilaya: formattedWilaya,
       commune: input.commune,
       directorate: input.directorate,
       educationLevel: eduLevel,
-      phone: input.phone,
-      subject: resolvedRole === 'teacher' ? input.subject : undefined,
-      grade: officialGrade?.name || input.gradeName,
-      gradeCode: officialGrade?.code || input.gradeCode,
-      corps: officialGrade?.corps || input.corps,
-      categoryGroup: officialGrade?.categoryGroup || input.categoryGroup,
-      levels: resolvedRole === 'teacher' ? input.levels : undefined,
+      phone: input.phone || '',
+      ...(resolvedRole === 'teacher'
+        ? {
+            subject: input.subject || 'العلوم الفيزيائية والتكنولوجيا',
+            levels: input.levels || [],
+          }
+        : {}),
+      ...(resolvedRole === 'lab_manager' && input.labSpecialty
+        ? { labSpecialty: input.labSpecialty }
+        : {}),
+      grade: officialGrade?.name || input.gradeName || '',
+      gradeCode: officialGrade?.code || input.gradeCode || '',
+      corps: officialGrade?.corps || input.corps || '',
+      categoryGroup: officialGrade?.categoryGroup || input.categoryGroup || '',
       status: 'active'
     };
 
     const { doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-    await setDoc(doc(db, 'users', uid), {
-      ...updatedProfile,
-      schoolId: assignedSchoolId,
-      roleTitle: ROLE_CONFIGS[resolvedRole].label,
-      statutoryCategory: officialGrade?.categoryGroup || input.categoryGroup,
-      corps: officialGrade?.corps || input.corps,
-      decreeNumber: '25-54',
-      isExtinction: Boolean(officialGrade?.isExtinction),
-      hasCompletedSchoolSetup: true,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    await setDoc(
+      doc(db, 'users', uid),
+      stripUndefinedFields({
+        ...updatedProfile,
+        schoolId: assignedSchoolId,
+        roleTitle: ROLE_CONFIGS[resolvedRole].label,
+        statutoryCategory: officialGrade?.categoryGroup || input.categoryGroup || '',
+        corps: officialGrade?.corps || input.corps || '',
+        decreeNumber: '25-54',
+        isExtinction: Boolean(officialGrade?.isExtinction),
+        hasCompletedSchoolSetup: true,
+        updatedAt: serverTimestamp()
+      }),
+      { merge: true }
+    );
 
     let teacherObject: Teacher | null = null;
     if (resolvedRole === 'teacher') {
@@ -310,24 +326,32 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         id: uid,
         name: input.fullName,
         email: currentUser.email || '',
-        phone: input.phone,
+        phone: input.phone || '',
         subject: input.subject || 'العلوم الفيزيائية والتكنولوجيا',
         levels: input.levels || [],
-        grade: officialGrade?.name || input.gradeName,
+        grade: officialGrade?.name || input.gradeName || '',
         functionalCode: input.nationalId || uid,
         status: 'active'
       };
       try {
-        await setDoc(doc(db, 'schools', assignedSchoolId, 'teachers', uid), {
-          ...teacherObject,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-        await setDoc(doc(db, 'teachers', uid), {
-          ...teacherObject,
-          schoolId: assignedSchoolId,
-          institution: input.institution,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
+        await setDoc(
+          doc(db, 'schools', assignedSchoolId, 'teachers', uid),
+          stripUndefinedFields({
+            ...teacherObject,
+            updatedAt: serverTimestamp()
+          }),
+          { merge: true }
+        );
+        await setDoc(
+          doc(db, 'teachers', uid),
+          stripUndefinedFields({
+            ...teacherObject,
+            schoolId: assignedSchoolId,
+            institution: input.institution,
+            updatedAt: serverTimestamp()
+          }),
+          { merge: true }
+        );
       } catch (err) {
         console.warn('Teacher write warning:', err);
       }
@@ -395,8 +419,26 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         console.warn('Teacher lookup error:', e);
       }
 
+      // Fallback to settings/{uid} if users/{uid} lacks grade or educationLevel
+      let settingsFallback: any = null;
+      if (!data?.grade || data?.grade === 'مسؤول / ملحق المخبر' || !data?.educationLevel) {
+        try {
+          const settingsSnap = await getDoc(doc(db, 'settings', uid));
+          if (settingsSnap.exists()) {
+            settingsFallback = settingsSnap.data();
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const rawUserGrade =
+        data?.grade && data.grade !== 'مسؤول / ملحق المخبر' && data.grade !== 'المسؤول / ملحق المخبر'
+          ? data.grade
+          : settingsFallback?.jobTitle || '';
+
       // Extract official grade from document data
-      const gradeIdentifier = data?.gradeCode || data?.grade || teacherDocData?.rank;
+      const gradeIdentifier = data?.gradeCode || rawUserGrade || teacherDocData?.rank;
       const officialGrade = gradeIdentifier ? findGradeByCodeOrName(gradeIdentifier) : undefined;
 
       // Determine role strictly according to owner override (if set) or statutory grade & official role
@@ -419,7 +461,7 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
 
       // Check if existing user has all required statutory information to determine workspace
       const hasAllRequiredInfo = Boolean(
-        (officialGrade || data?.grade) && 
+        (officialGrade || rawUserGrade) && 
         (data?.institution || data?.schoolId || teacherDocData?.institution)
       );
 
@@ -436,14 +478,14 @@ export function UserRoleProvider({ children }: { children: React.ReactNode }) {
         email: email || data?.email || '',
         role: role,
         nationalId: data?.nationalId || teacherDocData?.functionalCode || '',
-        institution: data?.institution || data?.schoolName || teacherDocData?.institution || '',
+        institution: data?.institution || data?.schoolName || settingsFallback?.schoolName || teacherDocData?.institution || '',
         wilaya: data?.wilaya || '',
-        commune: data?.commune || '',
-        directorate: data?.directorate || '',
-        educationLevel: data?.educationLevel || '',
+        commune: data?.commune || settingsFallback?.communeName || '',
+        directorate: data?.directorate || settingsFallback?.directorateName || '',
+        educationLevel: data?.educationLevel || settingsFallback?.cycle || '',
         phone: data?.phone || '',
         subject: data?.subject || teacherDocData?.subject || '',
-        grade: officialGrade?.name || data?.grade || teacherDocData?.rank || '',
+        grade: officialGrade?.name || rawUserGrade || teacherDocData?.rank || '',
         gradeCode: officialGrade?.code || data?.gradeCode || '',
         corps: officialGrade?.corps || data?.corps || '',
         categoryGroup: officialGrade?.categoryGroup || data?.statutoryCategory || '',

@@ -4,6 +4,16 @@ import { queryClient } from '../queryClient';
 import { db, auth, getUserCollection } from '../../firebase';
 import { writeBatch, doc, getDocs, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
+function stripUndefined<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const cleaned: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      cleaned[k] = v;
+    }
+  }
+  return cleaned;
+}
+
 function getActiveSchoolId(): string | null {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('algeria_lab_school_id');
@@ -131,7 +141,7 @@ export const createChemical = async (data: Partial<Chemical>): Promise<Chemical>
     const schoolId = getActiveSchoolId();
     if (schoolId) {
       const docRef = doc(getUserCollection(schoolId, 'chemicals'), created.id);
-      await setDoc(docRef, { ...created, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(docRef, { ...stripUndefined(created), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (fsErr) {
     console.warn('Firestore mirror error in createChemical:', fsErr);
@@ -144,13 +154,14 @@ export const createChemical = async (data: Partial<Chemical>): Promise<Chemical>
 };
 
 export const updateChemical = async (id: string, data: Partial<Chemical>): Promise<Chemical> => {
-  let updatedItem: Chemical = { id, ...data } as Chemical;
+  const cleanedData = stripUndefined(data);
+  let updatedItem: Chemical = { id, ...cleanedData } as Chemical;
   try {
     const result = await fetchWithAuth(`/api/db/chemicals/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data)
+      body: JSON.stringify(cleanedData)
     });
-    if (result?.id) updatedItem = { ...data, ...result, id };
+    if (result?.id) updatedItem = { ...cleanedData, ...result, id };
   } catch (apiErr) {
     console.warn(`API /api/db/chemicals/${id} unavailable, falling back to Firestore & localStorage:`, apiErr);
   }
@@ -158,7 +169,7 @@ export const updateChemical = async (id: string, data: Partial<Chemical>): Promi
   try {
     for (const schoolId of getTargetSchoolIds()) {
       const docRef = doc(getUserCollection(schoolId, 'chemicals'), id);
-      await setDoc(docRef, { ...data, updatedAt: serverTimestamp() }, { merge: true });
+      await setDoc(docRef, { ...cleanedData, updatedAt: serverTimestamp() }, { merge: true });
     }
   } catch (fsErr) {
     console.warn('Firestore mirror update error in updateChemical:', fsErr);
@@ -168,6 +179,64 @@ export const updateChemical = async (id: string, data: Partial<Chemical>): Promi
   const updated = existing.map(e => (e.id === id ? { ...e, ...updatedItem } : e));
   syncQueryCache(updated);
   return updated.find(e => e.id === id) || updatedItem;
+};
+
+export const updateChemicalsBulk = async (
+  updates: { id: string; data: Partial<Chemical> }[]
+): Promise<void> => {
+  if (!updates || updates.length === 0) return;
+
+  const cleanedUpdates = updates.map(u => ({
+    id: u.id,
+    data: stripUndefined(u.data),
+  }));
+
+  // 1. Update SQL database via PUT /api/db/chemicals/:id in controlled parallel batches
+  try {
+    const CHUNK_API = 10;
+    for (let i = 0; i < cleanedUpdates.length; i += CHUNK_API) {
+      const slice = cleanedUpdates.slice(i, i + CHUNK_API);
+      await Promise.allSettled(
+        slice.map(u =>
+          fetchWithAuth(`/api/db/chemicals/${u.id}`, {
+            method: 'PUT',
+            body: JSON.stringify(u.data),
+          })
+        )
+      );
+    }
+  } catch (apiErr) {
+    console.warn('API bulk PUT error in updateChemicalsBulk, relying on Firestore & cache:', apiErr);
+  }
+
+  // 2. Batch update Firestore across all target school scopes
+  try {
+    const targetSchoolIds = getTargetSchoolIds();
+    if (targetSchoolIds.length > 0) {
+      for (const schoolId of targetSchoolIds) {
+        for (let i = 0; i < cleanedUpdates.length; i += 400) {
+          const chunk = cleanedUpdates.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach(u => {
+            const docRef = doc(getUserCollection(schoolId, 'chemicals'), u.id);
+            batch.set(docRef, { ...u.data, updatedAt: serverTimestamp() }, { merge: true });
+          });
+          await batch.commit();
+        }
+      }
+    }
+  } catch (fsErr) {
+    console.warn('Firestore batch update error in updateChemicalsBulk:', fsErr);
+  }
+
+  // 3. Sync React Query & localStorage cache once per bulk batch
+  const updateMap = new Map(cleanedUpdates.map(u => [u.id, u.data]));
+  const existing = getExistingCachedItems();
+  const next = existing.map(item => {
+    const patch = updateMap.get(item.id);
+    return patch ? { ...item, ...patch } : item;
+  });
+  syncQueryCache(next);
 };
 
 export const deleteChemical = async (id: string): Promise<void> => {
@@ -311,7 +380,7 @@ export const createChemicalsBulk = async (items: Partial<Chemical>[]): Promise<C
         chunk.forEach(item => {
           const docRef = doc(getUserCollection(schoolId, 'chemicals'), item.id);
           batch.set(docRef, {
-            ...item,
+            ...stripUndefined(item),
             updatedAt: serverTimestamp(),
             createdAt: serverTimestamp()
           }, { merge: true });

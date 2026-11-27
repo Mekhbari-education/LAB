@@ -114,7 +114,7 @@ export default function Login({ onRoleLogin }: LoginProps) {
           navigate(targetPath, { replace: true });
         }
       } catch (err: any) {
-        console.error('Redirect result error:', err);
+        console.warn('Redirect result warning:', err?.code || err?.message);
         handleAuthError(err, 'google');
       } finally {
         setLoading(false);
@@ -246,7 +246,7 @@ export default function Login({ onRoleLogin }: LoginProps) {
         navigate(ROUTES.TEACHER_PORTAL, { replace: true });
       }, 350);
     } catch (err: any) {
-      console.error('Error logging in teacher:', err);
+      console.warn('Teacher code login failed:', err?.code || err?.message);
       setError('تعذر تسجيل الدخول بالرمز الوظيفي. يرجى المحاولة مرة أخرى.');
     } finally {
       setLoading(false);
@@ -267,7 +267,7 @@ export default function Login({ onRoleLogin }: LoginProps) {
       setSuccessInfo('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني بنجاح. يرجى مراجعة صندوق الوارد (أو مجلد الرسائل غير المرغوب فيها Spam).');
       setIsResetting(false);
     } catch (err: any) {
-      console.error('Reset password error:', err);
+      console.warn('Reset password notice:', err?.code || err?.message);
       if (err.code === 'auth/user-not-found') {
         setError('هذا البريد الإلكتروني غير مسجل لدينا في النظام.');
       } else if (err.code === 'auth/invalid-email') {
@@ -326,8 +326,24 @@ export default function Login({ onRoleLogin }: LoginProps) {
         navigate(targetPath, { replace: true });
       }
     } catch (err: any) {
-      console.error('Auth error:', err);
-      if (err.code === 'auth/unauthorized-domain') {
+      const code = err?.code || '';
+      const isExpectedUserAuthError = [
+        'auth/user-not-found',
+        'auth/wrong-password',
+        'auth/invalid-credential',
+        'auth/invalid-email',
+        'auth/too-many-requests',
+        'auth/user-disabled',
+        'auth/email-already-in-use',
+        'auth/weak-password',
+        'auth/operation-not-allowed',
+      ].includes(code);
+
+      if (!isExpectedUserAuthError) {
+        console.warn('Auth warning:', code || err?.message);
+      }
+
+      if (code === 'auth/unauthorized-domain') {
         setError(
           <div className="text-right p-4 bg-error/5 rounded-2xl border border-error/20">
             <p className="font-black text-error mb-2">النطاق غير مصرح به في إعدادات Firebase</p>
@@ -337,24 +353,56 @@ export default function Login({ onRoleLogin }: LoginProps) {
           </div>
         );
       } else if (isLogin) {
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-          setError('البريد الإلكتروني أو كلمة المرور غير صحيحة. يرجى التحقق من صحة البيانات أو استخدام استعادة كلمة المرور.');
-        } else if (err.code === 'auth/invalid-email') {
+        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+          setError(
+            <div className="text-right space-y-2.5">
+              <p className="font-black text-error">
+                تعذر التحقق من البريد الإلكتروني أو كلمة المرور.
+              </p>
+              <p className="text-[11px] font-medium text-on-surface/80 leading-relaxed">
+                قد تكون كلمة المرور غير صحيحة، أو أن هذا الحساب مسجّل باستخدام <strong>Google</strong> ولا يملك كلمة مرور منفصلة.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleGoogleLogin(false)}
+                  className="flex-1 min-w-[140px] py-2 px-3 rounded-xl bg-primary text-on-primary text-[11px] font-bold hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>الدخول بحساب Google</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetting(true);
+                    setError('');
+                  }}
+                  className="flex-1 min-w-[140px] py-2 px-3 rounded-xl bg-surface border border-outline/20 text-primary text-[11px] font-bold hover:border-primary/40 transition-colors cursor-pointer"
+                >
+                  استعادة / تعيين كلمة المرور
+                </button>
+              </div>
+            </div>
+          );
+        } else if (code === 'auth/operation-not-allowed') {
+          setError('تسجيل الدخول بالبريد وكلمة المرور غير مفعل في مشروع Firebase. يرجى تسجيل الدخول عبر حساب Google أو تفعيل المزود من لوحة Firebase.');
+        } else if (code === 'auth/invalid-email') {
           setError('صيغة عنوان البريد الإلكتروني غير صالحة.');
-        } else if (err.code === 'auth/too-many-requests') {
+        } else if (code === 'auth/too-many-requests') {
           setError('تم تقييد محاولات الدخول مؤقتاً بسبب تكرار المحاولات الخاطئة. يرجى الانتظار دقيقة والمحاولة مجدداً.');
-        } else if (err.code === 'auth/network-request-failed') {
+        } else if (code === 'auth/network-request-failed') {
           setError('تعذر الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت.');
-        } else if (err.code === 'auth/user-disabled') {
+        } else if (code === 'auth/user-disabled') {
           setError('تم تعطيل هذا الحساب من قبل إدارة النظام.');
         } else {
           setError('خطأ في تسجيل الدخول. يرجى التحقق من صحة البريد الإلكتروني وكلمة المرور.');
         }
       } else {
-        if (err.code === 'auth/email-already-in-use') {
+        if (code === 'auth/email-already-in-use') {
           setError('هذا البريد الإلكتروني مستخدم بالفعل. يرجى تسجيل الدخول بدلاً من ذلك.');
-        } else if (err.code === 'auth/weak-password') {
+        } else if (code === 'auth/weak-password') {
           setError('كلمة المرور ضعيفة جداً. يجب أن تتكون من 6 أحرف أو أرقام على الأقل.');
+        } else if (code === 'auth/operation-not-allowed') {
+          setError('إنشاء الحساب بالبريد وكلمة المرور غير مفعل حالياً في Firebase. يرجى المتابعة عبر حساب Google.');
         } else {
           setError('فشل إنشاء الحساب. يرجى المحاولة مرة أخرى.');
         }
@@ -399,7 +447,7 @@ export default function Login({ onRoleLogin }: LoginProps) {
   };
 
   const handleAuthError = (err: any, providerType: 'google' | 'facebook') => {
-    console.error(`${providerType} login error:`, err);
+    console.warn(`${providerType} login notice:`, err?.code || err?.message);
     setLoading(false);
 
     if (err.code === 'auth/unauthorized-domain') {
